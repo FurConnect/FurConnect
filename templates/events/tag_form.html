@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Tag - {{ current_convention_name|default:"FurConnect" }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="display-4">Edit Tag</h1>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="mb-3">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field.errors }}
+                {{ field }}
+                {% if field.help_text %}
+                <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">
+                <i class="material-icons">save</i> Save Tag
+            </button>
+            <a href="{% url 'events:schedule' %}" class="btn btn-secondary">
+                <i class="material-icons">cancel</i> Cancel
+            </a>
+            {% if tag %}
+            <form method="post" action="{% url 'events:tag_delete' tag.name %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this tag?');">
+                    <i class="material-icons">delete</i> Delete Tag
+                </button>
+            </form>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize jscolor for the color picker
+    if (typeof jscolor !== 'undefined') {
+        jscolor.install();
+    }
+});
+</script>
+{% endblock %} 

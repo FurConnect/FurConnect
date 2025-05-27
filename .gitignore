@@ -1,0 +1,7 @@
+*.sqlite3
+.vscode
+.venv
+.idea/*
+*.pyc
+*/migrations
+panel_hosts/

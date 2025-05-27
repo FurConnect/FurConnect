@@ -1,0 +1,416 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }} Convention - {{ current_convention_name|default:"FurConnect" }}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="display-4">{{ action }} Convention</h1>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            <!-- Name Field -->
+            <div class="mb-4 form-group">
+                <label for="{{ form.name.id_for_label }}" class="form-label">
+                    <i class="material-icons">label</i>
+                    Convention Name
+                </label>
+                {{ form.name.errors }}
+                {{ form.name }}
+                {% if form.name.help_text %}
+                <div class="form-text">{{ form.name.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Description Field -->
+            <div class="mb-4 form-group">
+                <label for="{{ form.description.id_for_label }}" class="form-label">
+                    <i class="material-icons">notes</i>
+                    Description
+                </label>
+                {{ form.description.errors }}
+                {{ form.description }}
+                {% if form.description.help_text %}
+                <div class="form-text">{{ form.description.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Date Range -->
+            <div class="row mb-4">
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.start_date.id_for_label }}" class="form-label">
+                        <i class="material-icons">event_available</i> Start Date
+                    </label>
+                    {{ form.start_date.errors }}
+                    {{ form.start_date }}
+                </div>
+                <div class="col-md-6 form-group">
+                    <label for="{{ form.end_date.id_for_label }}" class="form-label">
+                        <i class="material-icons">event_busy</i> End Date
+                    </label>
+                    {{ form.end_date.errors }}
+                    {{ form.end_date }}
+                </div>
+            </div>
+
+            <!-- Location Fields -->
+            <div class="mb-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="id_hotel_name" class="form-label">
+                            <i class="material-icons">hotel</i>
+                            Hotel/Venue Name
+                        </label>
+                        {{ form.hotel_name }}
+                    </div>
+                    <div class="col-md-6">
+                        <label for="id_address" class="form-label">
+                            <i class="material-icons">location_on</i>
+                            Street Address
+                        </label>
+                        {{ form.address }}
+                    </div>
+                    <div class="col-md-4">
+                        <label for="id_city" class="form-label">
+                            <i class="material-icons">location_city</i>
+                            City
+                        </label>
+                        {{ form.city }}
+                    </div>
+                    <div class="col-md-4">
+                        <label for="id_state" class="form-label">
+                            <i class="material-icons">map</i>
+                            State/Province
+                        </label>
+                        {{ form.state }}
+                    </div>
+                    <div class="col-md-4">
+                        <label for="id_country" class="form-label">
+                            <i class="material-icons">public</i>
+                            Country
+                        </label>
+                        {{ form.country }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Banner Image Field -->
+            <div class="mb-4 form-group">
+                <label for="{{ form.banner_image.id_for_label }}" class="form-label">
+                    <i class="material-icons">image</i>
+                    Convention Banner Image
+                </label>
+                {{ form.banner_image.errors }}
+                <input type="hidden" name="banner_image" id="id_banner_image" value="{{ form.instance.banner_image }}">
+                <div class="input-group">
+                    <input type="file" class="form-control" id="banner_image_input" accept="image/*">
+                    <button class="btn btn-outline-secondary" type="button" id="clear_banner">
+                        <i class="material-icons">clear</i>
+                    </button>
+                </div>
+                {% if form.banner_image.help_text %}
+                <div class="form-text">{{ form.banner_image.help_text }}</div>
+                {% endif %}
+                
+                <div class="mt-2">
+                    <p>Current banner:</p>
+                    <img id="banner_preview" src="{{ form.instance.banner_image }}" alt="Current Convention Banner" class="img-thumbnail" style="max-width: 200px;">
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="material-icons">save</i> Save Convention
+                </button>
+                <a href="{% url 'events:schedule' %}" class="btn btn-secondary">
+                    <i class="material-icons">cancel</i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Add Bootstrap Datepicker JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get initial date values from Django form data
+    const initialStartDate = "{{ form.start_date.value|date:'Y-m-d' }}";
+    const initialEndDate = "{{ form.end_date.value|date:'Y-m-d' }}";
+
+    flatpickr('input[name="start_date"]', {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "F j, Y",
+        defaultDate: initialStartDate || null,
+        allowInput: true,
+        clearInput: true,
+    });
+
+    flatpickr('input[name="end_date"]', {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "F j, Y",
+        defaultDate: initialEndDate || null,
+        allowInput: true,
+        clearInput: true,
+    });
+
+    // Add basic input validation for location fields
+    const locationInputs = document.querySelectorAll('input[type="text"]:not([name="name"])');
+    locationInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            // Allow letters, numbers, spaces, hyphens, and periods
+            this.value = this.value.replace(/[^a-zA-Z0-9\s\-\.]/g, '');
+        });
+    });
+
+    // Handle banner image upload and conversion to base64
+    const bannerInput = document.getElementById('banner_image_input');
+    const bannerPreview = document.getElementById('banner_preview');
+    const bannerHidden = document.getElementById('id_banner_image');
+    const clearBannerBtn = document.getElementById('clear_banner');
+
+    bannerInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64String = e.target.result;
+                bannerHidden.value = base64String;
+                bannerPreview.src = base64String;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    clearBannerBtn.addEventListener('click', function() {
+        bannerInput.value = '';
+        bannerHidden.value = '';
+        bannerPreview.src = '';
+    });
+});
+</script>
+{% endblock %}
+
+<style>
+.input-group-text {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.375rem 0 0 0.375rem;
+}
+
+.form-control {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+    border-radius: 0.375rem; /* Full rounded corners */
+}
+
+.input-group {
+    width: 100%;
+}
+
+/* Keep specific styles for input-group form controls */
+.input-group > .form-control {
+    border-radius: 0 0.375rem 0.375rem 0;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+    text-align: left;
+}
+
+.form-label .material-icons {
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+/* Add styles for textarea */
+textarea.form-control {
+    border-radius: 0 0.375rem 0.375rem 0;
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* Ensure all form groups are left-aligned */
+.form-group {
+    text-align: left;
+    margin-bottom: 1rem;
+}
+
+/* Ensure consistent spacing */
+.mb-4 {
+    margin-bottom: 1.5rem !important;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(98, 0, 234, 0.25);
+}
+
+.flatpickr-calendar {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.flatpickr-day.selected {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.flatpickr-day:hover {
+    background: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+/* Add styles for loading states */
+.form-select:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+/* Add loading indicator styles */
+.loading {
+    position: relative;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translateY(-50%) rotate(0deg); }
+    100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Add styles for select elements */
+.form-select {
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(98, 0, 234, 0.25);
+}
+
+.form-select:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+/* Material Design Form Styling */
+.form-floating {
+    position: relative;
+}
+
+.form-floating > .input-group {
+    position: relative;
+}
+
+.form-floating > .input-group > .form-control {
+    height: calc(3.5rem + 2px);
+    padding: 1rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid #ced4da;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-floating > .input-group > .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(98, 0, 234, 0.25);
+}
+
+.form-floating > .input-group > label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    padding: 1rem 0.75rem;
+    pointer-events: none;
+    border: 1px solid transparent;
+    transform-origin: 0 0;
+    transition: opacity .1s ease-in-out,transform .1s ease-in-out;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 2.5rem;
+}
+
+.form-floating > .input-group > .form-control:focus ~ label,
+.form-floating > .input-group > .form-control:not(:placeholder-shown) ~ label {
+    opacity: .65;
+    transform: scale(.85) translateY(-0.5rem) translateX(0.15rem);
+    background-color: white;
+    padding: 0 0.5rem;
+    color: var(--primary-color);
+    margin-left: 0;
+}
+
+.form-floating > .input-group > textarea.form-control {
+    height: auto;
+    min-height: 100px;
+}
+
+.form-floating > .input-group > textarea.form-control ~ label {
+    align-items: flex-start;
+    padding-top: 1.5rem;
+}
+
+.form-floating > .input-group > .input-group-text {
+    border-radius: 0.375rem 0 0 0.375rem;
+    border-right: none;
+    z-index: 1;
+}
+
+.form-floating > .input-group > .form-control {
+    border-radius: 0 0.375rem 0.375rem 0;
+}
+
+/* Dark mode support */
+[data-bs-theme="dark"] .form-floating > .input-group > label {
+    background-color: #2c3034;
+    color: #adb5bd;
+}
+
+[data-bs-theme="dark"] .form-floating > .input-group > .form-control:focus ~ label,
+[data-bs-theme="dark"] .form-floating > .input-group > .form-control:not(:placeholder-shown) ~ label {
+    background-color: #2c3034;
+    color: var(--primary-purple-light);
+}
+
+/* Add styles for date inputs */
+input[type="date"].form-control {
+    border-radius: 0.375rem; /* Ensure date inputs have full rounded corners */
+}
+</style> 

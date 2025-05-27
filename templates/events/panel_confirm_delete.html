@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirm Delete Event - {{ current_convention_name|default:"FurConnect" }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="my-4">Confirm Event Deletion</h1>
+    <p>Are you sure you want to delete the panel: "{{ panel.title }}"?</p>
+    
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Yes, Delete</button>
+        <a href="{% url 'events:convention_detail' pk=panel.convention_day.convention.pk %}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %} 

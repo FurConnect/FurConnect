@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="mb-0">Import Panels from CSV</h2>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.convention.id_for_label }}" class="form-label">{{ form.convention.label }}</label>
+                            {{ form.convention }}
+                            {% if form.convention.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.convention.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.csv_file.id_for_label }}" class="form-label">{{ form.csv_file.label }}</label>
+                            {{ form.csv_file }}
+                            {% if form.csv_file.help_text %}
+                            <div class="form-text">{{ form.csv_file.help_text }}</div>
+                            {% endif %}
+                            {% if form.csv_file.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.csv_file.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <h5>CSV Format Requirements:</h5>
+                            <p>The CSV file should have the following columns:</p>
+                            <ul>
+                                <li><strong>title</strong> - Panel title</li>
+                                <li><strong>description</strong> - Panel description</li>
+                                <li><strong>date</strong> - Date in YYYY-MM-DD format</li>
+                                <li><strong>start_time</strong> - Start time in HH:MM format (24-hour)</li>
+                                <li><strong>end_time</strong> - End time in HH:MM format (24-hour)</li>
+                                <li><strong>room</strong> - Room name</li>
+                                <li><strong>tags</strong> - Comma-separated list of tags (optional)</li>
+                                <li><strong>hosts</strong> - Comma-separated list of hosts (optional)</li>
+                            </ul>
+                            <p>Example row:</p>
+                            <pre>title,description,date,start_time,end_time,room,tags,hosts
+"Furry Art Workshop","Learn to draw furry art",2024-03-15,10:00,12:00,"Main Hall","Art,Workshop","John Doe,Jane Smith"</pre>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Import Panels</button>
+                            <a href="{% url 'events:convention_detail' pk=convention.pk %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

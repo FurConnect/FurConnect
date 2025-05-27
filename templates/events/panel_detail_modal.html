@@ -1,0 +1,142 @@
+{% load static %}
+{% load event_filters %}
+<div class="modal-body">
+    {% if panel %}
+    <div class="panel-detail">
+        {% if panel.cancelled %}
+        <div class="alert alert-danger mb-3 d-flex align-items-center justify-content-center">
+            <i class="material-icons me-2">cancel</i> This event has been cancelled
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0" style="display: flex; align-items: center; {% if panel.is_featured %}font-weight: bold;{% endif %}">
+                {% if panel.is_featured %}
+                <span class="material-icons-round me-2 featured-star-modal" style="font-size: 2.3rem; color: black;">star</span>
+                {% endif %}
+                {{ panel.title }}
+            </h2>
+        </div>
+        
+        {% if panel.host.all %}
+        <div class="d-flex gap-2 mb-3">
+            {% for host in panel.ordered_hosts %}
+                {% if host.image_data %}
+                <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
+                    <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                </div>
+                {% else %}
+                <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
+                    <img src="{% static 'events/images/placeholder.webp' %}" alt="{{ host.name }}" class="host-avatar" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="mb-4">
+            <p class="lead" style="font-size: 1.25rem;">{{ panel.description }}</p>
+        </div>
+
+        <div class="panel-info">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="material-icons me-2" style="font-size: 1.5rem;">calendar_today</i>
+                        <div>
+                            <h6 class="mb-0" style="font-size: 1.25rem;">Date</h6>
+                            <p class="mb-0" style="font-size: 1.125rem;">{{ panel.convention_day.date|date:"l, F d, Y" }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="material-icons me-2" style="font-size: 1.5rem;">schedule</i>
+                        <div>
+                            <h6 class="mb-0" style="font-size: 1.25rem;">Time</h6>
+                            <p class="mb-0" style="font-size: 1.125rem;">{{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="material-icons me-2" style="font-size: 1.5rem;">room</i>
+                        <div>
+                            <h6 class="mb-0" style="font-size: 1.25rem;">Room</h6>
+                            <p class="mb-0" style="font-size: 1.125rem;">{{ panel.room }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {% if panel.tags.all %}
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="material-icons me-2" style="font-size: 1.5rem;">label</i>
+                        <div>
+                            <h6 class="mb-2" style="font-size: 1.25rem;">Tags</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for tag in panel.ordered_tags %}
+                                {# Determine text color based on tag color luminosity #}
+                                {% with text_color=tag.color|is_light_color|yesno:'#000,#fff' %}
+                                <span class="badge" style="background-color: {{ tag.color }}; color: {{ text_color }}; font-size: 1rem; padding: 0.5rem 1rem;">
+                                    {{ tag.name }}
+                                </span>
+                                {% endwith %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-danger">
+        Event not found.
+    </div>
+    {% endif %}
+</div>
+
+<div class="modal-footer">
+    <div class="d-flex justify-content-between w-100">
+        <div>
+            <a href="{% url 'events:panel_calendar' panel.pk %}" class="btn btn-outline-primary" style="display: block !important;">
+                <i class="material-icons">calendar_today</i> Add to Calendar
+            </a>
+        </div>
+        <div>
+            {% if user.is_staff %}
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-primary dropdown-toggle" type="button" id="editMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="material-icons">edit</i> Edit
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="editMenuDropdown">
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center" href="{% url 'events:panel_edit' panel.pk %}">
+                            <i class="material-icons me-2">edit</i> Edit Details
+                        </a>
+                    </li>
+                    <li>
+                        <form method="post" action="{% url 'events:toggle_cancelled' panel.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item d-flex align-items-center {% if panel.cancelled %}text-success{% else %}text-danger{% endif %}">
+                                <i class="material-icons me-2">{% if panel.cancelled %}restore{% else %}cancel{% endif %}</i>
+                                {% if panel.cancelled %}Restore Event{% else %}Cancel Event{% endif %}
+                            </button>
+                        </form>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center text-danger" href="{% url 'events:panel_delete' panel.pk %}">
+                            <i class="material-icons me-2">delete</i> Delete Event
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+    </div>
+</div>
