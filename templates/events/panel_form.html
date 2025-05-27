@@ -1,0 +1,1783 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+{% load event_filters %}
+
+{% block title %}{% if form.instance.pk %}Edit Event{% else %}Add Event{% endif %} - {{ current_convention_name|default:"FurConnect" }}{% endblock %}
+
+{% block extra_css %}
+    <!-- Tom Select CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <!-- jscolor CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.5.1/jscolor.min.css" rel="stylesheet">
+    <style>
+        /* Custom styles for the cancelled checkbox */
+        .form-check-input.panel-cancelled-checkbox {
+            transform: scale(1.2);
+            margin-right: .5rem;
+        }
+
+        /* Style the label when the checkbox is checked */
+        .form-check-input.panel-cancelled-checkbox:checked + .form-check-label {
+            font-weight: bold;
+            color: #dc3545; /* Bootstrap's danger color */
+        }
+        
+        /* Adjust the form-text for help text below the checkbox */
+        .form-check .form-text {
+            margin-top: .25rem;
+            font-size: .875em;
+            color: #6c757d;
+        }
+        .chip-group {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            min-height: 2.5rem;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            background: #f1f3f4;
+            color: #333;
+            border-radius: 16px;
+            padding: 0.35em 0.9em 0.35em 0.9em;
+            font-size: 1rem;
+            box-shadow: 0 1px 4px rgba(60,60,60,0.07);
+            border: 1px solid #e0e0e0;
+            transition: box-shadow 0.2s, background 0.2s;
+            cursor: default;
+        }
+        .chip[data-color] {
+            background: var(--tag-color, #e3f2fd);
+            color: #fff;
+            border: none;
+        }
+        .chip .material-icons {
+            font-size: 1.1em;
+            margin-left: 0.4em;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: color 0.2s, opacity 0.2s;
+        }
+        .chip .material-icons:hover {
+            color: #1976d2;
+            opacity: 1;
+        }
+        .chip .delete-icon:hover {
+            color: #dc3545;
+        }
+        .fab-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15);
+            font-size: 1.5rem;
+            transition: background 0.2s, box-shadow 0.2s;
+            margin-left: 0.2rem;
+        }
+        .fab-btn:hover, .fab-btn:focus {
+            background: #1565c0;
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(25, 118, 210, 0.25);
+        }
+        .choices__list--multiple .choices__item {
+            background-color: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 16px;
+            padding: 0.25em 0.9em;
+            margin: 0 0.2em 0.2em 0;
+            font-size: 1rem;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1.5;
+        }
+        .choices__list--multiple .choices__item .choices__button {
+            color: #333;
+            margin-left: 0.5em;
+            border-left: 1px solid rgba(255, 255, 255, 0.3);
+            padding-left: 0.5em;
+            background: transparent;
+            border: none;
+            border-radius: 16px;
+            padding: 0 0.3em;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        /* Tag pills: white x */
+        #id_tags + .choices .choices__list--multiple .choices__item .choices__button {
+            color: #fff;
+        }
+        #id_tags + .choices .choices__list--multiple .choices__item .choices__button:hover {
+            background: rgba(0,0,0,0.12);
+            color: #fff;
+        }
+        /* Host pills: dark x */
+        #id_host + .choices .choices__list--multiple .choices__item .choices__button {
+            color: #fff;
+        }
+        #id_host + .choices .choices__list--multiple .choices__item .choices__button:hover {
+            background: rgba(0,0,0,0.12);
+            color: #fff;
+        }
+        .choices__list--multiple .choices__item.is-highlighted {
+            background-color: #1565c0;
+        }
+        .choices__inner {
+            min-height: 2.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #ced4da;
+            padding: 0.25rem 0.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem;
+        }
+
+        /* General placeholder style for Tom Select */
+        .ts-control::placeholder {
+            color: #999; /* A standard muted gray for placeholders */
+            opacity: 1; /* Ensure opacity is not reduced */
+        }
+
+        /* Dark mode specific placeholder style for Tom Select */
+        [data-bs-theme="dark"] .ts-control::placeholder {
+            color: #a0a0a0; /* A lighter gray for dark mode */
+        }
+
+        /* Add these styles for Dark Mode Tom Select */
+        [data-bs-theme="dark"] .ts-control,
+        [data-bs-theme="dark"] .ts-dropdown {
+            background-color: #343a40; /* Dark background */
+            color: #adb5bd; /* Lighter text color */
+            border-color: #454d55; /* Darker border */
+        }
+
+        [data-bs-theme="dark"] .ts-control::placeholder {
+            color: #6c757d; /* Slightly lighter placeholder */
+        }
+
+        [data-bs-theme="dark"] .ts-dropdown .option {
+            color: #adb5bd; /* Lighter option text */
+            background-color: #343a40; /* Match dropdown background */
+        }
+
+        [data-bs-theme="dark"] .ts-dropdown .option:hover,
+        [data-bs-theme="dark"] .ts-dropdown .option.active {
+            background-color: #495057; /* Darker background on hover/active */
+            color: #ffffff; /* White text on hover/active */
+        }
+
+        /* Ensure selected items (pills) in the control also look good in dark mode */
+        [data-bs-theme="dark"] .ts-control .item {
+            /* Use a standard dark theme background color for general items (like Rooms) */
+            background-color: #343a40; /* A common dark theme background color */
+            color: #ffffff;
+        }
+
+        /* Style for Host items in dark mode - use a darker gray */
+        [data-bs-theme="dark"] .ts-control .item[data-host-id] {
+            background-color: #495057;
+        }
+
+        [data-bs-theme="dark"] .ts-control .item.active {
+            background-color: #004085; /* Darker blue when active - keeping for general active state or can adjust */
+        }
+
+        /* Adjust the color of the 'x' remove button in dark mode pills */
+        [data-bs-theme="dark"] .ts-control .item .remove {
+             color: rgba(255, 255, 255, 0.7); /* Lighter 'x' */
+        }
+        [data-bs-theme="dark"] .ts-control .item .remove:hover {
+             color: #ffffff; /* White 'x' on hover */
+        }
+
+        input[type="time"]::-webkit-datetime-edit-second-field {
+            display: none;
+        }
+
+        input[type="time"]::-webkit-datetime-edit-text {
+            padding: 0 1px; /* Adjust padding if needed after hiding seconds */
+        }
+
+        /* Add dark mode styling for form labels */
+        [data-bs-theme="dark"] form label.form-label {
+             color: #adb5bd; /* Use a light gray color for labels in dark mode for better contrast */
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="display-4">{% if form.instance.pk %}Edit Event{% else %}Add Event{% endif %}</h1>
+        {# Display convention name - Day is now selected in the form #}
+        <p class="lead">
+            {{ convention.name }}
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" data-panel-id="{{ form.instance.pk|default:'' }}">
+            {% csrf_token %}
+            {# Explicitly render form fields in desired order #}
+            <div class="mb-3">
+                <label for="{{ form.title.id_for_label }}" class="form-label">{{ form.title.label }}</label>
+                {{ form.title.errors }}
+                {{ form.title }}
+                {% if form.title.help_text %}
+                <div class="form-text">{{ form.title.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.description.id_for_label }}" class="form-label">{{ form.description.label }}</label>
+                {{ form.description.errors }}
+                {{ form.description }}
+                {% if form.description.help_text %}
+                <div class="form-text">{{ form.description.help_text }}</div>
+                {% endif %}
+            </div>
+
+            {# Convention Day is moved below Description #}
+            <div class="mb-3">
+                <label for="{{ form.convention_day.id_for_label }}" class="form-label">{{ form.convention_day.label }}</label>
+                {{ form.convention_day.errors }}
+                {{ form.convention_day }}
+                {% if form.convention_day.help_text %}
+                <div class="form-text">{{ form.convention_day.help_text }}</div>
+                {% endif %}
+            </div>
+
+            {# Start and End Time side-by-side #}
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label for="{{ form.start_time.id_for_label }}" class="form-label">{{ form.start_time.label }}</label>
+                    {{ form.start_time.errors }}
+                    {{ form.start_time }}
+                    {% if form.start_time.help_text %}
+                    <div class="form-text">{{ form.start_time.help_text }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.end_time.id_for_label }}" class="form-label">{{ form.end_time.label }}</label>
+                    {{ form.end_time.errors }}
+                    {{ form.end_time }}
+                    {% if form.end_time.help_text %}
+                    <div class="form-text">{{ form.end_time.help_text }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.room.id_for_label }}" class="form-label">{{ form.room.label }}</label>
+                {{ form.room.errors }}
+                {{ form.room }}
+                {% if form.room.help_text %}
+                <div class="form-text">{{ form.room.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.host.id_for_label }}" class="form-label">{{ form.host.label }}</label>
+                {{ form.host.errors }}
+                {{ form.host }}
+                {% if form.host.help_text %}
+                <div class="form-text">{{ form.host.help_text }}</div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label for="{{ form.tags.id_for_label }}" class="form-label">{{ form.tags.label }}</label>
+                {{ form.tags.errors }}
+                {{ form.tags }}
+                {% if form.tags.help_text %}
+                <div class="form-text">{{ form.tags.help_text }}</div>
+                {% endif %}
+            </div>
+
+            {# Special handling for cancelled checkbox #}
+            <div class="mb-3">
+                <label for="{{ form.cancelled.id_for_label }}" class="form-label">{{ form.cancelled.label }}</label>
+                <div class="form-check form-switch">
+                    {{ form.cancelled|add_class:"form-check-input panel-cancelled-checkbox" }}
+                    {{ form.cancelled.errors }}
+                    {% if form.cancelled.help_text %}
+                        <small class="form-text">{{ form.cancelled.help_text }}</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Featured checkbox #}
+            <div class="mb-3">
+                <label for="{{ form.is_featured.id_for_label }}" class="form-label">{{ form.is_featured.label }}</label>
+                <div class="form-check form-switch">
+                    {{ form.is_featured|add_class:"form-check-input" }}
+                    {{ form.is_featured.errors }}
+                    {% if form.is_featured.help_text %}
+                        <small class="form-text">{{ form.is_featured.help_text }}</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+                <button type="submit" class="btn btn-primary">
+                    <i class="material-icons">save</i> Save Event
+                </button>
+                <a href="{% url 'events:convention_detail' convention_pk %}" class="btn btn-secondary">
+                    <i class="material-icons">cancel</i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add New Host Modal (Bootstrap) -->
+<div class="modal fade" id="addHostModal" tabindex="-1" aria-labelledby="addHostModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addHostModalLabel">Add New Event Host</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addHostForm" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="host_id" id="id_host_id">
+                    <div class="mb-3">
+                        <label for="id_name" class="form-label">Name</label>
+                        <input type="text" name="name" id="id_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_profile_picture" class="form-label">Profile Picture</label>
+                        <div id="currentProfilePic" class="mb-2" style="display: none;">
+                            <img src="" alt="Current profile picture" style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%;">
+                            <p class="text-muted mt-1">Current profile picture</p>
+                        </div>
+                        <input type="file" name="image" id="id_profile_picture" class="form-control" accept="image/*">
+                        <div class="form-text">Upload a profile picture for the host (optional)</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger me-auto" id="deleteHostBtn" style="display: none;">Delete Host</button>
+                <button type="button" class="btn btn-primary" id="saveHostBtn">Save Host</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add New Tag Modal (Bootstrap) -->
+<div class="modal fade" id="addTagModal" tabindex="-1" aria-labelledby="addTagModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addTagModalLabel">Add New Tag</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addTagForm" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_name" class="form-label">Name</label>
+                        <input type="text" name="name" id="id_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_color" class="form-label">Color</label>
+                        <input type="text" name="color" id="id_color" class="form-control jscolor" value="#007bff" required>
+                        <div class="form-text">Click to open color picker</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger me-auto" id="deleteTagBtn" style="display: none;">Delete Tag</button>
+                <button type="button" class="btn btn-primary" id="saveTagBtn">Save Tag</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add New Room Modal (Bootstrap) -->
+<div class="modal fade" id="addRoomModal" tabindex="-1" aria-labelledby="addRoomModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addRoomModalLabel">Add New Room</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addRoomForm" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_name" class="form-label">Name</label>
+                        <input type="text" name="name" id="id_name" class="form-control" required>
+                    </div>
+                    {# Add hidden convention_id input #}
+                    <input type="hidden" name="convention_id" value="{{ convention_pk }}">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger me-auto" id="deleteRoomBtn" style="display: none;">Delete Room</button>
+                <button type="button" class="btn btn-primary" id="saveRoomBtn">Save Room</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
+<!-- jscolor JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.5.1/jscolor.min.js"></script>
+
+{# json_script tags to safely pass initial data to JavaScript #}
+{{ form.host.value|json_script:"initial-host-items" }}
+{{ form.tags.value|json_script:"initial-tag-items" }}
+{{ form.room.value|json_script:"initial-room-items" }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize jscolor for the color picker
+    if (typeof jscolor !== 'undefined') {
+        jscolor.install();
+    }
+
+    // Add time format settings for the time inputs
+    const timeInputs = document.querySelectorAll('input[type="time"]');
+    timeInputs.forEach(input => {
+        input.step = '60'; // Set step to 60 seconds to hide seconds
+    });
+
+    // Retrieve data from json_script tags
+    const initialHostItems = JSON.parse(document.getElementById('initial-host-items').textContent);
+    const initialTagItems = JSON.parse(document.getElementById('initial-tag-items').textContent);
+    const initialRoomItems = JSON.parse(document.getElementById('initial-room-items').textContent);
+
+    // Initialize Tom Select for hosts
+    let hostSelectInstance = null; // Declare using let so we can assign later
+    let allHostsData = {}; // Variable to store all fetched hosts data
+
+    // Add a function to refresh host images in Tom Select items and options
+    // This function reads the image source from the stored data or fetches if necessary.
+    function refreshHostImages(containerElement = null, triggerEvent = 'unknown') {
+        // Wait for the next animation frame to ensure the DOM is updated after Tom Select operations
+        requestAnimationFrame(() => {
+            const hostSelectControl = document.querySelector('#id_host').tomselect?.control;
+            const dropdownEl = hostSelectControl?.dropdown;
+
+            // Select all host image elements within the control and the dropdown
+            let hostImgElements = [];
+
+            if (containerElement && typeof containerElement.querySelectorAll === 'function') {
+                // If a valid container is provided, search within it
+                 // Search for both item and option images within the specific container
+                hostImgElements = Array.from(containerElement.querySelectorAll('.item[data-host-id] img, .option[data-host-id] img'));
+            } else {
+                // If no container, or container is invalid, search globally within the control and dropdown
+                // This is a fallback, ideally a container should be provided for targeted refresh
+                if (hostSelectControl && typeof hostSelectControl.querySelectorAll === 'function') {
+                    hostImgElements = hostImgElements.concat(Array.from(hostSelectControl.querySelectorAll('.item[data-host-id] img')));
+                }
+                if (dropdownEl && typeof dropdownEl.querySelectorAll === 'function') {
+                    hostImgElements = hostImgElements.concat(Array.from(dropdownEl.querySelectorAll('.option[data-host-id] img')));
+                }
+            }
+
+            hostImgElements.forEach(imgElement => {
+                // Get host ID from the parent element with the data-host-id attribute
+                const hostElement = imgElement.closest('[data-host-id]');
+                const hostId = hostElement?.dataset.hostId;
+
+                if (hostId) {
+                    // Look up host data in the stored variable
+                    const hostData = allHostsData[hostId];
+
+                    if (hostData && hostData.profile_picture) {
+                        imgElement.src = hostData.profile_picture;
+                      } else if (hostData && !hostData.profile_picture) {
+                          imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                      } else {
+                         // Fallback: If data not in stored variable, fetch details via AJAX (less common now)
+                         fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`), {
+                             method: 'GET',
+                             headers: {
+                                 'Accept': 'application/json',
+                                 'X-Requested-With': 'XMLHttpRequest'
+                             },
+                             credentials: 'same-origin'
+                          })
+                          .then(response => {
+                              if (!response.ok) {
+                                  console.error(`HTTP error fetching fallback host ${hostId} details! status: ${response.status}`);
+                                  // If 404, it might mean the host was deleted, set placeholder.
+                                  if (response.status === 404) {
+                                      imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                                  }
+                                  throw new Error(`HTTP error! status: ${response.status}`);
+                              }
+                              return response.json();
+                          })
+                          .then(data => {
+                              console.log('Received fallback host data for ID', hostId, ':', data);
+                              if (data && data.profile_picture) {
+                                  console.log('Setting fallback image for host ID:', hostId, 'with src:', data.profile_picture);
+                                  imgElement.src = data.profile_picture;
+                                  // Optionally update stored data here too if needed
+                                  allHostsData[hostId] = data; // Update stored data with the fetched details
+                              } else {
+                                  console.log('No profile picture found in fallback data for host ID:', hostId, '. Setting placeholder.');
+                                  imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                              }
+                          })
+                          .catch(error => {
+                              console.error(`Error fetching fallback host details for ID ${hostId}:`, error);
+                              imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                          });
+                      }
+                  } else {
+                      imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                  }
+              });
+          });
+      }
+
+    // Define render functions separately
+    const renderHostItem = function(data, escape) {
+        // Show profile picture in the main list (selected items)
+        // Initially use a placeholder, refreshHostImages will update
+        const hostProfilePic = data.profile_picture || "{% static 'events/images/placeholder.webp' %}}";
+
+        // Determine text color based on luminosity (assuming background is known)
+        // For TomSelect items, the background is the default item background.
+        // Let's keep the default text color unless there's a specific dark mode style
+        const textColor = ''; // Use default text color
+
+        return `<div style="display:inline-flex;align-items:center;gap:0.5rem;" data-host-id="${escape(data.value)}">
+            <img src="${escape(hostProfilePic)}" alt="Profile picture for ${escape(data.text)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null;this.src='{% static 'events/images/placeholder.webp' %}';">
+            ${escape(data.text)}
+        </div>`;
+    };
+
+    const renderHostOption = function(data, escape) {
+        // Show profile pictures in the dropdown too
+        const hostProfilePic = data.profile_picture || "{% static 'events/images/placeholder.webp' %}}";
+
+         return `<div style="display:flex;align-items:center;gap:0.5rem;" data-host-id="${escape(data.value)}">
+             <span style="width:24px;height:24px;border-radius:50%;overflow:hidden;">
+                 <img src="${escape(hostProfilePic)}" alt="Profile picture for ${escape(data.text)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.src='{% static 'events/images/placeholder.webp' %}';">
+             </span>
+             ${escape(data.text)}
+         </div>`;
+     };
+
+    hostSelectInstance = new TomSelect('#id_host', {
+        plugins: ['remove_button', 'drag_drop'],
+        placeholder: 'Select hosts...',
+        items: initialHostItems,
+        onInitialize: function() {
+            const hostSelect = this;
+             // Fetch all hosts for the current convention and add them as options
+            fetch(`/ajax/hosts/all/?convention_id={{ convention_pk }}&panel_id={{ form.instance.pk|default:"" }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.hosts) {
+                         // Store fetched data in the allHostsData variable for faster lookup
+                        data.hosts.forEach(host => {
+                            allHostsData[host.id] = host;
+                        });
+
+                        // Add all hosts as options
+                        const options = data.hosts.map(host => {
+                             return {
+                                 value: host.id,
+                                 text: host.name,
+                                 profile_picture: host.profile_picture || "{% static 'events/images/placeholder.webp' %}", // Add top-level for robustness
+                                 customProperties: {
+                                     profile_picture: host.profile_picture || "{% static 'events/images/placeholder.webp' %}"
+                                 }
+                             };
+                         });
+                         this.addOptions(options);
+
+                         // Add selected items
+                         data.hosts.forEach(host => {
+                             if (host.selected) {
+                                 this.addItem(host.id); // This will trigger renderHostItem
+                             }
+                         });
+
+                         // Manually refresh images after adding options and items
+                         requestAnimationFrame(() => {
+                             // Ensure allHostsData is populated before attempting refresh
+                             if (Object.keys(allHostsData).length > 0) {
+                                 setTimeout(() => { refreshHostImages('tomselect_init'); }, 100); // Increased delay
+                             } else {
+                                 console.warn('allHostsData is empty after fetch in onInitialize. Images may not refresh.');
+                                 // Still attempt refresh with a slightly longer delay just in case of late population
+                                 setTimeout(() => { refreshHostImages('tomselect_init_empty_data'); }, 200);
+                             }
+                         });
+
+                         // Ensure Tom Select syncs after adding options and items
+                         this.sync();
+                     }
+                 })
+                 .catch(error => {
+                     console.error('Error fetching hosts for Tom Select initialization:', error);
+                 });
+         },
+         render: {
+            option_create: function(data, escape) {
+                return `<div class="create">Add <strong>${escape(data.input)}</strong>...</div>`;
+            },
+            item: renderHostItem, // Use the pre-defined function
+            option: renderHostOption // Use the pre-defined function
+        },
+        create: function(input, callback) {
+            const hostModal = new bootstrap.Modal(document.getElementById('addHostModal'));
+            const hostNameInput = document.getElementById('id_name');
+            if (hostNameInput) hostNameInput.value = input;
+            hostModal.show();
+            return false;
+        },
+        valueField: 'value',
+        labelField: 'text',
+        searchField: 'text',
+        dataAttr: 'data-custom-properties',
+        sortField: null // Disable sorting to maintain original order
+    });
+
+    // Add event listener for when a host item is added
+    hostSelectInstance.on('item_add', function() {
+        // Refresh host images after an item is added
+        refreshHostImages('host_item_added');
+    });
+
+    // Add event listener for when the dropdown is opened with reflow hack
+    hostSelectInstance.on('dropdown_open', function() {
+        const dropdownEl = this.dropdown;
+        if (dropdownEl) {
+            // Refresh images only within the dropdown
+            refreshHostImages(dropdownEl, 'dropdown_open_hack');
+            // Force a reflow to try and render images
+            dropdownEl.offsetHeight; // Reading offsetHeight forces a reflow
+        }
+    });
+
+    // Add form submission handler to ensure host values are included
+    document.querySelector('form').addEventListener('submit', function(e) {
+        e.preventDefault(); // Prevent default form submission
+        
+        // Get the selected host values from TomSelect in their current order
+        const selectedHosts = hostSelectInstance ? hostSelectInstance.items : [];
+        console.log('Selected hosts from TomSelect:', selectedHosts);  // Debug log
+        
+        // Remove any existing host inputs
+        const existingHostInputs = document.querySelectorAll('input[name="host"]');
+        existingHostInputs.forEach(input => input.remove());
+        
+        // Create hidden inputs for each selected host in order
+        selectedHosts.forEach(hostId => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'host';
+            input.value = hostId;
+            this.appendChild(input);
+        });
+        
+        // Log the form data before submission
+        const formData = new FormData(this);
+        console.log('Form data before submission:', Array.from(formData.entries()));  // Debug log
+        
+        // Now submit the form
+        this.submit();
+    });
+
+    // Add retroactive loading of host images every second
+    setInterval(function() {
+                            if (hostSelectInstance) {
+            refreshHostImages('retroactive');
+        }
+    }, 1000);
+
+    // Add retroactive loading of tag colors every second
+    setInterval(function() {
+        if (tagSelectInstance) {
+            refreshTagColors();
+        }
+    }, 1000); // Reload every 1 second
+
+    // Add a function to check color luminosity (needed for tag color contrast)
+    function isLightColor(color) {
+        // Convert hex to RGB
+        let r, g, b;
+        if (color.startsWith('#')) {
+            r = parseInt(color.substr(1,2), 16);
+            g = parseInt(color.substr(3,2), 16);
+            b = parseInt(color.substr(5,2), 16);
+        } else if (color.startsWith('rgb')) {
+            const rgb = color.match(/\d+/g);
+            r = parseInt(rgb[0]);
+            g = parseInt(rgb[1]);
+            b = parseInt(rgb[2]);
+        } else {
+            return false; // Cannot determine luminosity for unknown format
+        }
+        
+        // Calculate relative luminance (Luma model, more perceptual)
+        // Formula: L = 0.2126*R + 0.7152*G + 0.0722*B (for sRGB)
+        const luminance = (0.2126 * (r/255) + 0.7152 * (g/255) + 0.0722 * (b/255));
+        
+        // Use a threshold (e.g., 0.5 or calculate contrast ratio)
+        return luminance > 0.5; // Simple threshold
+    }
+
+    // Add a function to refresh tag colors in Tom Select items and options
+    function refreshTagColors() {
+        const tagSelectControl = document.querySelector('#id_tags').tomselect.control;
+        if (!tagSelectControl) return; // Exit if Tom Select isn't initialized
+
+         // Get all current options from Tom Select instance
+        const options = tagSelectInstance.options;
+
+        // Refresh colors in selected items (in the control area)
+        const tagItems = tagSelectControl.querySelectorAll('.item');
+        tagItems.forEach(itemElement => {
+            const tagId = itemElement.getAttribute('data-value');
+             const option = options[tagId]; // Get the option data from the Tom Select instance
+             if (option && option.customProperties && option.customProperties.color) {
+                const color = option.customProperties.color;
+                itemElement.style.backgroundColor = color;
+                 // Adjust text color based on luminosity
+                 itemElement.style.color = isLightColor(color) ? '#000' : '#fff';
+            }
+        });
+
+        // Refresh colors in dropdown options
+        const dropdownOptions = document.querySelectorAll('.ts-dropdown .option');
+        dropdownOptions.forEach(optionElement => {
+            const tagId = optionElement.getAttribute('data-value');
+             const option = options[tagId]; // Get the option data from the Tom Select instance
+             if (option && option.customProperties && option.customProperties.color) {
+                const color = option.customProperties.color;
+                const colorDot = optionElement.querySelector('.tag-color-bubble'); // Select using the class
+                if (colorDot) {
+                    colorDot.style.background = color;
+                    // Add inline styles for size and alignment
+                    colorDot.style.display = 'inline-block';
+                    colorDot.style.width = '12px';
+                    colorDot.style.height = '12px';
+                    colorDot.style.borderRadius = '50%';
+                    colorDot.style.marginRight = '0.5rem';
+                    colorDot.style.verticalAlign = 'middle';
+                }
+                // Adjust text color based on luminosity
+                // optionElement.style.color = isLightColor(color) ? '#000' : '#fff'; // Keep original text color or adjust as needed
+            }
+        });
+    }
+
+    // Initial refresh after a delay (for both hosts and tags)
+    setTimeout(refreshHostImages, 200);
+    setTimeout(refreshTagColors, 250); // Slightly later for tags
+
+    // Initialize Tom Select for room
+    const roomSelectInstance = new TomSelect('#id_room', {
+        plugins: ['remove_button'],
+        placeholder: 'Select room...',
+        items: initialRoomItems,
+        onInitialize: function() {
+            // Fetch all rooms for the current convention
+            fetch(`/ajax/rooms/all/?convention_id={{ convention_pk }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.rooms) {
+                        console.log('Fetched rooms data:', data.rooms);
+                        // Add all rooms as options
+                        const options = data.rooms.map(room => ({
+                            value: room.id,
+                            text: room.name
+                        }));
+                        this.addOptions(options);
+                        
+                        // Add selected item if any
+                        if (this.items.length > 0) {
+                            this.addItem(this.items[0]);
+                        }
+                        
+                        // Ensure Tom Select syncs after adding options and items
+                        this.sync();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching rooms:', error);
+                });
+        },
+        render: {
+            option_create: function(data, escape) {
+                return `<div class="create">Add <strong>${escape(data.input)}</strong>...</div>`;
+            }
+        },
+        create: function(input, callback) {
+            // Open the modal and pre-fill the name field
+            const roomModal = new bootstrap.Modal(document.getElementById('addRoomModal'));
+            const roomModalForm = document.getElementById('addRoomForm');
+            const roomNameInput = roomModalForm.querySelector('#id_name');
+            const roomIdInput = roomModalForm.querySelector('#id_room_id');
+            const deleteRoomBtn = document.getElementById('deleteRoomBtn');
+            const closeRoomModalBtn = document.querySelector('#addRoomModal button[data-bs-dismiss="modal"]');
+
+            // Clear hidden ID for new room creation
+            if (roomIdInput) roomIdInput.value = '';
+
+            // Set the name input in the modal
+            if (roomNameInput) roomNameInput.value = input;
+
+            // Hide delete button for new rooms
+            if (deleteRoomBtn) {
+                deleteRoomBtn.style.display = 'none';
+            }
+
+            // Update modal title for new room
+            const modalTitle = document.getElementById('addRoomModalLabel');
+            if (modalTitle) modalTitle.textContent = 'Add New Room';
+
+            // Show the modal
+            roomModal.show();
+
+            // Prevent the default Tom Select behavior
+            return false;
+        }
+    });
+
+    // Variables for the room modal, declared in a scope accessible by all handlers
+    const roomModal = new bootstrap.Modal(document.getElementById('addRoomModal'));
+    const roomModalForm = document.getElementById('addRoomForm');
+    const roomNameInput = roomModalForm.querySelector('#id_name');
+    let roomIdInput = roomModalForm.querySelector('#id_room_id');
+    const deleteRoomBtn = document.getElementById('deleteRoomBtn');
+    const closeRoomModalBtn = document.querySelector('#addRoomModal button[data-bs-dismiss="modal"]');
+
+    // Add a hidden input for room ID if it doesn't exist
+    if (!roomIdInput) {
+        roomIdInput = document.createElement('input');
+        roomIdInput.setAttribute('type', 'hidden');
+        roomIdInput.setAttribute('name', 'room_id');
+        roomIdInput.setAttribute('id', 'id_room_id');
+        roomModalForm.appendChild(roomIdInput);
+    }
+
+    // Function to open modal with room data
+    function openRoomEditModal(roomId, roomName) {
+        // Update modal title
+        const modalTitle = document.getElementById('addRoomModalLabel');
+        if (modalTitle) modalTitle.textContent = roomId ? 'Edit Room' : 'Add New Room';
+
+        // Populate form fields
+        if (roomNameInput) roomNameInput.value = roomName || '';
+        if (roomIdInput) roomIdInput.value = roomId || '';
+
+        // Show/hide delete button
+        if (deleteRoomBtn) {
+            deleteRoomBtn.style.display = roomId ? '' : 'none';
+        }
+
+        // Show the modal
+        roomModal.show();
+    }
+
+    // Add event listener for the save room button
+    document.getElementById('saveRoomBtn').addEventListener('click', function() {
+        const formData = new FormData(roomModalForm);
+        // formData.append('convention_id', '{{ convention_pk }}'); // Removed: now in hidden input
+
+        // Explicitly add room_id if editing
+        if (roomIdInput && roomIdInput.value) {
+            formData.append('room_id', roomIdInput.value);
+        }
+
+        // Log FormData contents for debugging
+        for (let pair of formData.entries()) {
+            console.log(pair[0]+ ': ' + pair[1]);
+        }
+        console.log('Sending data to save_room_ajax');
+
+        fetch('{% url "events:save_room_ajax" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const savedRoom = data.room;
+                
+                // Update or add the room in Tom Select
+                if (roomSelectInstance) {
+                    // Check if the option already exists before adding to avoid duplicates
+                    if (!roomSelectInstance.options.hasOwnProperty(savedRoom.id)) {
+                         roomSelectInstance.addOption({
+                             value: savedRoom.id,
+                             text: savedRoom.name
+                         });
+                     }
+
+                    // Set the newly saved room as the selected item
+                    roomSelectInstance.setValue(savedRoom.id);
+
+                    // The .setValue() method should handle syncing with the original select, but let's log to confirm
+                    console.log('Original room select value set to:', document.getElementById('id_room').value);
+
+                }
+
+                // Close the modal
+                const roomModal = bootstrap.Modal.getInstance(document.getElementById('addRoomModal'));
+                if (roomModal) {
+                    roomModal.hide();
+                }
+                
+                // Clear the form
+                roomModalForm.reset();
+            } else {
+                // Handle errors
+                console.error('Error saving room:', data.errors);
+                alert('Error saving room: ' + JSON.stringify(data.errors || data));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving room. Please try again.');
+        });
+    });
+
+    // Add double-click handler for rooms
+    const roomSelectControl = document.querySelector('#id_room').tomselect.control;
+
+    if (roomSelectControl) {
+        roomSelectControl.addEventListener('dblclick', function(e) {
+            const itemElement = e.target.closest('.item');
+            if (itemElement) {
+                const roomId = itemElement.getAttribute('data-value');
+                if (roomId) {
+                    // Fetch room details via AJAX
+                    fetch(`{% url 'events:get_room_details_ajax' pk=0 %}`.replace('/0/', `/${roomId}/`))
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            // Populate modal with data from the AJAX response
+                            openRoomEditModal(data.id, data.name);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching room details:', error);
+                        });
+                }
+            }
+        });
+    }
+
+    // Handle delete room button click
+    if (deleteRoomBtn) {
+        deleteRoomBtn.addEventListener('click', function() {
+            const roomId = roomIdInput.value;
+            if (!roomId) {
+                console.warn("No room ID found for deletion.");
+                return;
+            }
+
+            // Confirm deletion
+            if (confirm('Are you sure you want to delete this room? This cannot be undone.')) {
+                fetch(`{% url 'events:delete_room_ajax' pk=0 %}`.replace('/0/', `/${roomId}/`), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the room from Tom Select
+                        if (roomSelectInstance) {
+                            roomSelectInstance.removeOption(roomId);
+                            roomSelectInstance.removeItem(roomId);
+                        }
+
+                        // Close the modal
+                        roomModal.hide();
+                    } else {
+                        console.error('Error deleting room:', data.error || 'Unknown error');
+                        alert('Error deleting room: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('AJAX error during deletion:', error);
+                    alert('An error occurred during deletion.');
+                });
+            }
+        });
+    }
+
+    // Reset room modal when hidden
+    roomModal._element.addEventListener('hidden.bs.modal', function () {
+        roomModalForm.reset();
+        if (roomIdInput) roomIdInput.value = '';
+        const modalTitle = document.getElementById('addRoomModalLabel');
+        if (modalTitle) modalTitle.textContent = 'Add New Room';
+        if (deleteRoomBtn) deleteRoomBtn.style.display = 'none';
+    });
+
+    // Add click listener to the explicit close button
+    if (closeRoomModalBtn) {
+        closeRoomModalBtn.addEventListener('click', function() {
+            roomModal.hide();
+        });
+    }
+
+    // --- Host Modal Save Logic ---
+    const saveHostBtn = document.getElementById('saveHostBtn');
+    const addHostForm = document.getElementById('addHostForm');
+    const hostModal = new bootstrap.Modal(document.getElementById('addHostModal'));
+
+    if (saveHostBtn && addHostForm && hostModal) {
+        saveHostBtn.addEventListener('click', function() {
+            const formData = new FormData(addHostForm);
+            const hostIdInput = addHostForm.querySelector('#id_host_id');
+            const profilePictureInput = addHostForm.querySelector('#id_profile_picture');
+
+            // Append host_id if editing
+            if (hostIdInput && hostIdInput.value) {
+                formData.append('host_id', hostIdInput.value);
+            }
+
+            // Convert image file to base64 if a new one is selected
+            if (profilePictureInput && profilePictureInput.files && profilePictureInput.files[0]) {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    // Ensure the base64 string is correctly formatted (e.g., remove data URL prefix if needed)
+                    // Django's Base64ImageField might expect the prefix, let's keep it for now.
+                    formData.append('image_base64', reader.result);
+                    sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
+                };
+                reader.readAsDataURL(profilePictureInput.files[0]);
+            } else {
+                // If no new image is selected, check if we are clearing an existing one
+                 const currentProfilePicDiv = document.getElementById('currentProfilePic');
+                 // If there was a current picture displayed and no new file, and we are editing (hostId exists), 
+                 // explicitly send an empty string for the image to signal clearing.
+                 if (currentProfilePicDiv && currentProfilePicDiv.style.display !== 'none' && hostIdInput && hostIdInput.value && (!profilePictureInput || !profilePictureInput.files || profilePictureInput.files.length === 0)) {
+                      formData.append('image_base64', '');
+                      console.log('Explicitly sending empty image_base64 to clear picture.');
+                 }
+                sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
+            }
+        });
+    }
+
+    // Function to send the AJAX request for saving host
+    function sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput) {
+        console.log('Attempting to send host save request.');
+        // Log FormData contents for debugging
+        for (let pair of formData.entries()) {
+            console.log('FormData entry: ' + pair[0]+ ': ' + pair[1]);
+        }
+
+        fetch('{% url "events:add_panel_host_ajax" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                // Do NOT set Content-Type: 'application/json' when sending FormData with files
+            }
+        })
+        .then(response => {
+            console.log('Received response from host save AJAX.', response);
+            // Check if response is OK
+            if (!response.ok) {
+                console.error(`HTTP error saving host! status: ${response.status}`);
+                // Attempt to read response body for more details
+                return response.json().catch(() => { throw new Error(`HTTP status ${response.status}`); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Received JSON data for host save:', data);
+            if (data.success) {
+                console.log('Host saved successfully:', data.host);
+                const savedHost = data.host;
+                
+                // Update or add the host in Tom Select
+                if (hostSelectInstance) {
+                    const hostOptionData = {
+                        value: savedHost.id,
+                        text: savedHost.name,
+                        profile_picture: savedHost.profile_picture || "{% static 'events/images/placeholder.webp' %}",
+                        customProperties: {
+                            profile_picture: savedHost.profile_picture || "{% static 'events/images/placeholder.webp' %}"
+                        }
+                    };
+
+                    // Check if the option already exists before adding to avoid duplicates
+                    // Use updateOption if host_id was present (editing), otherwise addOption (creating)
+                     if (hostIdInput && hostIdInput.value && hostSelectInstance.options.hasOwnProperty(savedHost.id)) {
+                         console.log('Updating host option in Tom Select:', savedHost.id);
+                         hostSelectInstance.updateOption(savedHost.id, hostOptionData);
+                         // Re-render items to update display, especially for image
+                         hostSelectInstance.refreshItems();
+                     } else if (!hostSelectInstance.options.hasOwnProperty(savedHost.id)) {
+                         console.log('Adding new host option to Tom Select:', savedHost.id);
+                         hostSelectInstance.addOption(hostOptionData);
+                     }
+
+                    // Add the saved host to the selected items if it wasn't already selected
+                    // Check if the item is NOT currently selected before adding
+                    if (!hostSelectInstance.items.includes(savedHost.id.toString())) { // Tom Select stores values as strings
+                         console.log('Adding saved host to selected items:', savedHost.id);
+                         hostSelectInstance.addItem(savedHost.id, { silent: true }); // Add silently to prevent event loops
+                         hostSelectInstance.refreshItems(); // Refresh after silent add
+                    }
+
+                    // Update allHostsData with the saved host details
+                    allHostsData[savedHost.id] = savedHost;
+
+                    // Manually refresh host images to ensure the new/updated image appears
+                    setTimeout(() => { refreshHostImages(document, 'host_saved'); }, 50); // Small delay
+                }
+
+                // Close the modal
+                console.log('Attempting to close host modal.');
+                // Get the actual modal instance before hiding
+                const activeHostModal = bootstrap.Modal.getInstance(document.getElementById('addHostModal'));
+                if (activeHostModal) {
+                     console.log('Found active host modal instance, attempting to hide.');
+                     activeHostModal.hide();
+                } else {
+                     console.log('No active host modal instance found to hide.');
+                }
+
+                
+                // Clear the form (except CSRF token and convention_id if they exist)
+                addHostForm.reset();
+                // Manually reset the file input
+                if (profilePictureInput) {
+                    profilePictureInput.value = '';
+                }
+                // Hide current profile pic preview
+                const currentProfilePicDiv = document.getElementById('currentProfilePic');
+                if (currentProfilePicDiv) {
+                    currentProfilePicDiv.style.display = 'none';
+                    currentProfilePicDiv.querySelector('img').src = '';
+                }
+
+            } else {
+                console.error('Backend reported error saving host:', data.errors || data.error);
+                let errorMessage = 'Error saving host.';
+                 if (data.errors) {
+                     errorMessage += '\n' + Object.entries(data.errors).map(([field, messages]) => `${field}: ${messages.join(', ')}`).join('\n');
+                 } else if (data.error) {
+                     errorMessage += '\n' + data.error;
+                 }
+                alert(errorMessage);
+            }
+        })
+        .catch(error => {
+            console.error('Fetch or JSON parsing error saving host:', error);
+            alert('An error occurred while saving the host. Please try again.\n' + error.message);
+        });
+    }
+
+    // Add double-click handler for hosts in Tom Select
+    // This is outside the setTimeout block now
+    setTimeout(function() {
+        const hostSelectControl = document.querySelector('#id_host').tomselect?.control;
+
+        // Function to open modal with host data
+        function openHostEditModal(hostId, hostName, profilePictureUrl) {
+            // Update modal title
+            const modalTitle = document.getElementById('addHostModalLabel');
+            if (modalTitle) modalTitle.textContent = hostId ? 'Edit Event Host' : 'Add New Event Host';
+
+            // Populate form fields
+            const hostNameInput = document.getElementById('id_name');
+            const hostIdInput = document.getElementById('id_host_id');
+            const profilePictureInput = document.getElementById('id_profile_picture');
+            const currentProfilePicDiv = document.getElementById('currentProfilePic');
+            const deleteHostBtn = document.getElementById('deleteHostBtn');
+            
+            if (hostNameInput) hostNameInput.value = hostName || '';
+            if (hostIdInput) hostIdInput.value = hostId || '';
+
+            // Display current profile picture if it exists
+            if (profilePictureUrl) {
+                if (currentProfilePicDiv) {
+                    currentProfilePicDiv.style.display = 'block';
+                    currentProfilePicDiv.querySelector('img').src = profilePictureUrl;
+                }
+            }
+
+            // Show/hide delete button
+            if (deleteHostBtn) {
+                deleteHostBtn.style.display = hostId ? '' : 'none';
+            }
+
+            // Show the modal
+            const hostModal = new bootstrap.Modal(document.getElementById('addHostModal'));
+            hostModal.show();
+
+            // Add a slight delay before refreshing images in the modal content
+             // This helps ensure the modal is visible and elements are rendered
+             setTimeout(() => {
+                 const modalElement = document.getElementById('addHostModal');
+                 if (modalElement) {
+                      refreshHostImages(modalElement, 'open_host_edit_modal');
+                 }
+             }, 350);
+        }
+
+        if (hostSelectControl) {
+            // Add double-click listener to the control itself
+            hostSelectControl.addEventListener('dblclick', function(e) {
+                // Find the closest item element to the double-clicked target
+                const itemElement = e.target.closest('.item');
+
+                if (itemElement) {
+                    const hostId = itemElement.getAttribute('data-value');
+                    if (hostId) {
+                        // Fetch host details via AJAX
+                        fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`))
+                            .then(response => {
+                                if (!response.ok) {
+                                    console.error(`HTTP error! status: ${response.status}`);
+                                    throw new Error(`HTTP error! status: ${response.status}`);
+                                }
+                                return response.json();
+                            })
+                            .then(data => {
+                                // Populate and open modal with data from the AJAX response
+                                openHostEditModal(data.id, data.name, data.profile_picture);
+                            })
+                            .catch(error => {
+                                console.error('Error fetching host details for editing:', error);
+                                alert('Error fetching host details.');
+                            });
+                    }
+                }
+            });
+        }
+
+        // Handle delete host button click
+        const deleteHostBtn = document.getElementById('deleteHostBtn');
+        const hostIdInput = document.getElementById('id_host_id');
+
+        if (deleteHostBtn) {
+            deleteHostBtn.addEventListener('click', function() {
+                const hostId = hostIdInput.value;
+                if (!hostId) {
+                    console.warn("No host ID found for deletion.");
+                    return;
+                }
+
+                // Confirm deletion
+                if (confirm('Are you sure you want to delete this host? This cannot be undone.')) {
+                    fetch(`{% url 'events:delete_host_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Remove the host from Tom Select options and selected items
+                            if (hostSelectInstance) {
+                                hostSelectInstance.removeOption(hostId);
+                                hostSelectInstance.removeItem(hostId);
+                                 // Remove from allHostsData
+                                delete allHostsData[hostId];
+                                 // Manually refresh host images as the option might still be in memory temporarily
+                                 setTimeout(() => { refreshHostImages(document, 'host_deleted'); }, 50);
+                            }
+
+                            // Close the modal
+                            const hostModal = bootstrap.Modal.getInstance(document.getElementById('addHostModal'));
+                            if (hostModal) {
+                                hostModal.hide();
+                            }
+                        } else {
+                            console.error('Error deleting host:', data.error || 'Unknown error');
+                            alert('Error deleting host: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('AJAX error during deletion:', error);
+                        alert('An error occurred during deletion.');
+                    });
+                }
+            });
+        }
+
+        // Reset host modal when hidden
+        hostModal._element.addEventListener('hidden.bs.modal', function () {
+            addHostForm.reset();
+            hostIdInput.value = '';
+            const modalTitle = document.getElementById('addHostModalLabel');
+            if (modalTitle) modalTitle.textContent = 'Add New Event Host';
+            const currentProfilePicDiv = document.getElementById('currentProfilePic');
+            if (currentProfilePicDiv) {
+                currentProfilePicDiv.style.display = 'none';
+                currentProfilePicDiv.querySelector('img').src = '';
+            }
+            const profilePictureInput = document.getElementById('id_profile_picture');
+            if (profilePictureInput) profilePictureInput.value = '';
+            if (deleteHostBtn) deleteHostBtn.style.display = 'none';
+        });
+
+    }, 500);
+
+
+    // Initialize Tom Select for tags
+    let tagSelectInstance = null; // Declare using let
+    let allTagsData = {}; // Variable to store all fetched tags data
+
+    // Define render functions for tags
+    const renderTagItem = function(data, escape) {
+        const tagColor = allTagsData[data.value]?.color || '#007bff'; // Default to blue if color not found
+        // Determine text color based on luminosity
+        const textColor = isLightColor(tagColor) ? '#000' : '#fff';
+        const removeIconColor = isLightColor(tagColor) ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+        const removeIconHoverColor = isLightColor(tagColor) ? '#dc3545' : '#fff'; // Dark red or white on hover
+
+        return `<div style="display:inline-flex;align-items:center;gap:0.5rem;background-color:${escape(tagColor)};color:${textColor};padding:0.35em 0.9em;border-radius:16px;font-size:1rem;">
+            ${escape(data.text)}
+             <span data-value="${escape(data.value)}" class="remove" style="color:${removeIconColor}; cursor:pointer; transition: color 0.2s;" onmouseover="this.style.color='${removeIconHoverColor}'" onmouseout="this.style.color='${removeIconColor}'" >&times;</span>
+        </div>`;
+    };
+
+    const renderTagOption = function(data, escape) {
+        const tagColor = allTagsData[data.value]?.color || '#007bff'; // Default to blue if color not found
+         return `<div style="display:flex;align-items:center;gap:0.5rem;">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background-color:${escape(tagColor)};"></span>
+            ${escape(data.text)}
+         </div>`;
+    };
+
+    tagSelectInstance = new TomSelect('#id_tags', {
+        plugins: ['drag_drop'],
+        placeholder: 'Select tags...',
+        items: initialTagItems,
+        onInitialize: function() {
+            const tagSelect = this;
+             // Fetch all tags for the current convention
+            fetch(`/ajax/tags/all/?convention_id={{ convention_pk }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.tags) {
+                        console.log('Fetched tags data for Tom Select initialization:', data.tags);
+
+                         // Store fetched data in allTagsData
+                        data.tags.forEach(tag => {
+                            allTagsData[tag.id] = tag;
+                        });
+                        console.log('Stored allTagsData:', allTagsData);
+
+                        // Add all tags as options
+                        data.tags.forEach(tag => {
+                            tagSelect.addOption({value: tag.id, text: tag.name});
+                        });
+
+                         // Pre-select initial items if any
+                         if (initialTagItems && initialTagItems.length > 0) {
+                             tagSelect.setValue(initialTagItems);
+                         }
+                         // Refresh visuals after setting value
+                         tagSelect.refreshOptions(false);
+                         tagSelect.refreshItems();
+                    }
+                })
+                .catch(error => console.error('Error fetching tags:', error));
+        },
+        onItemAdd: function(value, item) {
+            // When a tag is added, update its priority
+            updateTagPriorities();
+        },
+        onItemRemove: function(value, item) {
+            // When a tag is removed, update priorities
+            updateTagPriorities();
+        },
+        onReorder: function() {
+            // When tags are reordered, update priorities
+            updateTagPriorities();
+        },
+        render: {
+            item: renderTagItem,
+            option: renderTagOption
+        },
+        valueField: 'value',
+        labelField: 'text',
+        searchField: ['text'],
+        create: function(input, callback) {
+            // Open the modal and pre-fill the name field
+            const tagModal = new bootstrap.Modal(document.getElementById('addTagModal'));
+            const tagModalForm = document.getElementById('addTagForm');
+            const tagNameInput = tagModalForm.querySelector('#id_name');
+            const tagColorInput = tagModalForm.querySelector('#id_color');
+            const tagIdInput = tagModalForm.querySelector('#id_tag_id');
+            const deleteTagBtn = document.getElementById('deleteTagBtn');
+
+            // Clear hidden ID for new tag creation
+            if (tagIdInput) tagIdInput.value = '';
+
+            // Set the name input in the modal
+            if (tagNameInput) tagNameInput.value = input;
+
+            // Set default color
+            if (tagColorInput) {
+                tagColorInput.value = '#007bff';
+                // Initialize jscolor
+                if (typeof jscolor !== 'undefined') {
+                    jscolor.install(tagModal._element);
+                }
+            }
+
+            // Hide delete button for new tags
+            if (deleteTagBtn) {
+                deleteTagBtn.style.display = 'none';
+            }
+
+            // Update modal title for new tag
+            const modalTitle = document.getElementById('addTagModalLabel');
+            if (modalTitle) modalTitle.textContent = 'Add New Tag';
+
+            // Show the modal
+            tagModal.show();
+
+            // Prevent the default Tom Select behavior
+            return false;
+        }
+    });
+
+    // Add double-click handler for tags
+    setTimeout(function() {
+        const tagSelectControl = document.querySelector('#id_tags').tomselect.control;
+        const tagModal = new bootstrap.Modal(document.getElementById('addTagModal'));
+        const tagModalForm = document.getElementById('addTagForm');
+        const tagNameInput = tagModalForm.querySelector('#id_name');
+        const tagColorInput = tagModalForm.querySelector('#id_color');
+        let tagIdInput = tagModalForm.querySelector('#id_tag_id');
+        const deleteTagBtn = document.getElementById('deleteTagBtn');
+
+        // Add a hidden input for tag ID if it doesn't exist
+        if (!tagIdInput) {
+            tagIdInput = document.createElement('input');
+            tagIdInput.setAttribute('type', 'hidden');
+            tagIdInput.setAttribute('name', 'tag_id');
+            tagIdInput.setAttribute('id', 'id_tag_id');
+            tagModalForm.appendChild(tagIdInput);
+        }
+
+        // Function to open modal with tag data
+        function openTagEditModal(tagId, tagName, tagColor) {
+            // Update modal title
+            const modalTitle = document.getElementById('addTagModalLabel');
+            if (modalTitle) modalTitle.textContent = tagId ? 'Edit Tag' : 'Add New Tag';
+
+            // Populate form fields
+            if (tagNameInput) tagNameInput.value = tagName || '';
+            if (tagColorInput) {
+                tagColorInput.value = tagColor || '#007bff';
+                // Call jscolor.install on the modal element to refresh pickers within it
+                if (tagModal._element) {
+                    jscolor.install(tagModal._element);
+                    // Also ensure the value is correctly set again after install
+                    if (tagColorInput.jscolor) {
+                        tagColorInput.jscolor.fromString(tagColorInput.value || '#007bff');
+                    }
+                }
+            }
+            if (tagIdInput) tagIdInput.value = tagId || '';
+
+            // Show/hide delete button
+            if (deleteTagBtn) {
+                deleteTagBtn.style.display = tagId ? '' : 'none';
+            }
+
+            // Show the modal
+            tagModal.show();
+        }
+
+        if (tagSelectControl) {
+            tagSelectControl.addEventListener('dblclick', function(e) {
+                const itemElement = e.target.closest('.item');
+                if (itemElement) {
+                    const tagId = itemElement.getAttribute('data-value');
+                    if (tagId) {
+                        // Fetch tag details via AJAX
+                        fetch(`{% url 'events:get_tag_details_ajax' pk=0 %}`.replace('/0/', `/${tagId}/`))
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error(`HTTP error! status: ${response.status}`);
+                                }
+                                return response.json();
+                            })
+                            .then(data => {
+                                // Populate modal with data from the AJAX response
+                                openTagEditModal(data.id, data.name, data.color);
+                            })
+                            .catch(error => {
+                                console.error('Error fetching tag details:', error);
+                                alert('Error fetching tag details.');
+                            });
+                    }
+                }
+            });
+        }
+
+        // --- Handle Save Tag Button Click ---
+        const saveTagBtn = document.getElementById('saveTagBtn');
+        
+        if (saveTagBtn) {
+            saveTagBtn.addEventListener('click', function() {
+                const formData = new FormData(tagModalForm);
+                const tagId = tagIdInput.value;
+
+                fetch('{% url "events:add_tag_ajax" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const savedTag = data.tag;
+                        
+                        // Update or add the tag in Tom Select
+                        if (tagSelectInstance) {
+                            // Prepare the data for addOption/updateOption
+                            const tagOptionData = {
+                                value: savedTag.id,
+                                text: savedTag.name,
+                                customProperties: {
+                                    color: savedTag.color
+                                }
+                            };
+
+                            if (tagId) {
+                                // Update existing option and re-render the item
+                                tagSelectInstance.updateOption(tagId, tagOptionData);
+                                // Tom Select's updateOption should handle item re-rendering, but refreshing items is safer
+                                tagSelectInstance.refreshItems();
+                            } else {
+                                // Add new option and item
+                                tagSelectInstance.addOption(tagOptionData);
+                                tagSelectInstance.addItem(savedTag.id);
+                            }
+
+                            // Update allTagsData
+                            allTagsData[savedTag.id] = savedTag;
+
+                            // Manually refresh tag colors after adding/updating
+                            setTimeout(refreshTagColors, 50); // Short delay to allow Tom Select to render
+                        }
+
+                        // Close the modal
+                        const tagModal = bootstrap.Modal.getInstance(document.getElementById('addTagModal'));
+                        if (tagModal) {
+                            tagModal.hide();
+                        }
+                    } else {
+                        console.error('Error saving tag:', data.errors);
+                        alert('Error saving tag: ' + JSON.stringify(data.errors));
+                    }
+                })
+                .catch(error => {
+                    console.error('AJAX error:', error);
+                    alert('AJAX error saving tag: ' + error.message);
+                });
+            });
+        }
+
+        // --- Handle Delete Tag Button Click ---
+        if (deleteTagBtn) {
+            deleteTagBtn.addEventListener('click', function() {
+                const tagId = tagIdInput.value;
+                if (!tagId) {
+                    console.warn("No tag ID found for deletion.");
+                    return;
+                }
+
+                // Confirm deletion
+                if (confirm('Are you sure you want to delete this tag? This cannot be undone.')) {
+                    fetch(`{% url 'events:delete_tag_ajax' pk=0 %}`.replace('/0/', `/${tagId}/`), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Remove the tag from Tom Select
+                            if (tagSelectInstance) {
+                                tagSelectInstance.removeOption(tagId);
+                                tagSelectInstance.removeItem(tagId);
+                                // Remove from allTagsData
+                                delete allTagsData[tagId];
+                            }
+
+                            // Close the modal
+                            tagModal.hide();
+                        } else {
+                            console.error('Error deleting tag:', data.error || 'Unknown error');
+                            alert('Error deleting tag: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('AJAX error during deletion:', error);
+                        alert('An error occurred during deletion.');
+                    });
+                }
+            });
+        }
+
+        // --- Reset tag modal when hidden ---
+        tagModal._element.addEventListener('hidden.bs.modal', function () {
+            tagModalForm.reset();
+            if (tagIdInput) tagIdInput.value = '';
+            const modalTitle = document.getElementById('addTagModalLabel');
+            if (modalTitle) modalTitle.textContent = 'Add New Tag';
+            if (deleteTagBtn) deleteTagBtn.style.display = 'none';
+        });
+    }, 500);
+
+    // Add event listener to handle clicks on the custom remove button
+    if (tagSelectInstance && tagSelectInstance.control) {
+        tagSelectInstance.control.addEventListener('click', function(e) {
+            const removeButton = e.target.closest('.remove');
+            if (removeButton) {
+                e.preventDefault(); // Prevent any default behavior
+                e.stopPropagation(); // Stop propagation to prevent Tom Select's default click handling
+
+                const tagId = removeButton.dataset.value;
+                if (tagId) {
+                    tagSelectInstance.removeItem(tagId);
+                }
+            }
+        });
+    }
+
+    // Add function to update tag priorities
+    function updateTagPriorities() {
+        if (!tagSelectInstance) return;
+
+        const tagItems = tagSelectInstance.items;
+        const formData = new FormData();
+        const panelId = document.querySelector('form[data-panel-id]').dataset.panelId;
+        
+        // If no panel ID, we're creating a new panel, so don't update priorities
+        if (!panelId) return;
+        
+        // Add each tag ID to the form data in their current order
+        tagItems.forEach(tagId => {
+            formData.append('tag_ids[]', tagId);
+        });
+
+        // Send the new order to the server
+        fetch(`{% url 'events:reorder_tags_ajax' panel_id=0 %}`.replace('/0/', `/${panelId}/`), {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Error updating tag order:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating tag order:', error);
+        });
+    }
+
+    function updateHostPriorities() {
+        if (!hostSelectInstance) return;
+
+        const hostItems = hostSelectInstance.items;
+        const formData = new FormData();
+        const panelId = document.querySelector('form[data-panel-id]').dataset.panelId;
+        
+        // If no panel ID, we're creating a new panel, so don't update priorities
+        if (!panelId) return;
+        
+        // Add each host ID to the form data in their current order
+        hostItems.forEach(hostId => {
+            formData.append('host_ids[]', hostId);
+        });
+
+        // Send the new order to the server
+        fetch(`{% url 'events:reorder_hosts_ajax' panel_id=0 %}`.replace('/0/', `/${panelId}/`), {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Error updating host order:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating host order:', error);
+        });
+    }
+
+    // Add event listeners for host reordering
+    if (hostSelectInstance) {
+        hostSelectInstance.on('item_add', function() {
+            updateHostPriorities();
+        });
+
+        hostSelectInstance.on('item_remove', function() {
+            updateHostPriorities();
+        });
+
+        hostSelectInstance.on('reorder', function() {
+            updateHostPriorities();
+        });
+    }
+});
+</script>
+{% endblock %}

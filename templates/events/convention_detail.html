@@ -1,0 +1,1320 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load event_filters %}
+
+{% block title %}{{ convention.name }} - {{ current_convention_name|default:"FurConnect" }}{% endblock %}
+
+{% block extra_js %}
+{# Add JSON data for JavaScript #}
+{{ is_staff|json_script:"is-staff-data" }}
+
+<script id="base-urls" type="application/json" 
+    data-is-staff="{{ is_staff|yesno:'true,false' }}"
+    data-host-edit-url-base="{% url 'events:host_edit' 0 %}"
+    data-tag-edit-url-base="{% url 'events:tag_edit' 0 %}">
+</script>
+
+<script>
+console.log('Convention detail script started'); // Log at the very beginning
+// Wait for all resources to load
+window.addEventListener('load', function() {
+    try {
+        console.log('window load event fired'); // Log to confirm event fires
+        // Initialize Bootstrap Modal
+        const panelDetailModal = new bootstrap.Modal(document.getElementById('panelDetailModal'));
+        const panelDetailContent = document.getElementById('panelDetailContent');
+        let currentPanelId = null;
+
+        // Function to initialize Bootstrap dropdowns in the modal
+        function initializeDropdowns() {
+            // Wait for the modal to be fully shown
+            const dropdownElementList = panelDetailContent.querySelectorAll('[data-bs-toggle="dropdown"]');
+            if (dropdownElementList.length > 0) {
+                dropdownElementList.forEach(dropdownToggleEl => {
+                    // Dispose of any existing dropdown instance
+                    const existingDropdown = bootstrap.Dropdown.getInstance(dropdownToggleEl);
+                    if (existingDropdown) {
+                        existingDropdown.dispose();
+                    }
+                    // Create new dropdown instance
+                    new bootstrap.Dropdown(dropdownToggleEl, {
+                        offset: [0, 2]
+                    });
+                });
+            }
+        }
+
+        console.log('Defining loadHostImages function'); // Log to confirm function definition is reached
+        // Function to load and update host images using fetched base64 data
+        function loadHostImages(containerElement) {
+            console.log('loadHostImages called with container:', containerElement);
+            // Wait for the next frame to ensure DOM is ready
+            requestAnimationFrame(() => {
+                // Find all host avatar containers within the specified element
+                const hostContainers = containerElement.querySelectorAll('.host-avatar-container');
+                console.log('Found host containers:', hostContainers.length);
+
+                if (hostContainers.length === 0) {
+                    console.log('No host containers found, retrying in 100ms');
+                    setTimeout(() => loadHostImages(containerElement), 100);
+                    return;
+                }
+
+                hostContainers.forEach(hostContainer => {
+                    const hostId = hostContainer.dataset.hostId;
+                    if (hostId) {
+                        console.log('Loading host image for ID:', hostId);
+                        // Fetch host details via AJAX
+                        fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`), {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            credentials: 'same-origin'
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                console.error(`HTTP error! status: ${response.status}`);
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            console.log('Received host data for ID', hostId, ':', data);
+                            const imgElement = hostContainer.querySelector('img.host-avatar');
+                            if (!imgElement) {
+                                console.error('No img element found for host:', hostId);
+                                return;
+                            }
+
+                            if (data && data.profile_picture) {
+                                // Check if the profile picture is base64
+                                if (data.profile_picture.startsWith('data:image')) {
+                                    console.log('Setting base64 image for host:', hostId);
+                                    imgElement.src = data.profile_picture;
+                                } else if (data.profile_picture.startsWith('http') || data.profile_picture.startsWith('/')) {
+                                    console.log('Setting URL image for host:', hostId);
+                                    imgElement.src = data.profile_picture;
+                                } else {
+                                    console.error('Invalid image format for host:', hostId);
+                                    imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                                }
+                            } else {
+                                console.log('No profile picture found for host:', hostId);
+                                imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading host image:', error);
+                            const imgElement = hostContainer.querySelector('img.host-avatar');
+                            if (imgElement) {
+                                imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        // Function to update time slots visibility
+        function updateTimeSlotsVisibility() {
+            document.querySelectorAll('.timeline-hour').forEach(hourBlock => {
+                const hourLabel = hourBlock.querySelector('.hour-label');
+                const hourContent = hourBlock.querySelector('.hour-content');
+                const panels = hourBlock.querySelectorAll('.panel-card');
+                
+                // Check if there are any visible panels in this hour
+                const hasVisiblePanels = Array.from(panels).some(panel => 
+                    panel.style.display !== 'none' && !panel.classList.contains('hidden')
+                );
+                
+                // Show/hide the hour block based on visible panels
+                hourBlock.style.display = hasVisiblePanels ? 'flex' : 'none';
+            });
+        }
+
+        // Function to determine if a color is light or dark
+        function isLightColor(color) {
+            if (!color) return true;
+            
+            // Convert hex to RGB
+            let r, g, b;
+            if (color.startsWith('#')) {
+                r = parseInt(color.substr(1,2), 16);
+                g = parseInt(color.substr(3,2), 16);
+                b = parseInt(color.substr(5,2), 16);
+            } else if (color.startsWith('rgb')) {
+                const rgb = color.match(/\d+/g);
+                r = parseInt(rgb[0]);
+                g = parseInt(rgb[1]);
+                b = parseInt(rgb[2]);
+            } else {
+                return true; // Default to light color if format is unknown
+            }
+            
+            // Calculate relative luminance
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return luminance > 0.5;
+        }
+
+        // Update panel cards with appropriate text color
+        document.querySelectorAll('.panel-card').forEach(card => {
+            const bgColor = card.style.backgroundColor;
+            if (bgColor) {
+                const textColor = isLightColor(bgColor) ? '#000000' : '#ffffff';
+                card.style.color = textColor;
+                // Update all text elements within the card
+                card.querySelectorAll('.card-title, .card-text, .text-muted, .material-icons').forEach(el => {
+                    el.style.color = textColor;
+                });
+            }
+        });
+
+        // Day Navigation (Dropdown)
+        const daySelect = document.getElementById('daySelect');
+        const daySchedules = document.querySelectorAll('.day-schedule');
+        
+        // Get the stored day index or default to 0
+        let currentDayIndex = parseInt(localStorage.getItem('conventionDayIndex')) || 0;
+        
+        // Ensure the index is valid
+        if (currentDayIndex >= daySelect?.options?.length) {
+            currentDayIndex = 0;
+        }
+
+        function updateDayNavigation() {
+            // Only update dropdown if it exists
+            if (daySelect) {
+                const selectedValue = daySelect.value;
+                
+                if (selectedValue === 'all') {
+                    // Show all day schedules
+                    daySchedules.forEach(schedule => {
+                        schedule.classList.remove('d-none');
+                        // Load images for all schedules when showing entire event
+                        loadHostImages(schedule);
+                    });
+                } else {
+                    // Show only selected day
+                    daySchedules.forEach((schedule, index) => {
+                        const isSelected = index === parseInt(selectedValue);
+                        schedule.classList.toggle('d-none', !isSelected);
+                        // Load images only for the selected schedule
+                        if (isSelected) {
+                            loadHostImages(schedule);
+                        }
+                    });
+                }
+                
+                // Store the current selection
+                localStorage.setItem('conventionDayIndex', selectedValue);
+                
+                // Update time slots visibility after day change
+                updateTimeSlotsVisibility();
+            }
+        }
+
+        // Add event listener for day selection
+        if (daySelect) {
+            daySelect.addEventListener('change', updateDayNavigation);
+            // Initial update - also load images for the initially visible day
+            updateDayNavigation();
+        }
+
+        // Filter Logic (using checkboxes)
+        const tagCheckboxes = document.querySelectorAll('.filter-tag-checkbox');
+        const roomCheckboxes = document.querySelectorAll('.filter-room-checkbox');
+        const allTagsCheckbox = document.getElementById('filterAllTags');
+        const allRoomsCheckbox = document.getElementById('filterAllRooms');
+
+        function applyFilters() {
+            const activeTagFilters = Array.from(tagCheckboxes)
+                .filter(checkbox => checkbox.checked && checkbox.dataset.filter !== 'all')
+                .map(checkbox => checkbox.dataset.filter);
+
+            const activeRoomFilters = Array.from(roomCheckboxes)
+                 .filter(checkbox => checkbox.checked && checkbox.dataset.filter !== 'all')
+                 .map(checkbox => checkbox.dataset.filter);
+
+            const panels = document.querySelectorAll('.panel-card');
+            panels.forEach(panel => {
+                const panelTags = panel.dataset.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+                const panelRoom = panel.querySelector('.panel-details h6:last-child').textContent.toLowerCase().replace('room', '').trim();
+                const panelRoomSlug = panelRoom.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+                // Check if panel has at least one active tag filter OR no tag filters are active (if 'All Events' is checked)
+                const tagMatch = activeTagFilters.length === 0 || activeTagFilters.some(filter => panelTags.includes(filter));
+                
+                // Check if panel is in an active room filter OR no room filters are active (if 'All Rooms' is checked)
+                const roomMatch = activeRoomFilters.length === 0 || activeRoomFilters.includes(panelRoomSlug);
+
+                const shouldShow = tagMatch && roomMatch;
+
+                panel.classList.toggle('hidden', !shouldShow);
+                panel.style.display = shouldShow ? 'block' : 'none'; // Also control display for search
+            });
+
+            // Update time slots visibility after filtering
+            updateTimeSlotsVisibility();
+        }
+
+        // Event listeners for checkboxes
+        tagCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                // Removed automatic check of "All Events"
+                applyFilters();
+            });
+        });
+
+        roomCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                // Removed automatic check of "All Rooms"
+                applyFilters();
+            });
+        });
+
+        // Initial application of filters on page load
+        // Removed automatic initial check of "All Events" and "All Rooms"
+
+        applyFilters();
+
+        // Panel Card Click Handler
+        document.querySelectorAll('.panel-card').forEach(panelCard => {
+            panelCard.style.cursor = 'pointer';
+            panelCard.addEventListener('click', function(e) {
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest('button') || e.target.closest('a')) {
+                    return;
+                }
+                
+                const panelId = this.dataset.panelId;
+                currentPanelId = panelId;
+                
+                fetch(`{% url 'events:panel_detail_modal_view' 0 %}`.replace('0', panelId))
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.text();
+                    })
+                    .then(html => {
+                        panelDetailContent.innerHTML = html;
+                        // Show modal first
+                        panelDetailModal.show();
+                        
+                        // Wait for modal to be fully shown before initializing
+                        panelDetailModal._element.addEventListener('shown.bs.modal', function onModalShown() {
+                            // Initialize dropdowns and load host images after a delay
+                            setTimeout(() => {
+                                // Initialize dropdowns after content is loaded
+                                initializeDropdowns();
+                                // Load host images in the modal
+                                loadHostImages(panelDetailContent);
+                            }, 350);
+                            // Remove the event listener to prevent multiple initializations
+                            panelDetailModal._element.removeEventListener('shown.bs.modal', onModalShown);
+                        }, { once: true });
+                    })
+                    .catch(error => {
+                        console.error('Error loading panel details:', error);
+                        // Show error message to user
+                        panelDetailContent.innerHTML = '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
+                        panelDetailModal.show();
+                    });
+            });
+        });
+
+        // Search functionality
+        const searchInput = document.getElementById('eventSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase().trim();
+                
+                const daySchedules = document.querySelectorAll('.day-schedule');
+                
+                daySchedules.forEach(schedule => {
+                    const panels = schedule.querySelectorAll('.panel-card');
+                    let hasVisiblePanels = false;
+                    
+                    panels.forEach(card => {
+                        const title = card.querySelector('.card-title').textContent.toLowerCase();
+                        const description = card.querySelector('.card-text').textContent.toLowerCase();
+                        const hosts = Array.from(card.querySelectorAll('.host-avatar-container')).map(host => 
+                            host.getAttribute('title')?.toLowerCase() || ''
+                        );
+                        
+                        const isVisible = searchTerm === '' || 
+                            title.includes(searchTerm) || 
+                            description.includes(searchTerm) || 
+                            hosts.some(host => host.includes(searchTerm));
+                        
+                        card.style.display = isVisible ? 'block' : 'none';
+                        if (isVisible) hasVisiblePanels = true;
+                    });
+                    
+                    schedule.style.display = hasVisiblePanels ? 'block' : 'none';
+                });
+                
+                const dayButtons = document.querySelectorAll('.day-btn');
+                dayButtons.forEach((btn, index) => {
+                    const schedule = daySchedules[index];
+                    btn.style.display = schedule.style.display === 'none' ? 'none' : 'block';
+                });
+                
+                if (searchTerm === '') {
+                    daySchedules.forEach((schedule, index) => {
+                        schedule.style.display = index === currentDayIndex ? 'block' : 'none';
+                    });
+                    dayButtons.forEach((btn, index) => {
+                        btn.style.display = 'block';
+                    });
+                }
+                
+                // Update time slots visibility after search
+                updateTimeSlotsVisibility();
+            });
+        }
+
+        // Initial update of time slots visibility
+        updateTimeSlotsVisibility();
+
+        // Initial load of host images on the main schedule page
+        window.addEventListener('load', function() {
+            console.log('Inside initial load event listener for host images');
+            // Increase initial delay for mobile devices
+            const isMobile = window.innerWidth <= 767.98;
+            const initialDelay = isMobile ? 1000 : 750;
+            
+            setTimeout(() => {
+                loadHostImages(document);
+            }, initialDelay);
+        });
+
+        // Add resize handler to reload images when switching between mobile and desktop
+        let lastWidth = window.innerWidth;
+        window.addEventListener('resize', function() {
+            const currentWidth = window.innerWidth;
+            // Only reload if crossing the mobile breakpoint
+            if ((lastWidth <= 767.98 && currentWidth > 767.98) || 
+                (lastWidth > 767.98 && currentWidth <= 767.98)) {
+                console.log('Screen size changed, reloading host images');
+                setTimeout(() => {
+                    loadHostImages(document);
+                }, 500);
+            }
+            lastWidth = currentWidth;
+        });
+
+    } catch (error) {
+        console.error('Error initializing convention detail page:', error);
+    }
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        {# Convention Name #}
+        <h1 class="display-4">{{ convention.name }}</h1>
+
+        {# About section - just display description #}
+        <p class="lead">{{ convention.description }}</p>
+
+        {# Location #}
+        <p class="lead">
+            <i class="material-icons">location_on</i> {{ convention.location }}
+        </p>
+
+        {# Date Display (Conditional) #}
+        <p class="lead">
+            <i class="material-icons">calendar_today</i>
+            {% if convention.start_date == convention.end_date %}
+                {{ convention.start_date|date:"M d, Y" }}
+            {% else %}
+                {{ convention.start_date|date:"M d, Y" }} - {{ convention.end_date|date:"M d, Y" }}
+            {% endif %}
+        </p>
+    </div>
+    <div class="col-auto d-flex gap-2">
+        <button onclick="window.print()" class="btn btn-primary btn-admin-action">
+            <i class="material-icons">print</i> Print Schedule
+        </button>
+        {% if user.is_staff %}
+        <a href="{% url 'events:convention_edit' convention.pk %}" class="btn btn-primary btn-admin-action">
+            <i class="material-icons">edit</i> Edit Convention
+        </a>
+        <a href="{% url 'events:panel_create' convention.days.first.pk %}" class="btn btn-primary btn-admin-action">
+            <i class="material-icons">add</i> Add Event
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if convention.banner_image %}
+<div class="card mb-4">
+    <div class="card-body p-0">
+        <img src="{{ convention.banner_image }}" alt="Convention Banner" class="img-fluid w-100" style="object-fit: cover; max-height: 300px;">
+    </div>
+</div>
+{% endif %}
+
+<!-- Search Bar -->
+<div class="search-container mb-4">
+    <div class="input-group">
+        <span class="input-group-text border-end-0">
+            <i class="material-icons">search</i>
+        </span>
+        <input type="text" id="eventSearch" class="form-control border-start-0" placeholder="Search events by title, description, or host..." style="font-size: 1.1rem;">
+    </div>
+</div>
+
+<!-- Main Content Row -->
+<div class="row">
+    <!-- Main Schedule Column -->
+    <div class="col-md-9">
+
+        <!-- Schedule Display -->
+        <div class="schedule-container">
+            {% for day in days %}
+            <div class="day-schedule {% if not forloop.first %}d-none{% endif %}" data-day-id="{{ day.original_day_obj.id }}">
+                <div class="day-header mb-4">
+                    <h3 class="text-primary">{{ day.original_day_obj.date|date:"l, M d, Y" }}</h3>
+                    <hr class="my-3">
+                </div>
+                <div class="timeline">
+                    {# Iterate through time groups and display time on the left and panels on the right #}
+                    {% for time_group in day.panels_by_time %}
+                    <div class="timeline-row">
+                        <div class="time-label">
+                            {{ time_group.start_time|time:"g:i A" }}
+                        </div>
+                        <div class="time-content">
+                            {% for panel in time_group.panels %}
+                                <div class="card mb-3 panel-card" 
+                                     data-panel-id="{{ panel.pk }}"
+                                     data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                                     data-room="{{ panel.room.name|lower|slugify }}"
+                                     {% if panel.cancelled %}data-cancelled="true"{% endif %}
+                                     style="{% if panel.ordered_tags.0.color and panel.ordered_tags|length == 1 %}background-color: {{ panel.ordered_tags.0.color }}; color: white;{% elif panel.ordered_tags|length == 2 %}background: linear-gradient(135deg, {{ panel.ordered_tags.0.color }} 0%, {{ panel.ordered_tags.0.color }} 50%, {{ panel.ordered_tags.1.color }} 50%, {{ panel.ordered_tags.1.color }} 100%); color: white;{% elif panel.ordered_tags|length >= 3 %}background: linear-gradient(135deg, {{ panel.ordered_tags.0.color }} 0%, {{ panel.ordered_tags.0.color }} 33%, {{ panel.ordered_tags.1.color }} 33%, {{ panel.ordered_tags.1.color }} 66%, {{ panel.ordered_tags.2.color }} 66%, {{ panel.ordered_tags.2.color }} 100%); color: white;{% endif %}">
+                                    <div class="card-body p-2">
+                                        <h5 class="card-title mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.65rem; display: flex; align-items: center; {% if panel.is_featured %}font-weight: bold;{% endif %}">
+                                            {% if panel.is_featured %}
+                                            <span class="material-icons-round me-2" style="font-size: 2.3rem; color: black;">star</span>
+                                            {% endif %}
+                                            {{ panel.title }}
+                                        </h5>
+                                        <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">{{ panel.description|linebreaksbr }}</p>
+                                        <div class="panel-details mt-2">
+                                            {% if panel.host.all %}
+                                            <div class="d-flex gap-2 mb-2">
+                                                {% for host in panel.ordered_hosts %}
+                                                            <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}"
+                                                        {% if user.is_staff %}
+                                                            data-host-edit-url="{% url 'events:host_edit' host.id %}"
+                                                        {% endif %}>
+                                                        {% if host.image %}
+                                                            <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar"
+                                                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                                        {% else %}
+                                                            <img src="{% static 'events/images/placeholder.webp' %}" alt="{{ host.name }}" class="host-avatar"
+                                                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                                        {% endif %}
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            <h6 class="text-muted mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
+                                                <i class="material-icons fs-6" style="font-size: 1.32rem;">schedule</i>
+                                                {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
+                                            </h6>
+                                            <h6 class="text-muted mb-0 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
+                                                <i class="material-icons fs-6" style="font-size: 1.32rem;">room</i>
+                                                {{ panel.room }}
+                                            </h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Sidebar Column -->
+    <div class="col-md-3">
+        <!-- Day Navigation (Dropdown) -->
+        {% if convention.days.count > 1 %}
+        <div class="day-navigation mb-4">
+            <h5>Select day</h5>
+            <select class="form-select" id="daySelect">
+                <option value="all">Show entire event</option>
+                {% for day in convention.days.all %}
+                <option value="{{ forloop.counter0 }}" data-day-id="{{ day.id }}" data-date="{{ day.date|date:'Y-m-d' }}">
+                    {{ day.date|date:"l, M d, Y" }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <!-- Filter Tags (Checkboxes) -->
+        <div class="filter-tags mb-4">
+            <h5>Filter by Tag</h5>
+            <div class="form-check">
+                <input class="form-check-input filter-tag-checkbox" type="checkbox" value="all" id="filterAllTags" data-filter="all" checked>
+                <label class="form-check-label" for="filterAllTags">
+                    All Events
+                </label>
+            </div>
+            {% for tag in unique_tags %}
+            <div class="form-check">
+                <input class="form-check-input filter-tag-checkbox" type="checkbox" value="{{ tag.name|lower }}" id="filterTag_{{ tag.id }}" data-filter="{{ tag.name|lower }}">
+                <label class="form-check-label" for="filterTag_{{ tag.id }}">
+                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; background-color: {{ tag.color }};"></span>
+                    {{ tag.name }}
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Filter Rooms (Checkboxes) -->
+        <div class="filter-rooms mb-4">
+            <h5>Filter by Room</h5>
+            <div class="form-check">
+                <input class="form-check-input filter-room-checkbox" type="checkbox" value="all" id="filterAllRooms" data-filter="all" checked>
+                <label class="form-check-label" for="filterAllRooms">
+                    All Rooms
+                </label>
+            </div>
+            {% for room in unique_rooms %}
+            <div class="form-check">
+                <input class="form-check-input filter-room-checkbox" type="checkbox" value="{{ room.name|lower|slugify }}" id="filterRoom_{{ room.id }}" data-filter="{{ room.name|lower|slugify }}">
+                <label class="form-check-label" for="filterRoom_{{ room.id }}">
+                    {{ room.name }}
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Event Detail Modal -->
+<div class="modal fade" id="panelDetailModal" tabindex="-1" aria-labelledby="panelDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="panelDetailModalLabel">Event Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="panelDetailContent">
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Timeline styles */
+.timeline {
+    position: relative;
+    padding: 0;
+}
+
+/* Print styles */
+@media print {
+    .filter-rooms {
+        display: none !important;
+    }
+}
+
+/* New style for the row containing time label and panels */
+.timeline-row {
+    display: flex;
+    margin-bottom: 1.5rem; /* Add space between time blocks */
+    align-items: flex-start; /* Align items to the top */
+}
+
+/* Style for the time label column */
+.time-label {
+    width: 120px; /* Fixed width for the time label */
+    text-align: right;
+    padding-right: 20px;
+    color: var(--primary-color);
+    font-weight: 500;
+    font-size: 1.2rem;
+    padding-top: 0.5rem; /* Adjust top padding */
+    padding-bottom: 0.5rem; /* Adjust bottom padding */
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+/* Style for the content column containing panels */
+.time-content {
+    flex-grow: 1; /* Take up remaining space */
+    padding-left: 20px;
+    border-left: 2px solid var(--bs-border-color); /* Vertical separator line */
+    position: relative;
+}
+
+/* Event card styles */
+.panel-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: calc(100% - 40px);
+    margin: 0.5rem 20px;
+    box-sizing: border-box;
+    color: var(--primary-color);
+    padding: 1.5rem;
+    border-radius: 8px;
+    height: auto !important;
+    min-height: 140px;
+    position: relative;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.panel-card.hidden {
+    display: none;
+}
+
+.panel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.panel-card .card-body {
+    padding: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 1;
+}
+
+.panel-card .card-title,
+.panel-card .card-text,
+.panel-card .text-muted,
+.panel-card .material-icons {
+    color: inherit;
+    text-shadow: inherit;
+}
+
+.panel-card .text-muted {
+    color: inherit !important;
+    opacity: 0.8;
+}
+
+.panel-card .cancelled-text {
+    text-shadow: none;
+    color: inherit !important;
+    opacity: 0.7;
+}
+
+/* Add styles for split background text */
+.panel-card[style*="linear-gradient"] .card-body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: inherit;
+    z-index: -1;
+    border-radius: 8px;
+}
+
+.panel-card[style*="linear-gradient"] .card-title,
+.panel-card[style*="linear-gradient"] .card-text,
+.panel-card[style*="linear-gradient"] .text-muted,
+.panel-card[style*="linear-gradient"] .material-icons {
+    color: black !important; /* Assuming the intent was black text on gradient */
+    text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+}
+
+/* Adjust styles for panel details to prevent time overlap */
+.panel-details {
+    margin-top: 0.5rem; /* Ensure some space above details */
+}
+
+.panel-details h6 {
+    white-space: normal; /* Allow text to wrap */
+    word-break: break-word; /* Break long words if necessary */
+    line-height: 1.4; /* Improve readability */
+    margin-bottom: 0.5rem; /* Space below each h6 */
+}
+
+.panel-details h6:last-child {
+     margin-bottom: 0; /* No bottom margin for the last h6 */
+}
+
+.panel-details h6 .material-icons {
+    vertical-align: middle; /* Align icon vertically with text */
+    margin-right: 0.25rem; /* Space between icon and text */
+}
+
+/* Potentially adjust panel-card padding if needed */
+/*
+.panel-card {
+     padding: 1.5rem 1rem; /* Adjust horizontal padding if content is too wide *
+}
+*/
+
+/* Tag badge styles */
+.tag-badge {
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.tag-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Day navigation button styles (No longer used, keeping for reference or cleanup) */
+.day-btn {
+    /* ... */
+}
+
+.day-btn:hover {
+    /* ... */
+}
+
+.day-btn.active {
+    /* ... */
+}
+
+/* Filter tag styles (No longer used for buttons) */
+.filter-tag {
+    /* ... */
+}
+
+.filter-tag:hover:not(.active) {
+    /* ... */
+}
+
+.filter-tag.active {
+    /* ... */
+}
+
+.filter-tag .material-icons {
+    /* ... */
+}
+
+/* Navigation buttons (No longer used for prev/next buttons) */
+#prevDay, #nextDay {
+    /* ... */
+}
+
+#prevDay:hover:not(:disabled), #nextDay:hover:not(:disabled) {
+    /* ... */
+}
+
+#prevDay:disabled, #nextDay:disabled {
+    /* ... */
+}
+
+.btn-admin-action {
+    padding: 0.15rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 30%; /* Consider removing fixed height if not necessary */
+}
+
+.btn-admin-action .material-icons {
+    font-size: 1rem;
+    height: 25%;
+}
+
+/* Specific style for the 'Add to Calendar' button in the modal footer */
+#panelDetailModal .modal-footer a.btn-outline-primary {
+    display: inline-flex !important;
+    color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+    background-color: transparent !important;
+}
+
+/* Host name hover styles */
+.host-names {
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 200px; /* Adjust as needed */
+}
+
+.host-names::after {
+    content: '...';
+    position: absolute;
+    right: 0;
+    top: 0;
+    background: inherit; /* Use inherited background to blend */
+    padding-left: 5px;
+}
+
+.host-names:hover {
+    overflow: visible;
+    white-space: normal;
+    background: var(--bs-body-bg); /* Use theme background color */
+    z-index: 1000; /* Ensure tooltip is above other content */
+    padding: 0.5rem; /* Add padding around tooltip content */
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
+}
+
+.host-names:hover::after {
+    display: none; /* Hide ellipsis on hover */
+}
+
+.host-name {
+    display: inline-block;
+    transition: all 0.2s ease;
+}
+
+.host-name:hover {
+    color: var(--bs-primary) !important; /* Highlight on hover */
+    text-decoration: underline !important; /* Add underline on hover */
+}
+
+/* Host avatar tooltip styles */
+.host-avatar-container {
+    position: relative;
+    display: inline-block;
+}
+
+.host-avatar-container:hover::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background-color: rgba(0, 0, 0, 0.8); /* Dark background */
+    color: white; /* White text */
+    border-radius: 4px;
+    font-size: 18px; /* Match panel title font size */
+    white-space: nowrap;
+    z-index: 1000; /* Ensure tooltip is above other content */
+    margin-bottom: 4px; /* Space between avatar and tooltip */
+}
+
+.host-avatar-container:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% - 4px); /* Position above the tooltip */
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 4px; /* Size of the arrow */
+    border-style: solid;
+    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent; /* Dark arrow pointing down */
+    z-index: 1000; /* Ensure arrow is above other content */
+}
+
+/* Add these styles to your existing styles */
+.cancelled-banner {
+    font-weight: bold;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.cancelled-banner .material-icons {
+    font-size: 1.2rem;
+}
+
+.panel-card[data-cancelled="true"] {
+    opacity: 0.8;
+    position: relative;
+    border: 2px solid #dc3545; /* Red border for cancelled */
+}
+
+.panel-card[data-cancelled="true"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255, 0, 0, 0.1),
+        rgba(255, 0, 0, 0.1) 10px,
+        rgba(255, 0, 0, 0.2) 10px,
+        rgba(255, 0, 0, 0.2) 20px
+    ); /* Red diagonal stripes */
+    pointer-events: none; /* Allow clicks to pass through */
+    z-index: 1;
+}
+
+/* Print-specific styles */
+@media print {
+    /* Hide elements that shouldn't be printed */
+    .print-button,
+    .btn-admin-action,
+    .search-container,
+    .filter-tags,
+    #prevDay,
+    #nextDay,
+    .modal,
+    .host-avatar-container,
+    .day-navigation,
+    .theme-switch-wrapper,
+    .day-list,
+    .row.mb-4:first-child,  /* Hide the header row (which includes the container) - kept for clarity */
+    .row.mb-4:first-child .col-auto:last-child, /* Hide the button container */
+    .card.mb-4,  /* Hide all cards with mb-4 class */
+    .theme-switch,
+    .slider,
+    .theme-switch-label,
+    [class*="theme-switch"],
+    [class*="dark-mode"],
+    [class*="light-mode"],
+    .theme-switch-wrapper *,
+    .theme-switch *,
+    .slider *,
+    .theme-switch-label *,
+    .material-icons:not([class*="schedule"]):not([class*="room"]):not([class*="location"]):not([class*="calendar"])
+    {
+        display: none !important;
+    }
+
+    /* Reset and clean up base styles */
+    body {
+        background: white !important;
+        color: #333 !important;
+        font-size: 10pt;
+        line-height: 1.3;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Adjust container for full width */
+    .container {
+        width: 100% !important;
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Optimize page margins */
+    @page {
+        margin: 1cm; /* Use physical page margins for spacing */
+    }
+
+    /* Add date display for each day */
+    .day-schedule::before {
+        content: attr(data-date);
+        display: block;
+        font-size: 18pt;
+        font-weight: 600;
+        color: #000;
+        margin-bottom: 15px;
+        padding: 0 1cm 8px 1cm; /* Add padding matching page margin */
+        border-bottom: 1px solid #eee;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Optimize timeline layout for full width */
+    .timeline {
+        margin: 0 !important;
+        padding: 0 1cm !important; /* Add padding matching page margin */
+        display: flex;
+        flex-direction: column;
+    }
+
+    .timeline-hour {
+        page-break-inside: avoid;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-bottom: 1px solid #eee !important;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start; /* Align items to the top */
+    }
+
+    .hour-label {
+        width: 80px !important;
+        min-width: 80px !important;
+        font-size: 9pt !important;
+        padding: 4px 10px 4px 0 !important;
+        text-align: right;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    .hour-content {
+        flex-grow: 1;
+        padding: 4px 0 4px 5px !important;
+        border-left: 1px solid #eee !important;
+        box-sizing: border-box;
+    }
+
+    /* Optimize panel cards */
+    .panel-card {
+        margin: 4px 0 !important;
+        padding: 8px 10px !important;
+        border-radius: 3px !important;
+        width: 100% !important; /* Ensure card takes full width */
+        box-sizing: border-box;
+    }
+
+    .panel-card .card-body {
+        padding: 0 !important;
+    }
+
+    .panel-card .card-title {
+        font-size: 11pt !important;
+        margin-bottom: 4px !important;
+        line-height: 1.2 !important;
+    }
+
+    .panel-card .card-text {
+        font-size: 9pt !important;
+        margin-bottom: 6px !important;
+        line-height: 1.2 !important;
+    }
+
+    .panel-card .text-muted {
+        font-size: 9pt !important;
+        margin-bottom: 2px !important;
+    }
+
+    .panel-card .material-icons {
+        font-size: 10pt !important;
+        vertical-align: -2px !important;
+        margin-right: 2px !important;
+    }
+
+    /* Optimize panel details */
+    .panel-details {
+        margin-top: 4px !important;
+        padding-top: 4px !important;
+    }
+
+    .panel-details h6 {
+        font-size: 9pt !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Optimize spacing */
+    .mb-4 {
+        margin-bottom: 15px !important;
+    }
+
+    /* Optimize time labels */
+    .time-label-specific {
+        font-size: 8pt !important;
+        position: static !important;
+        transform: none !important;
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        color: #555 !important;
+        text-align: right !important;
+        width: 100% !important;
+        margin-top: 2px !important;
+    }
+
+    /* Ensure proper page breaks */
+    .day-schedule {
+        display: block !important;
+        page-break-after: always;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .day-schedule:last-child {
+        page-break-after: avoid;
+    }
+
+    /* Remove d-none class from all day schedules */
+    .d-none {
+        display: block !important;
+    }
+
+    /* Optimize cancelled event styling */
+    .panel-card[data-cancelled="true"] {
+        opacity: 0.6 !important;
+    }
+
+    .cancelled-text {
+        text-decoration: line-through !important;
+        color: #999 !important;
+    }
+
+    /* Add page numbers */
+    @page {
+        margin: 1cm;
+        @bottom-center {
+            content: counter(page);
+            font-size: 9pt;
+            color: #666;
+        }
+    }
+}
+
+/* Print button styles */
+.print-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 2px solid var(--bs-primary);
+    background: transparent;
+}
+
+.print-button:hover {
+    background-color: var(--bs-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.print-button .material-icons {
+    font-size: 1.2rem;
+}
+
+/* Add styles for cancelled panels */
+.cancelled-text {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* Sidebar styles */
+.col-md-3 {
+    border-left: 1px solid var(--bs-border-color);
+    padding-left: 1.5rem;
+}
+
+/* Checkbox filter styles */
+.filter-tags .form-check,
+.filter-rooms .form-check {
+    margin-bottom: 0.5rem;
+}
+
+.filter-tags h5,
+.filter-rooms h5 {
+    margin-bottom: 1rem;
+}
+
+/* Day select dropdown styles */
+#daySelect {
+    margin-bottom: 1.5rem;
+}
+
+/* Mobile styles */
+@media (max-width: 767.98px) { /* Bootstrap's breakpoint for 'sm' */
+    .col-md-9,
+    .col-md-3 {
+        padding-left: 15px;
+        padding-right: 15px;
+        border-left: none; /* Remove sidebar border on mobile */
+    }
+
+    /* Adjust timeline layout for mobile */
+    .timeline-row {
+        flex-direction: column;
+        margin-bottom: 1rem;
+    }
+
+    .time-label {
+        width: 100%;
+        text-align: left;
+        padding: 0.5rem 0;
+        margin-bottom: 0.5rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .time-content {
+        padding-left: 0;
+        border-left: none;
+        width: 100%;
+    }
+
+    /* Adjust panel card width and spacing */
+    .panel-card {
+        width: 100%;
+        margin: 0;
+        padding: 1rem;
+        border-radius: 0;
+        box-shadow: none;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .panel-card:last-child {
+        border-bottom: none;
+    }
+
+    .panel-card .card-body {
+        padding: 0;
+    }
+
+    /* Adjust spacing for filter sections and day select */
+    .day-navigation,
+    .filter-tags,
+    .filter-rooms {
+        margin-bottom: 1.5rem;
+    }
+
+    /* Adjust host avatars for mobile */
+    .host-avatar-container {
+        width: 32px;
+        height: 32px;
+    }
+
+    .host-avatar-container img {
+        width: 32px !important;
+        height: 32px !important;
+    }
+
+    /* Adjust text sizes for mobile */
+    .panel-card .card-title {
+        font-size: 1.4rem !important;
+    }
+
+    .panel-card .card-text {
+        font-size: 1.1rem !important;
+    }
+
+    .panel-card .text-muted {
+        font-size: 1.1rem !important;
+    }
+
+    .panel-card .material-icons {
+        font-size: 1.1rem !important;
+    }
+
+    /* Reposition theme switcher on mobile */
+    .floating-theme-switch {
+        position: static !important;
+        margin-top: 1rem;
+        justify-content: flex-start;
+        right: auto !important;
+        bottom: auto !important;
+    }
+}
+</style>
+{% endblock %}
