@@ -119,18 +119,17 @@ window.addEventListener('load', function() {
 
         // Function to update time slots visibility
         function updateTimeSlotsVisibility() {
-            document.querySelectorAll('.timeline-hour').forEach(hourBlock => {
-                const hourLabel = hourBlock.querySelector('.hour-label');
-                const hourContent = hourBlock.querySelector('.hour-content');
-                const panels = hourBlock.querySelectorAll('.panel-card');
+            document.querySelectorAll('.timeline-row').forEach(timeRow => {
+                const panelsContainer = timeRow.querySelector('.time-content');
+                const panels = panelsContainer ? panelsContainer.querySelectorAll('.panel-card') : [];
                 
-                // Check if there are any visible panels in this hour
+                // Check if there are any visible panels in this time row
                 const hasVisiblePanels = Array.from(panels).some(panel => 
                     panel.style.display !== 'none' && !panel.classList.contains('hidden')
                 );
                 
-                // Show/hide the hour block based on visible panels
-                hourBlock.style.display = hasVisiblePanels ? 'flex' : 'none';
+                // Show/hide the time row based on visible panels
+                timeRow.style.display = hasVisiblePanels ? 'flex' : 'none';
             });
         }
 
