@@ -495,7 +495,14 @@ window.addEventListener('load', function() {
                                      data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
                                      data-room="{{ panel.room.name|lower|slugify }}"
                                      {% if panel.cancelled %}data-cancelled="true"{% endif %}
-                                     style="{% if panel.ordered_tags.0.color and panel.ordered_tags|length == 1 %}background-color: {{ panel.ordered_tags.0.color }}; color: white;{% elif panel.ordered_tags|length == 2 %}background: linear-gradient(135deg, {{ panel.ordered_tags.0.color }} 0%, {{ panel.ordered_tags.0.color }} 50%, {{ panel.ordered_tags.1.color }} 50%, {{ panel.ordered_tags.1.color }} 100%); color: white;{% elif panel.ordered_tags|length >= 3 %}background: linear-gradient(135deg, {{ panel.ordered_tags.0.color }} 0%, {{ panel.ordered_tags.0.color }} 33%, {{ panel.ordered_tags.1.color }} 33%, {{ panel.ordered_tags.1.color }} 66%, {{ panel.ordered_tags.2.color }} 66%, {{ panel.ordered_tags.2.color }} 100%); color: white;{% endif %}">
+                                     style="background-color: {{ panel.ordered_tags.0.color }}">
+                                     {% if panel.ordered_tags %}
+                                        <div class="tag-dots-container">
+                                            {% for tag in panel.ordered_tags %}
+                                                <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
                                     <div class="card-body p-2">
                                         <h5 class="card-title mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.65rem; display: flex; align-items: center; {% if panel.is_featured %}font-weight: bold;{% endif %}">
                                             {% if panel.is_featured %}
@@ -657,6 +664,24 @@ window.addEventListener('load', function() {
     border-left: 2px solid var(--bs-border-color); /* Vertical separator line */
     position: relative;
 }
+
+.tag-dots-container {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+    margin-top: 5px;
+    margin-right: 5px;
+    gap: 5px; /* Space between dots */
+    z-index: 1; /* Ensure dots are above other content */
+}
+
+.tag-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%; /* Make it round */
+    display: block;
+} 
 
 /* Event card styles */
 .panel-card {
