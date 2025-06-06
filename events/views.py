@@ -33,10 +33,10 @@ def convention_detail(request, pk):
         current_convention_name = convention.name
         
         # Get all unique tags for panels in this convention
-        unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct()
+        unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
 
         # Get all unique rooms for panels in this convention
-        unique_rooms = Room.objects.filter(panels__convention_day__convention=convention).distinct()
+        unique_rooms = Room.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
 
         # --- Calculations for timetable display ---
         # Assuming hour_height_px is 80 as in the CSS (consistent with template)
