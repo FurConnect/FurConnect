@@ -624,7 +624,6 @@ def delete_tag_ajax(request, pk):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@login_required
 def get_host_details_ajax(request, pk):
     """
     AJAX view to get details of a single PanelHost.
@@ -641,7 +640,6 @@ def get_host_details_ajax(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@login_required
 def get_room_details_ajax(request, pk):
     """
     AJAX view to get details of a single Room.
