@@ -15,11 +15,9 @@
 </script>
 
 <script>
-console.log('Convention detail script started'); // Log at the very beginning
 // Wait for all resources to load
 window.addEventListener('load', function() {
     try {
-        console.log('window load event fired'); // Log to confirm event fires
         // Initialize Bootstrap Modal
         const panelDetailModal = new bootstrap.Modal(document.getElementById('panelDetailModal'));
         const panelDetailContent = document.getElementById('panelDetailContent');
@@ -59,7 +57,6 @@ window.addEventListener('load', function() {
                 hostContainers.forEach(hostContainer => {
                     const hostId = hostContainer.dataset.hostId;
                     if (hostId) {
-                        console.log('Loading host image for ID:', hostId);
                         // Fetch host details via AJAX
                         fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`), {
                             method: 'GET',
@@ -77,7 +74,6 @@ window.addEventListener('load', function() {
                             return response.json();
                         })
                         .then(data => {
-                            console.log('Received host data for ID', hostId, ':', data);
                             const imgElement = hostContainer.querySelector('img.host-avatar');
                             if (!imgElement) {
                                 console.error('No img element found for host:', hostId);
@@ -87,17 +83,13 @@ window.addEventListener('load', function() {
                             if (data && data.profile_picture) {
                                 // Check if the profile picture is base64
                                 if (data.profile_picture.startsWith('data:image')) {
-                                    console.log('Setting base64 image for host:', hostId);
                                     imgElement.src = data.profile_picture;
                                 } else if (data.profile_picture.startsWith('http') || data.profile_picture.startsWith('/')) {
-                                    console.log('Setting URL image for host:', hostId);
                                     imgElement.src = data.profile_picture;
                                 } else {
-                                    console.error('Invalid image format for host:', hostId);
                                     imgElement.src = "{% static 'events/images/placeholder.webp' %}";
                                 }
                             } else {
-                                console.log('No profile picture found for host:', hostId);
                                 imgElement.src = "{% static 'events/images/placeholder.webp' %}";
                             }
                         })
@@ -375,7 +367,6 @@ window.addEventListener('load', function() {
 
         // Initial load of host images on the main schedule page
         window.addEventListener('load', function() {
-            console.log('Inside initial load event listener for host images');
             // Increase initial delay for mobile devices
             const isMobile = window.innerWidth <= 767.98;
             const initialDelay = isMobile ? 1000 : 750;
@@ -392,7 +383,6 @@ window.addEventListener('load', function() {
             // Only reload if crossing the mobile breakpoint
             if ((lastWidth <= 767.98 && currentWidth > 767.98) || 
                 (lastWidth > 767.98 && currentWidth <= 767.98)) {
-                console.log('Screen size changed, reloading host images');
                 setTimeout(() => {
                     loadHostImages(document);
                 }, 500);

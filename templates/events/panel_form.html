@@ -539,19 +539,15 @@ document.addEventListener('DOMContentLoaded', function() {
                               return response.json();
                           })
                           .then(data => {
-                              console.log('Received fallback host data for ID', hostId, ':', data);
                               if (data && data.profile_picture) {
-                                  console.log('Setting fallback image for host ID:', hostId, 'with src:', data.profile_picture);
                                   imgElement.src = data.profile_picture;
                                   // Optionally update stored data here too if needed
                                   allHostsData[hostId] = data; // Update stored data with the fetched details
                               } else {
-                                  console.log('No profile picture found in fallback data for host ID:', hostId, '. Setting placeholder.');
                                   imgElement.src = "{% static 'events/images/placeholder.webp' %}";
                               }
                           })
                           .catch(error => {
-                              console.error(`Error fetching fallback host details for ID ${hostId}:`, error);
                               imgElement.src = "{% static 'events/images/placeholder.webp' %}";
                           });
                       }
@@ -691,7 +687,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Get the selected host values from TomSelect in their current order
         const selectedHosts = hostSelectInstance ? hostSelectInstance.items : [];
-        console.log('Selected hosts from TomSelect:', selectedHosts);  // Debug log
         
         // Remove any existing host inputs
         const existingHostInputs = document.querySelectorAll('input[name="host"]');
@@ -708,7 +703,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Log the form data before submission
         const formData = new FormData(this);
-        console.log('Form data before submission:', Array.from(formData.entries()));  // Debug log
         
         // Now submit the form
         this.submit();
@@ -813,7 +807,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     if (data.rooms) {
-                        console.log('Fetched rooms data:', data.rooms);
                         // Add all rooms as options
                         const options = data.rooms.map(room => ({
                             value: room.id,
@@ -921,7 +914,6 @@ document.addEventListener('DOMContentLoaded', function() {
         for (let pair of formData.entries()) {
             console.log(pair[0]+ ': ' + pair[1]);
         }
-        console.log('Sending data to save_room_ajax');
 
         fetch('{% url "events:save_room_ajax" %}', {
             method: 'POST',
@@ -947,9 +939,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Set the newly saved room as the selected item
                     roomSelectInstance.setValue(savedRoom.id);
-
-                    // The .setValue() method should handle syncing with the original select, but let's log to confirm
-                    console.log('Original room select value set to:', document.getElementById('id_room').value);
 
                 }
 
@@ -1093,7 +1082,6 @@ document.addEventListener('DOMContentLoaded', function() {
                  // explicitly send an empty string for the image to signal clearing.
                  if (currentProfilePicDiv && currentProfilePicDiv.style.display !== 'none' && hostIdInput && hostIdInput.value && (!profilePictureInput || !profilePictureInput.files || profilePictureInput.files.length === 0)) {
                       formData.append('image_base64', '');
-                      console.log('Explicitly sending empty image_base64 to clear picture.');
                  }
                 sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
             }
@@ -1102,10 +1090,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to send the AJAX request for saving host
     function sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput) {
-        console.log('Attempting to send host save request.');
         // Log FormData contents for debugging
         for (let pair of formData.entries()) {
-            console.log('FormData entry: ' + pair[0]+ ': ' + pair[1]);
         }
 
         fetch('{% url "events:add_panel_host_ajax" %}', {
@@ -1117,19 +1103,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .then(response => {
-            console.log('Received response from host save AJAX.', response);
             // Check if response is OK
             if (!response.ok) {
-                console.error(`HTTP error saving host! status: ${response.status}`);
                 // Attempt to read response body for more details
                 return response.json().catch(() => { throw new Error(`HTTP status ${response.status}`); });
             }
             return response.json();
         })
         .then(data => {
-            console.log('Received JSON data for host save:', data);
             if (data.success) {
-                console.log('Host saved successfully:', data.host);
                 const savedHost = data.host;
                 
                 // Update or add the host in Tom Select
@@ -1146,19 +1128,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Check if the option already exists before adding to avoid duplicates
                     // Use updateOption if host_id was present (editing), otherwise addOption (creating)
                      if (hostIdInput && hostIdInput.value && hostSelectInstance.options.hasOwnProperty(savedHost.id)) {
-                         console.log('Updating host option in Tom Select:', savedHost.id);
                          hostSelectInstance.updateOption(savedHost.id, hostOptionData);
                          // Re-render items to update display, especially for image
                          hostSelectInstance.refreshItems();
                      } else if (!hostSelectInstance.options.hasOwnProperty(savedHost.id)) {
-                         console.log('Adding new host option to Tom Select:', savedHost.id);
                          hostSelectInstance.addOption(hostOptionData);
                      }
 
                     // Add the saved host to the selected items if it wasn't already selected
                     // Check if the item is NOT currently selected before adding
                     if (!hostSelectInstance.items.includes(savedHost.id.toString())) { // Tom Select stores values as strings
-                         console.log('Adding saved host to selected items:', savedHost.id);
                          hostSelectInstance.addItem(savedHost.id, { silent: true }); // Add silently to prevent event loops
                          hostSelectInstance.refreshItems(); // Refresh after silent add
                     }
@@ -1169,16 +1148,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Manually refresh host images to ensure the new/updated image appears
                     setTimeout(() => { refreshHostImages(document, 'host_saved'); }, 50); // Small delay
                 }
-
-                // Close the modal
-                console.log('Attempting to close host modal.');
                 // Get the actual modal instance before hiding
                 const activeHostModal = bootstrap.Modal.getInstance(document.getElementById('addHostModal'));
                 if (activeHostModal) {
-                     console.log('Found active host modal instance, attempting to hide.');
                      activeHostModal.hide();
                 } else {
-                     console.log('No active host modal instance found to hide.');
                 }
 
                 
@@ -1399,13 +1373,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     if (data.tags) {
-                        console.log('Fetched tags data for Tom Select initialization:', data.tags);
 
                          // Store fetched data in allTagsData
                         data.tags.forEach(tag => {
                             allTagsData[tag.id] = tag;
                         });
-                        console.log('Stored allTagsData:', allTagsData);
 
                         // Add all tags as options
                         data.tags.forEach(tag => {
