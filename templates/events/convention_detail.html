@@ -327,13 +327,37 @@ window.addEventListener('load', function() {
                         const title = card.querySelector('.card-title').textContent.toLowerCase();
                         const description = card.querySelector('.card-text').textContent.toLowerCase();
                         const hosts = Array.from(card.querySelectorAll('.host-avatar-container')).map(host => 
-                            host.getAttribute('title')?.toLowerCase() || ''
+                            host.getAttribute('data-title')?.toLowerCase() || ''
                         );
+                        const tags = card.dataset.tags.split(',').map(tag => tag.trim().toLowerCase());
                         
+                        // Check if search term matches any part of the panel
                         const isVisible = searchTerm === '' || 
                             title.includes(searchTerm) || 
                             description.includes(searchTerm) || 
-                            hosts.some(host => host.includes(searchTerm));
+                            hosts.some(host => host.includes(searchTerm)) ||
+                            tags.some(tag => tag.includes(searchTerm));
+                        
+                        // If searching for a host, highlight the matching host
+                        if (searchTerm !== '' && hosts.some(host => host.includes(searchTerm))) {
+                            card.querySelectorAll('.host-avatar-container').forEach(hostContainer => {
+                                const hostName = hostContainer.getAttribute('data-title')?.toLowerCase() || '';
+                                if (hostName.includes(searchTerm)) {
+                                    hostContainer.style.border = '2px solid #007bff';
+                                    hostContainer.style.borderRadius = '50%';
+                                    hostContainer.style.padding = '2px';
+                                    hostContainer.style.boxShadow = '0 0 0 4px rgba(0, 123, 255, 0.2)';
+                                } else {
+                                    hostContainer.style.border = 'none';
+                                    hostContainer.style.boxShadow = 'none';
+                                }
+                            });
+                        } else {
+                            card.querySelectorAll('.host-avatar-container').forEach(hostContainer => {
+                                hostContainer.style.border = 'none';
+                                hostContainer.style.boxShadow = 'none';
+                            });
+                        }
                         
                         card.style.display = isVisible ? 'block' : 'none';
                         if (isVisible) hasVisiblePanels = true;
@@ -341,21 +365,6 @@ window.addEventListener('load', function() {
                     
                     schedule.style.display = hasVisiblePanels ? 'block' : 'none';
                 });
-                
-                const dayButtons = document.querySelectorAll('.day-btn');
-                dayButtons.forEach((btn, index) => {
-                    const schedule = daySchedules[index];
-                    btn.style.display = schedule.style.display === 'none' ? 'none' : 'block';
-                });
-                
-                if (searchTerm === '') {
-                    daySchedules.forEach((schedule, index) => {
-                        schedule.style.display = index === currentDayIndex ? 'block' : 'none';
-                    });
-                    dayButtons.forEach((btn, index) => {
-                        btn.style.display = 'block';
-                    });
-                }
                 
                 // Update time slots visibility after search
                 updateTimeSlotsVisibility();
@@ -1354,6 +1363,26 @@ window.addEventListener('load', function() {
         justify-content: flex-start;
         right: auto !important;
         bottom: auto !important;
+    }
+}
+
+/* Add this to your existing styles */
+.host-avatar-container.highlight-host {
+    border: 2px solid #007bff;
+    border-radius: 50%;
+    padding: 2px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
     }
 }
 </style>
