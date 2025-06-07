@@ -44,18 +44,14 @@ window.addEventListener('load', function() {
             }
         }
 
-        console.log('Defining loadHostImages function'); // Log to confirm function definition is reached
         // Function to load and update host images using fetched base64 data
         function loadHostImages(containerElement) {
-            console.log('loadHostImages called with container:', containerElement);
             // Wait for the next frame to ensure DOM is ready
             requestAnimationFrame(() => {
                 // Find all host avatar containers within the specified element
                 const hostContainers = containerElement.querySelectorAll('.host-avatar-container');
-                console.log('Found host containers:', hostContainers.length);
 
                 if (hostContainers.length === 0) {
-                    console.log('No host containers found, retrying in 100ms');
                     setTimeout(() => loadHostImages(containerElement), 100);
                     return;
                 }
@@ -436,16 +432,44 @@ window.addEventListener('load', function() {
         </p>
     </div>
     <div class="col-auto d-flex gap-2">
-        <button onclick="window.print()" class="btn btn-primary btn-admin-action">
-            <i class="material-icons">print</i> Print Schedule
-        </button>
+        <div class="dropdown">
+            <button class="btn btn-primary btn-admin-action dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="material-icons">download</i> Export Schedule
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
+                <li>
+                    <a class="dropdown-item d-flex align-items-center" href="#" onclick="window.print(); return false;">
+                        <i class="material-icons me-2">print</i> Print Schedule
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item d-flex align-items-center" href="{% url 'events:export_panels_csv' convention_pk=convention.pk %}">
+                        <i class="material-icons me-2">download</i> Export CSV
+                    </a>
+                </li>
+            </ul>
+        </div>
         {% if user.is_staff %}
         <a href="{% url 'events:convention_edit' convention.pk %}" class="btn btn-primary btn-admin-action">
             <i class="material-icons">edit</i> Edit Convention
         </a>
-        <a href="{% url 'events:panel_create' convention.days.first.pk %}" class="btn btn-primary btn-admin-action">
-            <i class="material-icons">add</i> Add Event
-        </a>
+        <div class="dropdown d-inline-block">
+            <button class="btn btn-primary btn-admin-action dropdown-toggle" type="button" id="addEventDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="material-icons">add</i> Add Event
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="addEventDropdown">
+                <li>
+                    <a class="dropdown-item d-flex align-items-center" href="{% url 'events:panel_create' convention.days.first.pk %}">
+                        <i class="material-icons me-2">add_circle</i> Single Event
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item d-flex align-items-center" href="{% url 'events:import_panels_csv' convention_pk=convention.pk %}">
+                        <i class="material-icons me-2">upload_file</i> Bulk Import (CSV)
+                    </a>
+                </li>
+            </ul>
+        </div>
         {% endif %}
     </div>
 </div>

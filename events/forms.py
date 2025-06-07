@@ -5,27 +5,27 @@ from .models import Convention, ConventionDay, Panel, PanelHost, Tag, Room, Pane
 class ConventionForm(forms.ModelForm):
     hotel_name = forms.CharField(
         max_length=200,
-        required=False,
+        required=True,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     address = forms.CharField(
         max_length=200,
-        required=False,
+        required=True,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     city = forms.CharField(
         max_length=100,
-        required=False,
+        required=True,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     state = forms.CharField(
         max_length=100,
-        required=False,
+        required=True,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     country = forms.CharField(
         max_length=100,
-        required=False,
+        required=True,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     banner_image = forms.CharField(
@@ -48,8 +48,16 @@ class ConventionForm(forms.ModelForm):
                 'rows': 3,
                 'required': True
             }),
-            'start_date': forms.TextInput(attrs={'class': 'form-control', 'type': 'text'}),
-            'end_date': forms.TextInput(attrs={'class': 'form-control', 'type': 'text'}),
+            'start_date': forms.TextInput(attrs={
+                'class': 'form-control',
+                'type': 'text',
+                'required': True
+            }),
+            'end_date': forms.TextInput(attrs={
+                'class': 'form-control',
+                'type': 'text',
+                'required': True
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -254,4 +262,22 @@ class TagForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'color': forms.TextInput(attrs={'class': 'form-control jscolor'}),
-        } 
+        }
+
+class CSVImportForm(forms.Form):
+    csv_file = forms.FileField(
+        label='CSV File',
+        help_text='Upload a CSV file with panel information. Required columns: title, description, date, start_time, end_time, room, tags, hosts',
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.csv'})
+    )
+    convention = forms.ModelChoiceField(
+        queryset=Convention.objects.all(),
+        label='Convention',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    def clean_csv_file(self):
+        csv_file = self.cleaned_data['csv_file']
+        if not csv_file.name.endswith('.csv'):
+            raise forms.ValidationError('File must be a CSV file')
+        return csv_file 
