@@ -28,89 +28,78 @@ def schedule(request):
     return render(request, 'events/schedule.html', {'conventions': [], 'current_convention_name': 'FurConnect'})
 
 def convention_detail(request, pk):
-    try:
-        convention = get_object_or_404(Convention, pk=pk)
-        # Pass the convention name to the context
-        current_convention_name = convention.name
+    convention = get_object_or_404(Convention, pk=pk)
+    current_convention_name = convention.name if convention else 'FurConnect'
+    
+    # Get all days for the convention
+    days = convention.days.all().order_by('date')
+    
+    # Get all unique tags and rooms for the convention
+    unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
+    unique_rooms = Room.objects.filter(convention=convention).order_by('name')
+    
+    # Get all hosts for the convention
+    convention_hosts = PanelHost.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
+    
+    # Initialize dictionary to store panels grouped by day and time
+    panels_by_display_time = {}
+    
+    # Process each day
+    for day in days:
+        # Sort panels for the current day by start time
+        sorted_panels = day.panels.all().order_by('start_time')
+
+        # Initialize grouping for the current day
+        panels_by_display_time[day.date] = {}
+
+        # Group panels by exact start time
+        for panel in sorted_panels:
+            start_time = panel.start_time
+
+            # Get hosts ordered by their priority in PanelHostOrder
+            panel.ordered_hosts = list(panel.host.all().order_by('panelhostorder__priority'))
+            
+            # Get tags ordered by their priority in PanelTag
+            panel.ordered_tags = list(panel.tags.all().order_by('paneltag__priority'))
+
+            # Add panel to the grouped dictionary
+            if start_time not in panels_by_display_time[day.date]:
+                panels_by_display_time[day.date][start_time] = []
+
+            panels_by_display_time[day.date][start_time].append(panel)
+
+    # Sort the days for displaying in the template
+    sorted_display_days = sorted(panels_by_display_time.keys())
+    
+    # Reconstruct days structure with panels grouped by display start time
+    display_days_with_panels = []
+    for day_date in sorted_display_days:
+        day_obj = days.get(date=day_date)
+        display_day = {
+            'original_day_obj': day_obj,
+            'panels_by_time': []
+        }
         
-        # Get all unique tags for panels in this convention
-        unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
-
-        # Get all unique rooms for panels in this convention
-        unique_rooms = Room.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
-
-        # --- Calculations for timetable display ---
-        # Assuming hour_height_px is 80 as in the CSS (consistent with template)
-        hour_height_px = 80
-
-        # Pre-calculate panel display properties
-        # Order related hosts by name
-        days = convention.days.all().prefetch_related(
-            'panels__tags', 
-            'panels__room'
-        )
-
-        # Create a dictionary to hold panels grouped by display day and start time
-        panels_by_display_time = {}
-
-        for day in days:
-            # Sort panels for the current day by start time
-            sorted_panels = day.panels.all().order_by('start_time')
-
-            # Initialize grouping for the current day
-            panels_by_display_time[day.date] = {}
-
-            # Group panels by exact start time
-            for panel in sorted_panels:
-                start_time = panel.start_time
-
-                # Get hosts ordered by their priority in PanelHostOrder
-                panel.ordered_hosts = list(panel.host.all().order_by('panelhostorder__priority'))
-                
-                # Get tags ordered by their priority in PanelTag
-                panel.ordered_tags = list(panel.tags.all().order_by('paneltag__priority'))
-
-                # Add panel to the grouped dictionary
-                if start_time not in panels_by_display_time[day.date]:
-                    panels_by_display_time[day.date][start_time] = []
-
-                panels_by_display_time[day.date][start_time].append(panel)
-
-        # Sort the days for displaying in the template
-        sorted_display_days = sorted(panels_by_display_time.keys())
+        # Sort times for this day
+        sorted_times = sorted(panels_by_display_time[day_date].keys())
         
-        # Reconstruct days structure with panels grouped by display start time
-        display_days_with_panels = []
-        for d in sorted_display_days:
-            # Find the original ConventionDay object for the date
-            original_day_obj = next((day for day in convention.days.all() if day.date == d), None)
-            if original_day_obj:
-                 # Sort the start times for the current day
-                 sorted_start_times = sorted(panels_by_display_time[d].keys())
-                 panels_at_times = []
-                 for start_time in sorted_start_times:
-                     panels_at_times.append({
-                         'start_time': start_time,
-                         'panels': panels_by_display_time[d][start_time]
-                     })
-
-                 display_days_with_panels.append({
-                     'date': d,
-                     'panels_by_time': panels_at_times, # Changed key name to reflect grouping by time
-                     'original_day_obj': original_day_obj # Include original object for other template needs
-                 })
-
-    except Http404:
-        messages.info(request, "The requested convention was not found. Please create a new one.")
-        return redirect('events:convention_create')
+        # Add each time group to the day
+        for time in sorted_times:
+            display_day['panels_by_time'].append({
+                'start_time': time,
+                'panels': panels_by_display_time[day_date][time]
+            })
+        
+        display_days_with_panels.append(display_day)
 
     return render(request, 'events/convention_detail.html', {
         'convention': convention,
-        'days': display_days_with_panels, # Pass the modified structure
+        'days': display_days_with_panels,
+        'unique_tags': unique_tags,
+        'unique_rooms': unique_rooms,
+        'convention_hosts': convention_hosts,
         'current_convention_name': current_convention_name,
-        'unique_tags': unique_tags, # Pass unique tags to the template
-        'unique_rooms': unique_rooms, # Pass unique rooms to the template
-        'is_staff': request.user.is_staff, # Pass is_staff status to the template
+        'is_staff': request.user.is_staff
     })
 
 @login_required
@@ -631,10 +620,35 @@ def get_host_details_ajax(request, pk):
     """
     try:
         host = PanelHost.objects.get(pk=pk)
+        # Get all panels for this host
+        panels = host.panels.all().select_related('convention_day', 'room').prefetch_related('tags')
+        panels_data = []
+        for panel in panels:
+            tag_color = panel.tags.first().color if panel.tags.exists() else '#ffffff'
+            panels_data.append({
+                'id': panel.pk,
+                'title': panel.title,
+                'description': panel.description,
+                'start_time': panel.start_time.strftime('%I:%M %p'),
+                'end_time': panel.end_time.strftime('%I:%M %p'),
+                'room_name': panel.room.name if panel.room else '',
+                'tag_color': tag_color,
+                'day_of_week': panel.convention_day.date.strftime('%A') if hasattr(panel, 'convention_day') and panel.convention_day and hasattr(panel.convention_day, 'date') and panel.convention_day.date else '',
+                '_sort_date': panel.convention_day.date if hasattr(panel, 'convention_day') and panel.convention_day and hasattr(panel.convention_day, 'date') and panel.convention_day.date else None,
+                '_sort_time': panel.start_time
+            })
+        # Sort by day (date), then by time
+        panels_data.sort(key=lambda x: (x['_sort_date'], x['_sort_time']))
+        for p in panels_data:
+            p.pop('_sort_date', None)
+            p.pop('_sort_time', None)
+        
         return JsonResponse({
             'id': host.pk,
             'name': host.name,
-            'profile_picture': host.image if host.image else None
+            'profile_picture': host.image if host.image else None,
+            'panels': panels_data,
+            'panels_count': len(panels_data)
         })
     except PanelHost.DoesNotExist:
         return JsonResponse({'error': 'Host not found.'}, status=404)
@@ -961,7 +975,6 @@ def import_panels_csv(request, convention_pk):
         'current_convention_name': convention.name
     })
 
-@login_required
 def export_panels_csv(request, convention_pk):
     convention = get_object_or_404(Convention, pk=convention_pk)
     
