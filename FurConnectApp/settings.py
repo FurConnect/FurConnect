@@ -11,10 +11,18 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Version string for display in footer
+try:
+    from FurConnectApp import __version__
+    FURCONNECT_VERSION = __version__
+except ImportError:
+    FURCONNECT_VERSION = "dev"
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -70,8 +78,9 @@ USE_X_FORWARDED_PORT = True
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
+        'DIRS': [
+            BASE_DIR / 'templates',
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -79,7 +88,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'events.context_processors.user_exists_processor',
+                'FurConnectApp.settings.furconnect_version',
             ],
         },
     },
@@ -152,3 +161,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'events:login'
 LOGIN_REDIRECT_URL = 'schedule'
 LOGOUT_REDIRECT_URL = 'events:login'
+
+def furconnect_version(request):
+    from django.conf import settings
+    return {'FURCONNECT_VERSION': getattr(settings, 'FURCONNECT_VERSION', 'dev')}
