@@ -71,7 +71,6 @@ window.addEventListener('load', function() {
                         })
                         .then(response => {
                             if (!response.ok) {
-                                console.error(`HTTP error! status: ${response.status}`);
                                 throw new Error(`HTTP error! status: ${response.status}`);
                             }
                             return response.json();
@@ -83,15 +82,20 @@ window.addEventListener('load', function() {
                                 return;
                             }
 
+                            // Handle different image source types
                             if (data && data.profile_picture) {
-                                // Check if the profile picture is base64
-                                if (data.profile_picture.startsWith('data:image')) {
-                                    imgElement.src = data.profile_picture;
-                                } else if (data.profile_picture.startsWith('http') || data.profile_picture.startsWith('/')) {
-                                    imgElement.src = data.profile_picture;
-                                } else {
-                                    imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                                let imageUrl = data.profile_picture;
+                                // If it's a relative URL, make it absolute
+                                if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+                                    imageUrl = window.location.origin + imageUrl;
                                 }
+                                // Set the image source
+                                imgElement.src = imageUrl;
+                                // Add error handling for the image
+                                imgElement.onerror = function() {
+                                    this.src = "{% static 'events/images/placeholder.webp' %}";
+                                    this.onerror = null; // Prevent infinite loop
+                                };
                             } else {
                                 imgElement.src = "{% static 'events/images/placeholder.webp' %}";
                             }
@@ -301,6 +305,8 @@ window.addEventListener('load', function() {
                                 img.src = src;
                             }
                         });
+                        // Load host images after modal is shown
+                        loadHostImages(panelDetailContent);
                     })
                     .catch(error => {
                         console.error('Error loading panel details:', error);
@@ -507,6 +513,18 @@ window.addEventListener('load', function() {
                                     panelDetailContent.innerHTML = html;
                                     speakerDetailModal.hide();
                                     panelDetailModal.show();
+                                    // Force reflow
+                                    panelDetailModal._element.offsetHeight;
+                                    // Force reload images in the modal
+                                    panelDetailContent.querySelectorAll('img').forEach(img => {
+                                        if (img.src) {
+                                            const src = img.src;
+                                            img.src = '';
+                                            img.src = src;
+                                        }
+                                    });
+                                    // Load host images after modal is shown
+                                    loadHostImages(panelDetailContent);
                                 })
                                 .catch(error => {
                                     panelDetailContent.innerHTML = '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
