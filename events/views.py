@@ -646,7 +646,7 @@ def get_host_details_ajax(request, pk):
         return JsonResponse({
             'id': host.pk,
             'name': host.name,
-            'profile_picture': host.image if host.image else None,
+            'profile_picture': host.image if host.image else host.get_initials_avatar(),
             'panels': panels_data,
             'panels_count': len(panels_data)
         })
@@ -701,7 +701,7 @@ def get_all_hosts_ajax(request):
             hosts_data.append({
                 'id': host.pk,
                 'name': host.name,
-                'profile_picture': host.image if host.image else None,
+                'profile_picture': host.image if host.image else host.get_initials_avatar(),
                 'selected': host.id in selected_host_ids
             })
 

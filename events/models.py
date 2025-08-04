@@ -1,6 +1,10 @@
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+import base64
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+import random
 
 class Convention(models.Model):
     name = models.CharField(max_length=200)
@@ -97,6 +101,78 @@ class PanelHost(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_initials(self):
+        """Generate initials from the host's name"""
+        if not self.name:
+            return "?"
+        
+        # Split the name and get first letter of each part
+        name_parts = self.name.strip().split()
+        if len(name_parts) == 1:
+            # Single name, return first two letters
+            return self.name[:2].upper()
+        else:
+            # Multiple names, return first letter of first and last name
+            return (name_parts[0][0] + name_parts[-1][0]).upper()
+
+    def get_avatar_color(self):
+        """Generate a consistent color based on the host's name"""
+        if not self.name:
+            return "#6c757d"  # Default gray
+        
+        # Use the name to generate a consistent color
+        hash_value = hash(self.name.lower())
+        colors = [
+            "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
+            "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#6c757d"
+        ]
+        return colors[abs(hash_value) % len(colors)]
+
+    def get_initials_avatar(self):
+        """Generate a data URL for an initials-based avatar"""
+        try:
+            # Create a 200x200 image
+            size = 200
+            img = Image.new('RGB', (size, size), self.get_avatar_color())
+            draw = ImageDraw.Draw(img)
+            
+            # Try to use a default font, fallback to default if not available
+            try:
+                # Try to use a larger font size
+                font_size = size // 3
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+            except:
+                try:
+                    # Fallback to system font
+                    font = ImageFont.load_default()
+                except:
+                    # Last resort - use default
+                    font = ImageFont.load_default()
+            
+            # Get initials
+            initials = self.get_initials()
+            
+            # Calculate text position to center it
+            bbox = draw.textbbox((0, 0), initials, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            x = (size - text_width) // 2
+            y = (size - text_height) // 2
+            
+            # Draw the text in white
+            draw.text((x, y), initials, fill="white", font=font)
+            
+            # Convert to base64
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            img_str = base64.b64encode(buffer.getvalue()).decode()
+            
+            return f"data:image/png;base64,{img_str}"
+        except Exception as e:
+            # Fallback to a simple colored div approach
+            return None
 
     class Meta:
         ordering = ['name']

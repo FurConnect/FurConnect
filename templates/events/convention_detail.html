@@ -86,30 +86,94 @@ window.addEventListener('load', function() {
                             if (data && data.profile_picture) {
                                 let imageUrl = data.profile_picture;
                                 // If it's a relative URL, make it absolute
-                                if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+                                if (imageUrl.startsWith('/') && !imageUrl.startsWith('//') && !imageUrl.startsWith('data:')) {
                                     imageUrl = window.location.origin + imageUrl;
                                 }
                                 // Set the image source
                                 imgElement.src = imageUrl;
                                 // Add error handling for the image
                                 imgElement.onerror = function() {
-                                    this.src = "{% static 'events/images/placeholder.webp' %}";
-                                    this.onerror = null; // Prevent infinite loop
+                                    // Generate initials avatar as fallback
+                                    const hostName = data.name || '?';
+                                    const initials = generateInitials(hostName);
+                                    const color = generateAvatarColor(hostName);
+                                    imgElement.src = generateInitialsAvatar(initials, color);
+                                    imgElement.onerror = null; // Prevent infinite loop
                                 };
                             } else {
-                                imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                                // Generate initials avatar when no profile picture
+                                const hostName = data.name || '?';
+                                const initials = generateInitials(hostName);
+                                const color = generateAvatarColor(hostName);
+                                imgElement.src = generateInitialsAvatar(initials, color);
                             }
                         })
                         .catch(error => {
                             console.error('Error loading host image:', error);
                             const imgElement = hostContainer.querySelector('img.host-avatar');
                             if (imgElement) {
-                                imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                                // Generate initials avatar as fallback
+                                const hostName = hostContainer.getAttribute('data-title') || '?';
+                                const initials = generateInitials(hostName);
+                                const color = generateAvatarColor(hostName);
+                                imgElement.src = generateInitialsAvatar(initials, color);
                             }
                         });
                     }
                 });
             });
+        }
+
+        // Function to generate initials from a name
+        function generateInitials(name) {
+            if (!name) return "?";
+            
+            const nameParts = name.trim().split(' ');
+            if (nameParts.length === 1) {
+                return name.substring(0, 2).toUpperCase();
+            } else {
+                return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+            }
+        }
+
+        // Function to generate a consistent color based on name
+        function generateAvatarColor(name) {
+            if (!name) return "#6c757d";
+            
+            const colors = [
+                "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
+                "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#6c757d"
+            ];
+            const hash = name.toLowerCase().split('').reduce((a, b) => {
+                a = ((a << 5) - a) + b.charCodeAt(0);
+                return a & a;
+            }, 0);
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        // Function to generate initials avatar as data URL
+        function generateInitialsAvatar(initials, color) {
+            const canvas = document.createElement('canvas');
+            const size = 200;
+            canvas.width = size;
+            canvas.height = size;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Draw background circle
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw initials
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size/3}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initials, size/2, size/2);
+            
+            return canvas.toDataURL('image/png');
         }
 
         // Function to update time slots visibility
@@ -445,10 +509,29 @@ window.addEventListener('load', function() {
                     // Create HTML for speaker details and panels
                     let html = `
                         <div class="text-center mb-4">
-                            <img src="${data.profile_picture || "{% static 'events/images/placeholder.webp' %}"}" 
+                    `;
+                    
+                    // Handle profile picture or generate initials avatar
+                    if (data.profile_picture && !data.profile_picture.includes('placeholder.webp')) {
+                        html += `
+                            <img src="${data.profile_picture}" 
                                  alt="${data.name}" 
                                  class="rounded-circle mb-3" 
                                  style="width: 150px; height: 150px; object-fit: cover;">
+                        `;
+                    } else {
+                        // Generate initials avatar
+                        const initials = generateInitials(data.name);
+                        const color = generateAvatarColor(data.name);
+                        html += `
+                            <div class="rounded-circle mb-3 d-flex align-items-center justify-content-center" 
+                                 style="width: 150px; height: 150px; background-color: ${color}; color: white; font-weight: bold; font-size: 60px; text-align: center; line-height: 150px;">
+                                ${initials}
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
                             <h3>${data.name}</h3>
                             <p class="text-muted">${data.panels_count || 0} Event${data.panels_count !== 1 ? 's' : ''}</p>
                         </div>
@@ -706,8 +789,10 @@ window.addEventListener('load', function() {
                                                                     <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar"
                                                                          style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
                                                                 {% else %}
-                                                                    <img src="{% static 'events/images/placeholder.webp' %}" alt="{{ host.name }}" class="host-avatar"
-                                                                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                                                    <div class="host-avatar-initials" 
+                                                                         style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                                                        {{ host.get_initials }}
+                                                                    </div>
                                                                 {% endif %}
                                                             </div>
                                                         {% endfor %}
@@ -805,16 +890,19 @@ window.addEventListener('load', function() {
             </div>
         </div>
 
-        <div class="row" id="speakersContainer">
+        <div class="row justify-content-center" id="speakersContainer">
             {% for host in convention_hosts %}
             <div class="col-md-4 col-lg-3 mb-4 speaker-card-container" data-speaker-name="{{ host.name|lower }}">
                 <div class="card h-100 speaker-card" data-speaker-id="{{ host.id }}" style="cursor: pointer;">
                     <div class="card-body text-center">
-                        <div class="mb-3">
+                        <div class="mb-3 d-flex justify-content-center">
                             {% if host.image %}
                             <img src="{{ host.image }}" alt="{{ host.name }}" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
                             {% else %}
-                            <img src="{% static 'events/images/placeholder.webp' %}" alt="{{ host.name }}" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center" 
+                                 style="width: 120px; height: 120px; background-color: {{ host.get_avatar_color }}; color: white; font-weight: bold; font-size: 48px; display: flex; align-items: center; justify-content: center;">
+                                {{ host.get_initials }}
+                            </div>
                             {% endif %}
                         </div>
                         <h5 class="card-title">{{ host.name }}</h5>

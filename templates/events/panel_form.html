@@ -544,44 +544,116 @@ document.addEventListener('DOMContentLoaded', function() {
                                   // Optionally update stored data here too if needed
                                   allHostsData[hostId] = data; // Update stored data with the fetched details
                               } else {
-                                  imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                                  // Generate initials avatar when no profile picture
+                                  const hostName = data.name || '?';
+                                  const initials = generateInitials(hostName);
+                                  const color = generateAvatarColor(hostName);
+                                  imgElement.src = generateInitialsAvatar(initials, color);
                               }
                           })
                           .catch(error => {
-                              imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                              // Generate initials avatar as fallback
+                              const hostName = hostContainer.getAttribute('data-title') || '?';
+                              const initials = generateInitials(hostName);
+                              const color = generateAvatarColor(hostName);
+                              imgElement.src = generateInitialsAvatar(initials, color);
                           });
                       }
                   } else {
-                      imgElement.src = "{% static 'events/images/placeholder.webp' %}";
+                      // Generate initials avatar as fallback
+                      const hostName = hostContainer.getAttribute('data-title') || '?';
+                      const initials = generateInitials(hostName);
+                      const color = generateAvatarColor(hostName);
+                      imgElement.src = generateInitialsAvatar(initials, color);
                   }
               });
           });
       }
 
+    // Function to generate initials from a name
+    function generateInitials(name) {
+        if (!name) return "?";
+        
+        const nameParts = name.trim().split(' ');
+        if (nameParts.length === 1) {
+            return name.substring(0, 2).toUpperCase();
+        } else {
+            return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+        }
+    }
+
+    // Function to generate a consistent color based on name
+    function generateAvatarColor(name) {
+        if (!name) return "#6c757d";
+        
+        const colors = [
+            "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
+            "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#6c757d"
+        ];
+        const hash = name.toLowerCase().split('').reduce((a, b) => {
+            a = ((a << 5) - a) + b.charCodeAt(0);
+            return a & a;
+        }, 0);
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    // Function to generate initials avatar as data URL
+    function generateInitialsAvatar(initials, color) {
+        const canvas = document.createElement('canvas');
+        const size = 200;
+        canvas.width = size;
+        canvas.height = size;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Draw background circle
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw initials
+        ctx.fillStyle = 'white';
+        ctx.font = `bold ${size/3}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(initials, size/2, size/2);
+        
+        return canvas.toDataURL('image/png');
+    }
+
     // Define render functions separately
     const renderHostItem = function(data, escape) {
         // Show profile picture in the main list (selected items)
-        // Initially use a placeholder, refreshHostImages will update
-        const hostProfilePic = data.profile_picture || "{% static 'events/images/placeholder.webp' %}}";
-
-        // Determine text color based on luminosity (assuming background is known)
-        // For TomSelect items, the background is the default item background.
-        // Let's keep the default text color unless there's a specific dark mode style
-        const textColor = ''; // Use default text color
+        let hostProfilePic = data.profile_picture;
+        
+        // If no profile picture, generate initials avatar
+        if (!hostProfilePic || hostProfilePic === "{% static 'events/images/placeholder.webp' %}") {
+            const initials = generateInitials(data.text);
+            const color = generateAvatarColor(data.text);
+            hostProfilePic = generateInitialsAvatar(initials, color);
+        }
 
         return `<div style="display:inline-flex;align-items:center;gap:0.5rem;" data-host-id="${escape(data.value)}">
-            <img src="${escape(hostProfilePic)}" alt="Profile picture for ${escape(data.text)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null;this.src='{% static 'events/images/placeholder.webp' %}';">
+            <img src="${escape(hostProfilePic)}" alt="Profile picture for ${escape(data.text)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null;this.src='${generateInitialsAvatar(generateInitials(data.text), generateAvatarColor(data.text))}';">
             ${escape(data.text)}
         </div>`;
     };
 
     const renderHostOption = function(data, escape) {
         // Show profile pictures in the dropdown too
-        const hostProfilePic = data.profile_picture || "{% static 'events/images/placeholder.webp' %}}";
+        let hostProfilePic = data.profile_picture;
+        
+        // If no profile picture, generate initials avatar
+        if (!hostProfilePic || hostProfilePic === "{% static 'events/images/placeholder.webp' %}") {
+            const initials = generateInitials(data.text);
+            const color = generateAvatarColor(data.text);
+            hostProfilePic = generateInitialsAvatar(initials, color);
+        }
 
          return `<div style="display:flex;align-items:center;gap:0.5rem;" data-host-id="${escape(data.value)}">
              <span style="width:24px;height:24px;border-radius:50%;overflow:hidden;">
-                 <img src="${escape(hostProfilePic)}" alt="Profile picture for ${escape(data.text)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.src='{% static 'events/images/placeholder.webp' %}';">
+                 <img src="${escape(hostProfilePic)}" alt="Profile picture for ${escape(data.text)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.src='${generateInitialsAvatar(generateInitials(data.text), generateAvatarColor(data.text))}';">
              </span>
              ${escape(data.text)}
          </div>`;

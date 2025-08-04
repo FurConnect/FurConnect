@@ -20,13 +20,16 @@
         {% if panel.host.all %}
         <div class="d-flex gap-2 mb-3">
             {% for host in panel.ordered_hosts %}
-                {% if host.image_data %}
+                {% if host.image %}
                 <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
                     <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
                 </div>
                 {% else %}
                 <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
-                    <img src="{% static 'events/images/placeholder.webp' %}" alt="{{ host.name }}" class="host-avatar" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    <div class="host-avatar-initials" 
+                         style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                        {{ host.get_initials }}
+                    </div>
                 </div>
                 {% endif %}
             {% endfor %}
