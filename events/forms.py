@@ -5,27 +5,27 @@ from .models import Convention, ConventionDay, Panel, PanelHost, Tag, Room, Pane
 class ConventionForm(forms.ModelForm):
     hotel_name = forms.CharField(
         max_length=200,
-        required=True,
+        required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     address = forms.CharField(
         max_length=200,
-        required=True,
+        required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     city = forms.CharField(
         max_length=100,
-        required=True,
+        required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     state = forms.CharField(
         max_length=100,
-        required=True,
+        required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     country = forms.CharField(
         max_length=100,
-        required=True,
+        required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': ' '})
     )
     banner_image = forms.CharField(
@@ -46,7 +46,7 @@ class ConventionForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': ' ',
                 'rows': 3,
-                'required': True
+                'required': False
             }),
             'start_date': forms.TextInput(attrs={
                 'class': 'form-control',

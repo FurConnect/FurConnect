@@ -17,12 +17,19 @@
     <div class="card-body">
         <form method="post" class="needs-validation" novalidate>
             {% csrf_token %}
+
+            <!-- Required Fields Note -->
+            <div class="mb-4">
+                <small class="text-muted">
+                    <span class="text-danger">*</span> Indicates required fields
+                </small>
+            </div>
             
             <!-- Name Field -->
             <div class="mb-4 form-group">
                 <label for="{{ form.name.id_for_label }}" class="form-label">
                     <i class="material-icons">label</i>
-                    Convention Name
+                    Convention Name <span class="text-danger">*</span>
                 </label>
                 {{ form.name.errors }}
                 {{ form.name }}
@@ -48,14 +55,14 @@
             <div class="row mb-4">
                 <div class="col-md-6 form-group">
                     <label for="{{ form.start_date.id_for_label }}" class="form-label">
-                        <i class="material-icons">event_available</i> Start Date
+                        <i class="material-icons">event_available</i> Start Date <span class="text-danger">*</span>
                     </label>
                     {{ form.start_date.errors }}
                     {{ form.start_date }}
                 </div>
                 <div class="col-md-6 form-group">
                     <label for="{{ form.end_date.id_for_label }}" class="form-label">
-                        <i class="material-icons">event_busy</i> End Date
+                        <i class="material-icons">event_busy</i> End Date <span class="text-danger">*</span>
                     </label>
                     {{ form.end_date.errors }}
                     {{ form.end_date }}

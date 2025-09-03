@@ -5,3 +5,4 @@
 *.pyc
 */migrations
 panel_hosts/
+staticfiles/

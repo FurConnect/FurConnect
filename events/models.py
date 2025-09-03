@@ -8,10 +8,10 @@ import random
 
 class Convention(models.Model):
     name = models.CharField(max_length=200)
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
     start_date = models.DateField()
     end_date = models.DateField()
-    location = models.CharField(max_length=200)
+    location = models.CharField(max_length=200, blank=True, null=True)
     banner_image = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
