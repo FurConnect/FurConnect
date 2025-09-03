@@ -683,11 +683,19 @@ window.addEventListener('load', function() {
                 <i class="material-icons">add</i> Add Event
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="addEventDropdown">
+                {% if convention.days.exists %}
                 <li>
                     <a class="dropdown-item d-flex align-items-center" href="{% url 'events:panel_create' convention.days.first.pk %}">
                         <i class="material-icons me-2">add_circle</i> Single Event
                     </a>
                 </li>
+                {% else %}
+                <li>
+                    <a class="dropdown-item d-flex align-items-center disabled" href="#" onclick="return false;" style="pointer-events: none; opacity: 0.5;">
+                        <i class="material-icons me-2">add_circle</i> Single Event (No days created yet)
+                    </a>
+                </li>
+                {% endif %}
                 <li>
                     <a class="dropdown-item d-flex align-items-center" href="{% url 'events:import_panels_csv' convention_pk=convention.pk %}">
                         <i class="material-icons me-2">upload_file</i> Bulk Import (CSV)
