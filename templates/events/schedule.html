@@ -17,25 +17,21 @@
 </div>
 
 {% if conventions %}
-<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+<div class="event-card-list">
     {% for convention in conventions %}
-    <div class="col">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">{{ convention.name }}</h5>
-                <h6 class="card-subtitle mb-2 text-muted">
-                    <i class="material-icons">location_on</i> {{ convention.location }}
-                </h6>
-                <p class="card-text">
-                    <i class="material-icons">calendar_today</i>
-                    {{ convention.start_date|date:"M d, Y" }} - {{ convention.end_date|date:"M d, Y" }}
-                </p>
-                <p class="card-text">{{ convention.description|truncatewords:30 }}</p>
-                <a href="{% url 'events:convention_detail' convention.pk %}" class="btn btn-primary">
-                    View Details
-                </a>
-            </div>
-        </div>
+    <div class="event-card">
+        <h5 class="card-title">{{ convention.name }}</h5>
+        <h6 class="card-subtitle mb-2 text-muted">
+            <i class="material-icons">location_on</i> {{ convention.location }}
+        </h6>
+        <p class="card-text">
+            <i class="material-icons">calendar_today</i>
+            {{ convention.start_date|date:"M d, Y" }} - {{ convention.end_date|date:"M d, Y" }}
+        </p>
+        <p class="card-text">{{ convention.description|truncatewords:30 }}</p>
+        <a href="{% url 'events:convention_detail' convention.pk %}" class="btn btn-primary">
+            View Details
+        </a>
     </div>
     {% endfor %}
 </div>

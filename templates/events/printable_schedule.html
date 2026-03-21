@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ convention.name }} - Printable Schedule{% endblock %}
+
+{% block content %}
+    {% if view == 'grid' %}
+    <div style="margin-bottom: 1.5em;">
+        <input id="speakerSearchInput" type="text" class="form-control" placeholder="Search speakers by name..." style="max-width: 350px; display: inline-block;">
+    </div>
+    {% endif %}
+<style>
+    .print-header {
+        width: 100%;
+        color: #333;
+        text-align: left;
+        font-size: 2.1rem;
+        font-weight: bold;
+        letter-spacing: 0.04em;
+        margin-left: 0.66em;
+        margin-top: 1.5em;
+    }
+    .print-container {
+        margin: 0 auto;
+        max-width: 900px;
+        padding: 0 1.5em 2.5em 1.5em;
+    }
+    .print-day-title {
+        font-size: 1.4rem;
+        color: #333;
+        border-bottom: 1px solid #bbb;
+        padding-bottom: 0.2em;
+        margin-top: 2em;
+        margin-bottom: 1em;
+    }
+    /* Hide floating UI, overlays, and theme switches in print */
+    .floating-theme-switch, .theme-switch, .theme-switch-wrapper, .footer, .powered-by, .print-footer {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        overflow: hidden !important;
+        position: absolute !important;
+        left: -9999px !important;
+    }
+
+    /* Set print orientation based on view */
+    @media print {
+        @page {
+            size: A4 {% if view == 'grid' %}landscape{% else %}portrait{% endif %};
+        }
+    }
+</style>
+
+<div class="print-header">
+    {{ convention.name }}
+</div>
+<div class="print-container">
+    <p class="mb-1" style="font-size:1.1rem;">{{ convention.description }}</p>
+    <p class="mb-1"><strong>Location:</strong> {{ convention.location }}</p>
+    <p class="mb-3"><strong>Date:</strong> {% if convention.start_date == convention.end_date %}{{ convention.start_date|date:"M d, Y" }}{% else %}{{ convention.start_date|date:"M d, Y" }} - {{ convention.end_date|date:"M d, Y" }}{% endif %}</p>
+
+    {% if view == 'grid' %}
+        {% for day_matrix in days_matrix %}
+        <div class="mb-4">
+            <h2 class="print-day-title">{{ day_matrix.day.date|date:"l, M d, Y" }}</h2>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; margin-bottom:1.5em;">
+                    <thead>
+                        <tr style="background:#ede7f6;">
+                            <th style="padding:0.5em 0.7em; border:1px solid #bbb; min-width:90px;">Time</th>
+                            {% for room in unique_rooms %}
+                            <th style="padding:0.5em 0.7em; border:1px solid #bbb; min-width:120px;">{{ room.name }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in day_matrix.rows %}
+                        <tr>
+                            <td style="padding:0.5em 0.7em; border:1px solid #bbb; font-weight:600; color:#4b2991;">{{ row.time|time:"g:i A" }}</td>
+                            {% for cell in row.cells %}
+                            <td style="padding:0.5em 0.7em; border:1px solid #bbb; vertical-align:top;">
+                                {% if cell %}
+                                <div style="font-size:1.08rem; font-weight:600; color:#222; margin-bottom:0.2em;">{{ cell.title }}</div>
+                                <div style="font-size:0.97rem; color:#444;">{{ cell.description|truncatewords:8 }}</div>
+                                <div style="font-size:0.93rem; color:#666; margin-top:0.2em;">
+                                    {% if cell.host.all %}<span><strong>Host:</strong> {% for host in cell.ordered_hosts %}{{ host.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span> | {% endif %}
+                                    {% if cell.ordered_tags %}<span><strong>Tag:</strong> {{ cell.ordered_tags.0.name }}</span>{% endif %}
+                                </div>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        {% for day in days %}
+        <div class="mb-4">
+            <h2 class="print-day-title">{{ day.original_day_obj.date|date:"l, M d, Y" }}</h2>
+            {% for time_group in day.panels_by_time %}
+            <div style="margin-bottom:1.2em;">
+                <div style="font-weight:600; color:#555;">{{ time_group.start_time|time:"g:i A" }}</div>
+                <div style="margin-left:1.5em;">
+                    {% for panel in time_group.panels %}
+                    <div style="margin-bottom:0.7em; padding:0.7em 1em; border-left:4px solid {{ panel.ordered_tags.0.color }}; background:#f9f9fc; border-radius:6px;">
+                        <div style="font-size:1.15rem; font-weight:600; color:#222;">{{ panel.title }}</div>
+                        <div style="font-size:0.98rem; color:#444;">{{ panel.description|linebreaksbr }}</div>
+                        <div style="font-size:0.95rem; color:#666; margin-top:0.2em;">
+                            <span><strong>Room:</strong> {{ panel.room }}</span>
+                            {% if panel.host.all %} | <span><strong>Host:</strong> {% for host in panel.ordered_hosts %}{{ host.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+                            {% if panel.ordered_tags %} | <span><strong>Tag:</strong> {{ panel.ordered_tags.0.name }}</span>{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+<!-- Print footer removed -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Speaker search for grid view
+document.addEventListener('DOMContentLoaded', function() {
+    var searchInput = document.getElementById('speakerSearchInput');
+    if (!searchInput) return;
+    searchInput.addEventListener('input', function() {
+        var searchTerm = this.value.toLowerCase().trim();
+        // Find all grid cells with panel info
+        var gridCells = document.querySelectorAll('td');
+        gridCells.forEach(function(cell) {
+            var panelTitle = cell.querySelector('div[style*="font-size:1.08rem"]');
+            var hostDiv = cell.querySelector('div[style*="font-size:0.93rem"]');
+            if (!panelTitle || !hostDiv) {
+                cell.style.display = '';
+                return;
+            }
+            var hostText = hostDiv.textContent.toLowerCase();
+            var match = searchTerm === '' || hostText.includes(searchTerm);
+            cell.style.display = match ? '' : 'none';
+        });
+    });
+});
+</script>
+{% endblock %}

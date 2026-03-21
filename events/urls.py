@@ -1,11 +1,14 @@
 from django.urls import path
+
 from . import views
+from .print_pdf import printable_schedule_pdf
 
 app_name = 'events'
 
 urlpatterns = [
     path('', views.schedule, name='schedule'),
     path('convention/<int:pk>/', views.convention_detail, name='convention_detail'),
+    path('convention/<int:pk>/printable-schedule/', printable_schedule_pdf, name='printable_schedule_pdf'),
     path('convention/create/', views.convention_create, name='convention_create'),
     path('convention/<int:pk>/edit/', views.convention_edit, name='convention_edit'),
     path('panel/create/<int:day_pk>/', views.panel_create, name='panel_create'),

@@ -18,11 +18,42 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.4.6/jscolor.min.js"></script>
     <!-- Custom CSS -->
     <style>
+                /* Grid view styles for event cards */
+                .grid-view .event-card-list {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 1.5rem;
+                }
+                .grid-view .event-card-list .event-card {
+                    display: block;
+                    background: #fff !important;
+                    border-radius: 1rem;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+                    padding: 1.25rem;
+                    transition: box-shadow 0.2s;
+                    color: #222;
+                }
+                [data-bs-theme="dark"] .grid-view .event-card-list .event-card {
+                    background: #23272b !important;
+                    color: #fff;
+                }
+                .grid-view .event-card-list .event-card:hover {
+                    box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+                }
+                /* Hide grid/list toggle on small screens if needed */
+                @media (max-width: 576px) {
+                    #viewToggleBtn { display: none; }
+                }
         :root {
             --transition-speed: 0.3s;
             --primary-purple: #6200ea;
             --primary-purple-light: #7c4dff;
             --primary-purple-dark: #3700b3;
+            --bs-table-hover-bg: rgba(255, 127, 0, 0.35);
+        }
+
+        html[data-bs-theme="dark"] {
+            --bs-table-hover-bg: rgba(255, 127, 0, 0.35);
         }
 
         body {
@@ -418,8 +449,8 @@
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="d-flex align-items-center">
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <div class="d-flex align-items-center gap-2">
                     {% if user.is_authenticated %}
                     <a href="{% url 'events:logout' %}" class="btn btn-outline-primary">
                         <i class="material-icons">logout</i>
@@ -526,16 +557,55 @@
 
     <!-- Theme Switcher JS -->
     <script>
+                // Grid/List View Toggle Logic
+                document.addEventListener('DOMContentLoaded', function() {
+                    const viewToggleBtn = document.getElementById('viewToggleBtn');
+                    const viewToggleIcon = document.getElementById('viewToggleIcon');
+                    const body = document.body;
+                    const gridTableContainer = document.querySelector('.grid-table-container');
+                    // Get saved view from localStorage
+                    let gridView = localStorage.getItem('eventGridView') === 'true';
+
+                    function updateView() {
+                        if (gridView) {
+                            body.classList.add('grid-view');
+                            if (gridTableContainer) {
+                                gridTableContainer.classList.remove('d-none');
+                            }
+                            if (viewToggleIcon) {
+                                viewToggleIcon.textContent = 'view_list';
+                            }
+                        } else {
+                            body.classList.remove('grid-view');
+                            if (gridTableContainer) {
+                                gridTableContainer.classList.add('d-none');
+                            }
+                            if (viewToggleIcon) {
+                                viewToggleIcon.textContent = 'grid_view';
+                            }
+                        }
+                    }
+                    updateView();
+                    if (viewToggleBtn) {
+                        viewToggleBtn.addEventListener('click', function() {
+                            gridView = !gridView;
+                            localStorage.setItem('eventGridView', gridView);
+                            updateView();
+                        });
+                    }
+                });
         // Wait for all scripts to load
         window.addEventListener('load', function() {
             // const themeSwitch = document.getElementById('themeSwitch'); // Old button, no longer needed
-            const themeCheckbox = document.getElementById('themeCheckbox'); // New checkbox
+            const themeCheckbox = document.getElementById('footer-theme-toggle'); // checkbox in footer
             const themeIcon = document.querySelector('.floating-theme-switch .theme-icon'); // Icon within the wrapper
             const html = document.documentElement;
 
             // Function to update the theme icon
             function updateThemeIcon(theme) {
-                themeIcon.textContent = theme === 'light' ? 'dark_mode' : 'light_mode';
+                if (themeIcon) {
+                    themeIcon.textContent = theme === 'light' ? 'dark_mode' : 'light_mode';
+                }
             }
 
             // Function to set the theme
@@ -573,10 +643,12 @@
             });
 
             // Listen for changes on the checkbox
-            themeCheckbox.addEventListener('change', function() {
-                const newTheme = this.checked ? 'dark' : 'light';
-                setTheme(newTheme);
-            });
+            if (themeCheckbox) {
+                themeCheckbox.addEventListener('change', function() {
+                    const newTheme = this.checked ? 'dark' : 'light';
+                    setTheme(newTheme);
+                });
+            }
 
             // --- Existing Login Modal Handling --- //
             const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));

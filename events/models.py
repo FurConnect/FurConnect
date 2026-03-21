@@ -117,17 +117,19 @@ class PanelHost(models.Model):
             return (name_parts[0][0] + name_parts[-1][0]).upper()
 
     def get_avatar_color(self):
-        """Generate a consistent color based on the host's name"""
+        """Generate a consistent color based on the host's name (stable across runs)"""
+        import hashlib
         if not self.name:
             return "#6c757d"  # Default gray
-        
-        # Use the name to generate a consistent color
-        hash_value = hash(self.name.lower())
+        # Use md5 hash for stable, deterministic color selection
+        name_bytes = self.name.lower().encode('utf-8')
+        hash_digest = hashlib.md5(name_bytes).hexdigest()
+        hash_int = int(hash_digest, 16)
         colors = [
             "#007bff", "#28a745", "#dc3545", "#ffc107", "#17a2b8",
             "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#6c757d"
         ]
-        return colors[abs(hash_value) % len(colors)]
+        return colors[hash_int % len(colors)]
 
     def get_initials_avatar(self):
         """Generate a data URL for an initials-based avatar"""

@@ -232,7 +232,8 @@ window.addEventListener('load', function() {
         // Day Navigation (Dropdown)
         const daySelect = document.getElementById('daySelect');
         const daySchedules = document.querySelectorAll('.day-schedule');
-        
+        const dayGrids = document.querySelectorAll('.day-grid');
+
         // Get the stored day index or default to 0
         let currentDayIndex = parseInt(localStorage.getItem('conventionDayIndex')) || 0;
         
@@ -247,21 +248,26 @@ window.addEventListener('load', function() {
                 const selectedValue = daySelect.value;
                 
                 if (selectedValue === 'all') {
-                    // Show all day schedules
+                    // Show all day schedules and grids
                     daySchedules.forEach(schedule => {
                         schedule.classList.remove('d-none');
-                        // Load images for all schedules when showing entire event
                         loadHostImages(schedule);
+                    });
+                    dayGrids.forEach(grid => {
+                        grid.classList.remove('d-none');
                     });
                 } else {
                     // Show only selected day
                     daySchedules.forEach((schedule, index) => {
                         const isSelected = index === parseInt(selectedValue);
                         schedule.classList.toggle('d-none', !isSelected);
-                        // Load images only for the selected schedule
                         if (isSelected) {
                             loadHostImages(schedule);
                         }
+                    });
+                    dayGrids.forEach((grid, index) => {
+                        const isSelected = index === parseInt(selectedValue);
+                        grid.classList.toggle('d-none', !isSelected);
                     });
                 }
                 
@@ -375,6 +381,38 @@ window.addEventListener('load', function() {
                     .catch(error => {
                         console.error('Error loading panel details:', error);
                         // Show error message to user
+                        panelDetailContent.innerHTML = '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
+                        panelDetailModal.show();
+                    });
+            });
+        });
+
+        // Grid row click handler (for grid table mode)
+        document.querySelectorAll('.grid-panel-row, .grid-cell-card').forEach(el => {
+            el.addEventListener('click', function() {
+                const panelId = this.dataset.panelId;
+                if (!panelId) return;
+                fetch(`{% url 'events:panel_detail_modal_view' 0 %}`.replace('0', panelId))
+                    .then(response => {
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        return response.text();
+                    })
+                    .then(html => {
+                        panelDetailContent.innerHTML = html;
+                        speakerDetailModal.hide();
+                        panelDetailModal.show();
+                        panelDetailModal._element.offsetHeight;
+                        panelDetailContent.querySelectorAll('img').forEach(img => {
+                            if (img.src) {
+                                const src = img.src;
+                                img.src = '';
+                                img.src = src;
+                            }
+                        });
+                        loadHostImages(panelDetailContent);
+                    })
+                    .catch(error => {
+                        console.error('Error loading panel details from row:', error);
                         panelDetailContent.innerHTML = '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
                         panelDetailModal.show();
                     });
@@ -656,17 +694,46 @@ window.addEventListener('load', function() {
             {% endif %}
         </p>
     </div>
-    <div class="col-auto d-flex gap-2">
+    <div class="col-auto d-flex gap-2 align-items-center">
+        <button id="viewToggleBtn" class="btn btn-admin-action btn-primary d-flex align-items-center justify-content-center p-0" type="button" title="Switch view" style="width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark)); border: none; font-weight: 500; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(98,0,234,0.10);">
+            <span id="viewToggleIcon" class="material-icons-round" style="font-size: 2rem;">grid_view</span>
+        </button>
         <div class="dropdown">
-            <button class="btn btn-primary btn-admin-action dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <button class="btn btn-primary btn-admin-action dropdown-toggle px-4 py-2" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark)); border: none; font-weight: 500; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(98,0,234,0.10);">
                 <i class="material-icons">download</i> Export Schedule
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
                 <li>
-                    <a class="dropdown-item d-flex align-items-center" href="#" onclick="window.print(); return false;">
-                        <i class="material-icons me-2">print</i> Print Schedule
+                    <a id="exportPdfBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:printable_schedule_pdf' pk=convention.pk %}?view=list" target="_blank">
+                        <i class="material-icons me-2">picture_as_pdf</i> Download PDF (Print)
                     </a>
                 </li>
+                <script>
+                // Dynamically update the Export PDF link to include the current view (grid or list)
+                window.addEventListener('DOMContentLoaded', function() {
+                    const exportPdfBtn = document.getElementById('exportPdfBtn');
+                    const viewToggleBtn = document.getElementById('viewToggleBtn');
+                    let currentView = localStorage.getItem('scheduleView') || 'list';
+
+                    function updateExportPdfLink() {
+                        const baseUrl = exportPdfBtn.href.split('?')[0];
+                        exportPdfBtn.href = baseUrl + '?view=' + currentView;
+                    }
+
+                    // Update on load
+                    updateExportPdfLink();
+
+                    // Listen for view toggle button click
+                    if (viewToggleBtn) {
+                        viewToggleBtn.addEventListener('click', function() {
+                            // Toggle view and update localStorage
+                            currentView = (currentView === 'list') ? 'grid' : 'list';
+                            localStorage.setItem('scheduleView', currentView);
+                            updateExportPdfLink();
+                        });
+                    }
+                });
+                </script>
                 <li>
                     <a class="dropdown-item d-flex align-items-center" href="{% url 'events:export_panels_csv' convention_pk=convention.pk %}">
                         <i class="material-icons me-2">download</i> Export CSV
@@ -744,91 +811,9 @@ window.addEventListener('load', function() {
         </div>
 
         <!-- Main Content Row -->
-        <div class="row">
-            <!-- Main Schedule Column -->
-            <div class="col-md-9">
-                <!-- Schedule Display -->
-                <div class="schedule-container">
-                    {% for day in days %}
-                    <div class="day-schedule {% if not forloop.first %}d-none{% endif %}" data-day-id="{{ day.original_day_obj.id }}">
-                        <div class="day-header mb-4">
-                            <h3 class="text-primary">{{ day.original_day_obj.date|date:"l, M d, Y" }}</h3>
-                            <hr class="my-3">
-                        </div>
-                        <div class="timeline">
-                            {# Iterate through time groups and display time on the left and panels on the right #}
-                            {% for time_group in day.panels_by_time %}
-                            <div class="timeline-row">
-                                <div class="time-label">
-                                    {{ time_group.start_time|time:"g:i A" }}
-                                </div>
-                                <div class="time-content">
-                                    {% for panel in time_group.panels %}
-                                        <div class="card mb-3 panel-card" 
-                                             data-panel-id="{{ panel.pk }}"
-                                             data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
-                                             data-room="{{ panel.room.name|lower|slugify }}"
-                                             {% if panel.cancelled %}data-cancelled="true"{% endif %}
-                                             style="background-color: {{ panel.ordered_tags.0.color }}">
-                                             {% if panel.ordered_tags %}
-                                                <div class="tag-dots-container">
-                                                    {% for tag in panel.ordered_tags %}
-                                                        <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
-                                                    {% endfor %}
-                                                </div>
-                                            {% endif %}
-                                            <div class="card-body p-2">
-                                                <h5 class="card-title mb-1 {% if panel.cancelled %}cancelled-text{% endif %} {% if panel.is_featured %}featured-panel-title{% endif %}" style="font-size: 1.65rem; display: flex; align-items: center;">
-                                                    {% if panel.is_featured %}
-                                                    <span class="material-icons-round me-2" style="font-size: 2.3rem; color: black;">star</span>
-                                                    {% endif %}
-                                                    {{ panel.title }}
-                                                </h5>
-                                                <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">{{ panel.description|linebreaksbr }}</p>
-                                                <div class="panel-details mt-2">
-                                                    {% if panel.host.all %}
-                                                    <div class="d-flex gap-2 mb-2">
-                                                        {% for host in panel.ordered_hosts %}
-                                                                    <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}"
-                                                                {% if user.is_staff %}
-                                                                data-host-edit-url="{% url 'events:host_edit' host.id %}"
-                                                                {% endif %}>
-                                                                {% if host.image %}
-                                                                    <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar"
-                                                                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                                                                {% else %}
-                                                                    <div class="host-avatar-initials" 
-                                                                         style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
-                                                                        {{ host.get_initials }}
-                                                                    </div>
-                                                                {% endif %}
-                                                            </div>
-                                                        {% endfor %}
-                                                    </div>
-                                                    {% endif %}
-                                                    <h6 class="text-muted mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
-                                                        <i class="material-icons fs-6" style="font-size: 1.32rem;">schedule</i>
-                                                        {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
-                                                    </h6>
-                                                    <h6 class="text-muted mb-0 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
-                                                        <i class="material-icons fs-6" style="font-size: 1.32rem;">room</i>
-                                                        {{ panel.room }}
-                                                    </h6>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- Sidebar Column -->
-            <div class="col-md-3">
+        <div class="row flex-column flex-md-row">
+            <!-- Sidebar Column: appears on top on mobile, right on desktop -->
+            <div class="col-12 col-md-3 order-1 order-md-2">
                 <!-- Day Navigation (Dropdown) -->
                 {% if convention.days.count > 1 %}
                 <div class="day-navigation mb-4">
@@ -879,6 +864,132 @@ window.addEventListener('load', function() {
                         <label class="form-check-label" for="filterRoom_{{ room.id }}">
                             {{ room.name }}
                         </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <!-- Main Schedule Column -->
+            <div class="col-12 col-md-9 order-2 order-md-1">
+                <!-- Schedule Display -->
+                <div class="schedule-container">
+                    <!-- Grid table mode (room columns, time rows) -->
+                    <div class="grid-table-container d-none mb-3">
+                        {% for day_matrix in days_matrix %}
+                        <div class="day-grid d-none" data-day-index="{{ forloop.counter0 }}">
+                            <div class="day-grid-header mb-3">
+                                <h4>{{ day_matrix.day.date|date:"l, M d, Y" }}</h4>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover table-grid-schedule">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th style="min-width: 120px;">Time</th>
+                                            {% for room in unique_rooms %}
+                                            <th>{{ room.name }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for time_row in day_matrix.rows %}
+                                        <tr>
+                                            <th class="table-secondary">{{ time_row.time|time:"g:i A" }}</th>
+                                            {% for cell in time_row.cells %}
+                                            <td class="p-0">
+                                                {% if cell %}
+                                                {% with tag_color=cell.ordered_tags.0.color|default:'#f8f9fa' %}
+                                                <div class="grid-cell-card p-2" data-panel-id="{{ cell.pk }}" data-tag-color="{{ tag_color }}" style="border-left: 4px solid {{ tag_color }};">
+                                                    <div class="fw-bold">{{ cell.title }}</div>
+                                                    {% if cell.is_featured %}
+                                                    <span class="badge bg-warning text-dark mb-1">Featured</span>
+                                                    {% endif %}
+                                                    <div class="small text-muted">{{ cell.room }}</div>
+                                                    <div class="small">{{ cell.description|truncatewords:8 }}</div>
+                                                </div>
+                                                {% endwith %}
+                                                {% endif %}
+                                            </td>
+                                            {% endfor %}
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% for day in days %}
+                    <div class="day-schedule {% if not forloop.first %}d-none{% endif %}" data-day-id="{{ day.original_day_obj.id }}">
+                        <div class="day-header mb-4">
+                            <h3 class="text-primary">{{ day.original_day_obj.date|date:"l, M d, Y" }}</h3>
+                            <hr class="my-3">
+                        </div>
+                        <div class="timeline">
+                            {# Iterate through time groups and display time on the left and panels on the right #}
+                            {% for time_group in day.panels_by_time %}
+                            <div class="timeline-row">
+                                <div class="time-label">
+                                    {{ time_group.start_time|time:"g:i A" }}
+                                </div>
+                                <div class="time-content">
+                                    {% for panel in time_group.panels %}
+                                        <div class="card mb-3 panel-card" 
+                                             data-panel-id="{{ panel.pk }}"
+                                             data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                                             data-room="{{ panel.room.name|lower|slugify }}"
+                                             {% if panel.cancelled %}data-cancelled="true"{% endif %}
+                                             style="background-color: {{ panel.ordered_tags.0.color }}">
+                                             {% if panel.ordered_tags %}
+                                                <div  class="tag-dots-container">
+                                                    {% for tag in panel.ordered_tags %}
+                                                        <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                            <div class="card-body p-2">
+                                                <h5 class="card-title mb-1 {% if panel.cancelled %}cancelled-text{% endif %} {% if panel.is_featured %}featured-panel-title{% endif %}" style="font-size: 1.65rem; display: flex; align-items: center;">
+                                                    {% if panel.is_featured %}
+                                                    <span class="material-icons-round me-2" style="font-size: 2.3rem; color: currentColor;">star</span>
+                                                    {% endif %}
+                                                    {{ panel.title }}
+                                                </h5>
+                                                <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">{{ panel.description|linebreaksbr }}</p>
+                                                <div class="panel-details mt-2">
+                                                    {% if panel.host.all %}
+                                                    <div class="d-flex gap-2 mb-2">
+                                                        {% for host in panel.ordered_hosts %}
+                                                                    <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}"
+                                                                {% if user.is_staff %}
+                                                                data-host-edit-url="{% url 'events:host_edit' host.id %}"
+                                                                {% endif %}>
+                                                                {% if host.image %}
+                                                                    <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar"
+                                                                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                                                {% else %}
+                                                                    <div class="host-avatar-initials" 
+                                                                         style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                                                        {{ host.get_initials }}
+                                                                    </div>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                    {% endif %}
+                                                    <h6 class="text-muted mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
+                                                        <i class="material-icons fs-6" style="font-size: 1.32rem;">schedule</i>
+                                                        {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
+                                                    </h6>
+                                                    <h6 class="text-muted mb-0 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
+                                                        <i class="material-icons fs-6" style="font-size: 1.32rem;">room</i>
+                                                        {{ panel.room }}
+                                                    </h6>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -1036,6 +1147,176 @@ window.addEventListener('load', function() {
     text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
+/* Grid view styles for convention detail schedule */
+body.grid-view .schedule-container .timeline {
+    display: block;
+}
+
+body.grid-view .schedule-container .timeline .timeline-row {
+    display: block;
+    margin-bottom: 0;
+}
+
+body.grid-view .schedule-container .day-header {
+    margin-bottom: 1rem;
+}
+
+body.grid-view .schedule-container .day-schedule {
+    margin-bottom: 1.5rem;
+}
+
+body.grid-view .time-label {
+    display: none;
+}
+
+body.grid-view .timeline {
+    display: none !important;
+}
+
+body.grid-view .grid-table-container {
+    display: block !important;
+}
+
+body.grid-view .time-content,
+body.grid-view .day-header,
+body.grid-view .search-container,
+body.grid-view .filter-tags,
+body.grid-view .filter-rooms,
+body.grid-view .day-navigation,
+body.grid-view .col-md-3 {
+    display: none !important;
+}
+
+body.grid-view .col-md-9 {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+}
+
+body.grid-view .grid-table-container {
+    display: block !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.grid-view .day-grid {
+    display: block !important;
+    min-width: 1000px; /* keep grid table horizontally scrollable when many rooms */
+}
+
+.grid-cell-card {
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 0.45rem;
+    background: #fff;
+    min-height: 90px;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+html[data-bs-theme="dark"] #viewToggleBtn {
+    color: #fff;
+    border-color: #c8d6e5;
+    background: rgba(255,255,255,0.08);
+}
+html[data-bs-theme="dark"] #viewToggleBtn:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.15);
+}
+
+html[data-bs-theme="dark"] .grid-cell-card {
+    border-color: rgba(156, 163, 175, 0.4);
+    background: #1a1f27;
+    color: #e6edf9;
+}
+
+.grid-cell-card[data-tag-color] {
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+html[data-bs-theme="dark"] .grid-cell-card[data-tag-color] {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-bs-theme="dark"] .grid-cell-card .fw-bold {
+    color: #f7fbff;
+}
+
+html[data-bs-theme="dark"] .grid-cell-card .small {
+    color: #d9e2f5;
+}
+
+html[data-bs-theme="dark"] .grid-cell-card .badge {
+    opacity: 0.95;
+}
+
+html[data-bs-theme="dark"] .table-grid-schedule {
+    border-color: rgba(148, 163, 184, 0.35);
+    background-color: #131820;
+}
+
+html[data-bs-theme="dark"] .table-grid-schedule th,
+html[data-bs-theme="dark"] .table-grid-schedule td {
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+html[data-bs-theme="dark"] .table-grid-schedule th {
+    background: #0f1420;
+    color: #cfd9e8;
+}
+
+html[data-bs-theme="dark"] .table-grid-schedule th:hover,
+html[data-bs-theme="dark"] .table-grid-schedule td:hover {
+    background: var(--bs-table-hover-bg, rgba(255,255,255,0.12)) !important;
+    color: #fff !important;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body.grid-view .table-grid-schedule tbody tr:hover,
+body.grid-view .table-grid-schedule tbody tr:focus-within {
+    background: var(--bs-table-hover-bg, rgba(255,255,255,0.12)) !important;
+}
+
+body.grid-view .table-grid-schedule tbody tr:hover th,
+body.grid-view .table-grid-schedule tbody tr:hover td,
+body.grid-view .table-grid-schedule tbody tr:focus-within th,
+body.grid-view .table-grid-schedule tbody tr:focus-within td {
+    color: #fff !important;
+}
+
+.table-grid-schedule {
+    table-layout: fixed;
+    width: 100%;
+}
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    width: 120px;
+    min-width: 120px;
+    max-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    width: auto;
+    min-width: 120px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.table-grid-schedule th,
+.table-grid-schedule td {
+    vertical-align: top;
+    padding: 0.35rem 0.45rem;
+}
+
+body.grid-view .grid-panel-row {
+    cursor: pointer;
+}
+
+body.grid-view .grid-panel-row:hover {
+    background: rgba(0,0,0,0.04);
+}
+
 .panel-card.hidden {
     display: none;
 }
@@ -1145,49 +1426,6 @@ window.addEventListener('load', function() {
 .tag-badge:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Day navigation button styles (No longer used, keeping for reference or cleanup) */
-.day-btn {
-    /* ... */
-}
-
-.day-btn:hover {
-    /* ... */
-}
-
-.day-btn.active {
-    /* ... */
-}
-
-/* Filter tag styles (No longer used for buttons) */
-.filter-tag {
-    /* ... */
-}
-
-.filter-tag:hover:not(.active) {
-    /* ... */
-}
-
-.filter-tag.active {
-    /* ... */
-}
-
-.filter-tag .material-icons {
-    /* ... */
-}
-
-/* Navigation buttons (No longer used for prev/next buttons) */
-#prevDay, #nextDay {
-    /* ... */
-}
-
-#prevDay:hover:not(:disabled), #nextDay:hover:not(:disabled) {
-    /* ... */
-}
-
-#prevDay:disabled, #nextDay:disabled {
-    /* ... */
 }
 
 .btn-admin-action {

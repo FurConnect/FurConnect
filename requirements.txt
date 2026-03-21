@@ -2,3 +2,4 @@ Django
 django-widget-tweaks
 Pillow
 icalendar
+weasyprint

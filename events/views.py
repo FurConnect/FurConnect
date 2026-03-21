@@ -92,9 +92,29 @@ def convention_detail(request, pk):
         
         display_days_with_panels.append(display_day)
 
+    # Build a 2D grid matrix (times x rooms) for grid view
+    days_matrix = []
+    rooms_list = list(unique_rooms)
+    for display_day in display_days_with_panels:
+        matrix_rows = []
+        for time_group in display_day['panels_by_time']:
+            row = {
+                'time': time_group['start_time'],
+                'cells': []
+            }
+            for room in rooms_list:
+                panel_for_room = next(
+                    (panel for panel in time_group['panels'] if panel.room and panel.room.name == room.name),
+                    None
+                )
+                row['cells'].append(panel_for_room)
+            matrix_rows.append(row)
+        days_matrix.append({'day': display_day['original_day_obj'], 'rows': matrix_rows})
+
     return render(request, 'events/convention_detail.html', {
         'convention': convention,
         'days': display_days_with_panels,
+        'days_matrix': days_matrix,
         'unique_tags': unique_tags,
         'unique_rooms': unique_rooms,
         'convention_hosts': convention_hosts,
