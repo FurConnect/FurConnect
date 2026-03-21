@@ -31,7 +31,7 @@ except ImportError:
 SECRET_KEY = 'django-insecure-ozwj#9eg+=0leqx9pwzsgo@yqapfrzc3220(nfum7se6ie$tyq'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
