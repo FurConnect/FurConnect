@@ -1049,3 +1049,50 @@ def export_panels_csv(request, convention_pk):
         ])
     
     return response
+
+
+def convention_ical_feed(request, pk):
+    convention = get_object_or_404(Convention, pk=pk)
+    days = convention.days.all().order_by('date')
+    cal = icalendar.Calendar()
+    cal.add('prodid', '-//FurConnect//Convention Schedule//EN')
+    cal.add('version', '2.0')
+    cal.add('X-WR-CALNAME', convention.name)
+    # Try to get the convention's timezone from its location, fallback to UTC
+    import pytz
+    from timezonefinder import TimezoneFinder
+    import geopy.geocoders
+    tz_name = 'UTC'
+    try:
+        geolocator = geopy.geocoders.Nominatim(user_agent="furconnect-ical")
+        location = geolocator.geocode(convention.location)
+        if location:
+            tf = TimezoneFinder()
+            tz_name = tf.timezone_at(lng=location.longitude, lat=location.latitude) or 'UTC'
+    except Exception:
+        tz_name = 'UTC'
+    cal.add('X-WR-TIMEZONE', tz_name)
+    tz = pytz.timezone(tz_name)
+    for day in days:
+        panels = day.panels.filter(cancelled=False).order_by('start_time')
+        for panel in panels:
+            event = icalendar.Event()
+            event.add('summary', panel.title or "Untitled Event")
+            event.add('description', panel.description or "")
+            room_name = panel.room.name if panel.room else ""
+            event.add('location', f"{convention.name} - {room_name}" if room_name else convention.name)
+            start_datetime = datetime.combine(day.date, panel.start_time)
+            end_datetime = datetime.combine(day.date, panel.end_time)
+            start_datetime = tz.localize(start_datetime)
+            end_datetime = tz.localize(end_datetime)
+            if end_datetime < start_datetime:
+                end_datetime += timedelta(days=1)
+            event.add('dtstart', start_datetime)
+            event.add('dtend', end_datetime)
+            event.add('dtstamp', timezone.now().astimezone(tz))
+            # Add a unique identifier
+            event.add('uid', f"panel-{panel.pk}@furconnect")
+            cal.add_component(event)
+    response = HttpResponse(cal.to_ical(), content_type='text/calendar')
+    response['Content-Disposition'] = f'inline; filename="{convention.name}_schedule.ics"'
+    return response
