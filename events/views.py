@@ -1083,8 +1083,15 @@ def convention_ical_feed(request, pk):
             event.add('location', f"{convention.name} - {room_name}" if room_name else convention.name)
             start_datetime = datetime.combine(day.date, panel.start_time)
             end_datetime = datetime.combine(day.date, panel.end_time)
-            start_datetime = tz.localize(start_datetime)
-            end_datetime = tz.localize(end_datetime)
+            # If naive, localize; if aware, convert to convention tz
+            if start_datetime.tzinfo is None:
+                start_datetime = tz.localize(start_datetime)
+            else:
+                start_datetime = start_datetime.astimezone(tz)
+            if end_datetime.tzinfo is None:
+                end_datetime = tz.localize(end_datetime)
+            else:
+                end_datetime = end_datetime.astimezone(tz)
             if end_datetime < start_datetime:
                 end_datetime += timedelta(days=1)
             event.add('dtstart', start_datetime)
