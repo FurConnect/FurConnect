@@ -399,9 +399,9 @@
                         .catch(error => {
                             console.error('Error loading panel details:', error);
                             // Show error message to user
-                            panelDetailContent.innerHTML =
-                                '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
-                            panelDetailModal.show();
+                                panelDetailContent.innerHTML =
+                                    '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
+                                panelDetailModal.show();
                         });
                 });
             });
@@ -410,34 +410,35 @@
             document.querySelectorAll('.grid-panel-row, .grid-cell-card').forEach(el => {
                 el.addEventListener('click', function () {
                     const panelId = this.dataset.panelId;
-                    if (!panelId) return;
-                    fetch(`{% url 'events:panel_detail_modal_view' 0 %}`.replace('0', panelId))
-                        .then(response => {
+                if (!panelId) return;
+                console.log('Grid card clicked, panelId:', panelId);
+                fetch(`{% url 'events:panel_detail_modal_view' 0 %}`.replace('0', panelId))
+                    .then(response => {
                             if (!response.ok) throw new Error(
                                 'Network response was not ok');
-                            return response.text();
-                        })
-                        .then(html => {
-                            panelDetailContent.innerHTML = html;
-                            speakerDetailModal.hide();
-                            panelDetailModal.show();
-                            panelDetailModal._element.offsetHeight;
-                            panelDetailContent.querySelectorAll('img').forEach(img => {
-                                if (img.src) {
-                                    const src = img.src;
-                                    img.src = '';
-                                    img.src = src;
-                                }
-                            });
-                            loadHostImages(panelDetailContent);
-                        })
-                        .catch(error => {
-                            console.error('Error loading panel details from row:', error);
-                            panelDetailContent.innerHTML =
-                                '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
-                            panelDetailModal.show();
+                        return response.text();
+                    })
+                    .then(html => {
+                        panelDetailContent.innerHTML = html;
+                        speakerDetailModal.hide();
+                        panelDetailModal.show();
+                        panelDetailModal._element.offsetHeight;
+                        panelDetailContent.querySelectorAll('img').forEach(img => {
+                            if (img.src) {
+                                const src = img.src;
+                                img.src = '';
+                                img.src = src;
+                            }
                         });
-                });
+                        loadHostImages(panelDetailContent);
+                    })
+                    .catch(error => {
+                        console.error('Error loading panel details from row:', error);
+                        panelDetailContent.innerHTML =
+                            '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
+                        panelDetailModal.show();
+                    });
+            });
             });
 
             // Search functionality
@@ -914,7 +915,7 @@
                             id="filterTag_{{ tag.id }}" data-filter="{{ tag.name|lower }}">
                         <label class="form-check-label" for="filterTag_{{ tag.id }}">
                             <span
-                                style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; background-color: {{ tag.color }};"></span>
+                                style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; background-color: {{ tag.color|default:'#f8f9fa' }};"></span>
                             {{ tag.name }}
                         </label>
                     </div>
@@ -959,7 +960,7 @@
                                     <thead class="table-dark">
                                         <tr>
                                             <th style="min-width: 120px;">Time</th>
-                                            {% for room in unique_rooms %}
+                                            {% for room in day_matrix.rooms %}
                                             <th>{{ room.name }}</th>
                                             {% endfor %}
                                         </tr>
@@ -974,12 +975,20 @@
                                                 {% with tag_color=cell.ordered_tags.0.color|default:'#f8f9fa' %}
                                                 <div class="grid-cell-card p-2" data-panel-id="{{ cell.pk }}"
                                                     data-tag-color="{{ tag_color }}"
-                                                    style="border-left: 4px solid {{ tag_color }};">
+                                                    style="border-left: 5px solid {{ tag_color|default:'#f8f9fa' }}; background-color: {{ tag_color|default:'#f8f9fa' }}; outline: none;"
+                                                    tabindex="0"
+                                                    title="{{ cell.title }} ({{ cell.start_time|time:'g:i A' }} - {{ cell.end_time|time:'g:i A' }})">
                                                     <div class="fw-bold">{{ cell.title }}</div>
                                                     {% if cell.is_featured %}
-                                                    <span class="badge bg-warning text-dark mb-1">Featured</span>
+                                                    <span class="material-icons-round me-1 featured-star-grid" style="font-size: 1.5rem; vertical-align: middle; color: #fbc02d;">star</span>
                                                     {% endif %}
-                                                    <div class="small text-muted">{{ cell.room }}</div>
+                                                    {% if cell.ordered_tags %}
+                                                    <div class="mb-1">
+                                                        {% for tag in cell.ordered_tags %}
+                                                        <span class="badge" style="background-color: {{ tag.color|default:'#f8f9fa' }}; color: #222; font-size: 0.95em;">{{ tag.name }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                    {% endif %}
                                                     <div class="small">{{ cell.description|truncatewords:8 }}</div>
                                                 </div>
                                                 {% endwith %}
@@ -1014,11 +1023,11 @@
                                         data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
                                         data-room="{{ panel.room.name|lower|slugify }}"
                                         {% if panel.cancelled %}data-cancelled="true" {% endif %}
-                                        style="background-color: {{ panel.ordered_tags.0.color }}">
+                                        style="background-color: {{ panel.ordered_tags.0.color|default:'#f8f9fa' }};">
                                         {% if panel.ordered_tags %}
                                         <div class="tag-dots-container">
                                             {% for tag in panel.ordered_tags %}
-                                            <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
+                                            <span class="tag-dot" style="background-color: {{ tag.color|default:'#f8f9fa' }}"></span>
                                             {% endfor %}
                                         </div>
                                         {% endif %}
@@ -1049,7 +1058,7 @@
                                                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
                                                         {% else %}
                                                         <div class="host-avatar-initials"
-                                                            style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                                            style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color|default:'#f8f9fa' }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
                                                             {{ host.get_initials }}
                                                         </div>
                                                         {% endif %}
@@ -1108,7 +1117,7 @@
                                 style="width: 120px; height: 120px; object-fit: cover;">
                             {% else %}
                             <div class="rounded-circle d-flex align-items-center justify-content-center"
-                                style="width: 120px; height: 120px; background-color: {{ host.get_avatar_color }}; color: white; font-weight: bold; font-size: 48px; display: flex; align-items: center; justify-content: center;">
+                                style="width: 120px; height: 120px; background-color: {{ host.get_avatar_color|default:'#f8f9fa' }}; color: white; font-weight: bold; font-size: 48px; display: flex; align-items: center; justify-content: center;">
                                 {{ host.get_initials }}
                             </div>
                             {% endif %}
@@ -1363,28 +1372,10 @@
 
     body.grid-view .grid-table-container {
         display: block !important;
-    }
-
-    body.grid-view .time-content,
-    body.grid-view .day-header,
-    body.grid-view .search-container,
-    body.grid-view .filter-tags,
-    body.grid-view .filter-rooms,
-    body.grid-view .day-navigation,
-    body.grid-view .col-md-3 {
-        display: none !important;
-    }
-
-    body.grid-view .col-md-9 {
-        width: 100% !important;
-        max-width: 100% !important;
-        flex: 0 0 100% !important;
-    }
-
-    body.grid-view .grid-table-container {
-        display: block !important;
-        overflow-x: auto;
+        overflow-x: auto !important;
         -webkit-overflow-scrolling: touch;
+        width: 100%;
+        max-width: 100vw;
     }
 
     body.grid-view .day-grid {
@@ -1399,8 +1390,82 @@
         background: #fff;
         min-height: 90px;
         cursor: pointer;
-        transition: box-shadow 0.2s ease, transform 0.2s ease;
+        transition: box-shadow 0.2s, transform 0.2s, outline 0.2s;
+        position: relative;
+        outline: none;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
+    .grid-cell-card:focus {
+        outline: 2px solid #673ab7;
+        z-index: 2;
+        box-shadow: 0 0 0 4px rgba(103,58,183,0.12), 0 4px 16px rgba(0,0,0,0.10);
+        transform: scale(1.025);
+    }
+    .grid-cell-card:hover {
+        transform: scale(1.025);
+        box-shadow: 0 4px 16px rgba(103,58,183,0.13), 0 2px 8px rgba(0,0,0,0.10);
+        z-index: 2;
+    }
+    .grid-cell-card:active {
+        box-shadow: 0 2px 4px rgba(103,58,183,0.18);
+        transform: scale(0.98);
+    }
+    .grid-cell-card[data-tag-color] {
+        border-left: 5px solid var(--tag-color, #673ab7);
+    }
+    .grid-cell-card .fw-bold,
+    .grid-cell-card .small {
+        color: #222;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.07);
+    }
+    .grid-cell-card[data-tag-color] .fw-bold {
+        color: #222;
+    }
+    .grid-cell-card[data-tag-color] {
+        /* Ensure text contrast for light/dark tag colors */
+        color: #222;
+    }
+    @media (max-width: 767.98px) {
+        .grid-cell-card {
+            min-height: 60px;
+            font-size: 0.98rem;
+            padding: 0.5rem 0.3rem;
+        }
+    }
+    /* Tooltip for grid-cell-card */
+    .grid-cell-card[title] {
+        position: relative;
+    }
+    .grid-cell-card[title]:hover:after {
+        content: attr(title);
+        position: absolute;
+        left: 50%;
+        top: -2.2em;
+        transform: translateX(-50%);
+        background: #222;
+        color: #fff;
+        padding: 0.25em 0.7em;
+        border-radius: 0.35em;
+        font-size: 0.98em;
+        white-space: pre;
+        z-index: 99;
+        pointer-events: none;
+        opacity: 0.97;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+<script>
+// Keyboard accessibility for grid view
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.grid-cell-card').forEach(function(card) {
+        card.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                card.click();
+            }
+        });
+    });
+});
+</script>
 
     html[data-bs-theme="dark"] #viewToggleBtn {
         color: #fff;
@@ -1475,31 +1540,34 @@
 
     .table-grid-schedule {
         table-layout: fixed;
-        width: 100%;
+        width: max-content;
+        min-width: 100%;
     }
 
-    .table-grid-schedule th:first-child,
-    .table-grid-schedule td:first-child {
-        width: 120px;
-        min-width: 120px;
-        max-width: 130px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .table-grid-schedule th:not(:first-child),
-    .table-grid-schedule td:not(:first-child) {
-        width: auto;
-        min-width: 120px;
+    .table-grid-schedule th,
+    .table-grid-schedule td {
+        width: 180px;
+        min-width: 180px;
+        max-width: 180px;
         white-space: normal;
         overflow-wrap: anywhere;
+        text-overflow: ellipsis;
+    }
+    .table-grid-schedule th:first-child,
+    .table-grid-schedule td:first-child {
+        width: 1%;
+        min-width: 0;
+        max-width: none;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: initial;
     }
 
     .table-grid-schedule th,
     .table-grid-schedule td {
         vertical-align: top;
         padding: 0.35rem 0.45rem;
+        box-sizing: border-box;
     }
 
     body.grid-view .grid-panel-row {
