@@ -18,9 +18,30 @@ import sys
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Version string for display in footer
+import subprocess
+from datetime import datetime
 try:
     from FurConnectApp import __version__
-    FURCONNECT_VERSION = __version__
+    # Try to get git commit hash and date
+    git_hash = None
+    git_date = None
+    try:
+        git_hash = subprocess.check_output([
+            'git', 'rev-parse', 'HEAD'
+        ], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()[:6].upper()
+        git_date_raw = subprocess.check_output([
+            'git', 'show', '-s', '--format=%cd', '--date=format:%Y%m%d', 'HEAD'
+        ], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        git_date = git_date_raw
+    except Exception:
+        pass
+    if git_hash and git_date:
+        # Format: Version: ABCDEF (2026-03-09)
+        # git_date is YYYYMMDD, convert to YYYY-MM-DD
+        formatted_date = f"{git_date[:4]}-{git_date[4:6]}-{git_date[6:]}"
+        FURCONNECT_VERSION = f"Version: {git_hash} ({formatted_date})"
+    else:
+        FURCONNECT_VERSION = f"Version: {__version__}"
 except ImportError:
     FURCONNECT_VERSION = "dev"
 
