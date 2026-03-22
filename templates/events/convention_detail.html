@@ -952,7 +952,7 @@ window.addEventListener('load', function() {
                                                     {% endif %}
                                                     {{ panel.title }}
                                                 </h5>
-                                                <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">{{ panel.description|linebreaksbr }}</p>
+                                                <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">{{ panel.description|linebreaksbr|truncatechars:130 }}</p>
                                                 <div class="panel-details mt-2">
                                                     {% if panel.host.all %}
                                                     <div class="d-flex gap-2 mb-2">
