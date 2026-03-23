@@ -11,7 +11,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0" style="display: flex; align-items: center; {% if panel.is_featured %}font-weight: bold;{% endif %}">
                 {% if panel.is_featured %}
-                <span class="material-icons-round me-2 featured-star-modal" style="font-size: 2.3rem; color: black;">star</span>
+                <span class="material-icons-round me-2 featured-star-modal" style="font-size: 2.3rem; color: var(--fc-star, #FFD700);">star</span>
                 {% endif %}
                 {{ panel.title }}
             </h2>
