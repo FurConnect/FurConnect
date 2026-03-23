@@ -723,6 +723,37 @@ window.addEventListener('load', function() {
                     <a id="exportPdfBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:printable_schedule_pdf' pk=convention.pk %}?view=list" target="_blank">
                         <i class="material-icons me-2">picture_as_pdf</i> Download PDF (Print)
                     </a>
+                    <script>
+                        // Dynamically update the Export PDF link to include the current view (grid or list)
+                        window.addEventListener('DOMContentLoaded', function () {
+                            const exportPdfBtn = document.getElementById('exportPdfBtn');
+                            const viewToggleBtn = document.getElementById('viewToggleBtn');
+                            let currentView = localStorage.getItem('scheduleView') || 'list';
+
+                            function updateExportPdfLink() {
+                                const baseUrl = exportPdfBtn.href.split('?')[0];
+                                exportPdfBtn.href = baseUrl + '?view=' + currentView;
+                            }
+
+                            // Update on load
+                            updateExportPdfLink();
+
+                            // Listen for view toggle button click
+                            if (viewToggleBtn) {
+                                viewToggleBtn.addEventListener('click', function () {
+                                    // Toggle view and update localStorage
+                                    currentView = (currentView === 'list') ? 'grid' : 'list';
+                                    localStorage.setItem('scheduleView', currentView);
+                                    updateExportPdfLink();
+                                });
+                            }
+                        });
+                    </script>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center" href="#" id="calendarFeedModalTrigger">
+                            <i class="material-icons me-2">event</i> Calendar Feed (.ics)
+                        </a>
+                    </li>
                 </li>
                 <script>
                 // Dynamically update the Export PDF link to include the current view (grid or list)
@@ -787,6 +818,89 @@ window.addEventListener('load', function() {
             </ul>
         </div>
         {% endif %}
+        <!-- Calendar Feed Modal -->
+        <div class="modal fade" id="calendarFeedModal" tabindex="-1" aria-labelledby="calendarFeedModalLabel" aria-hidden="true" style="z-index: 99999;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="calendarFeedModalLabel">Subscribe to Live Calendar Feed</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>To get live updates in your calendar, <strong>subscribe</strong> using this URL (do not download and import):</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="calendarFeedUrl"
+                                value="{{ request.build_absolute_uri|cut:request.get_full_path }}{% url 'events:convention_ical_feed' pk=convention.pk %}"
+                                readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copyCalendarUrlBtn">Copy URL</button>
+                        </div>
+                        <div class="alert alert-info" style="font-size:0.97em;">
+                            <strong>Google Calendar:</strong> Go to Google Calendar (web), click <b>+</b> next to "Other calendars" &rarr; <b>From URL</b>, and paste the link above.<br><br>
+                            <strong>Apple Calendar:</strong> File &rarr; New Calendar Subscription, paste the link.<br><br>
+                            <strong>Outlook:</strong> Add calendar &rarr; Subscribe from web, paste the link.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+            // Hack: force modal open, event delegation, clipboard fallback, z-index, etc.
+            document.addEventListener('DOMContentLoaded', function () {
+                // Always re-create modal instance on click
+                document.body.addEventListener('click', function (e) {
+                    var trigger = e.target.closest('#calendarFeedModalTrigger');
+                    if (trigger) {
+                        e.preventDefault();
+                        var modalEl = document.getElementById('calendarFeedModal');
+                        if (modalEl) {
+                            // Remove lingering .show class if present
+                            modalEl.classList.remove('show');
+                            modalEl.style.display = '';
+                            // Remove any lingering backdrop
+                            var backdrops = document.querySelectorAll('.modal-backdrop');
+                            backdrops.forEach(function (bd) {
+                                bd.parentNode.removeChild(bd);
+                            });
+                            // Create and show modal
+                            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                            modal.show();
+                            // Focus the input for easy copy
+                            setTimeout(function () {
+                                var urlInput = document.getElementById('calendarFeedUrl');
+                                if (urlInput) urlInput.focus();
+                            }, 300);
+                        }
+                    }
+                });
+                // Copy button logic (with fallback)
+                document.body.addEventListener('click', function (e) {
+                    var copyBtn = e.target.closest('#copyCalendarUrlBtn');
+                    if (copyBtn) {
+                        var urlInput = document.getElementById('calendarFeedUrl');
+                        if (urlInput) {
+                            urlInput.select();
+                            urlInput.setSelectionRange(0, 99999);
+                            try {
+                                if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(urlInput.value);
+                                } else {
+                                    document.execCommand('copy');
+                                }
+                                copyBtn.innerText = 'Copied!';
+                                setTimeout(function () {
+                                    copyBtn.innerText = 'Copy URL';
+                                }, 1200);
+                            } catch (err) {
+                                alert('Copy failed. Please copy manually.');
+                            }
+                        }
+                    }
+                });
+            });
+        </script>
     </div>
 </div>
 
