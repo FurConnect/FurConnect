@@ -1518,8 +1518,9 @@ body.grid-view .col-md-9 {
 body.grid-view .grid-table-container {
     display: block !important;
     overflow-x: auto;
-    overflow-y: auto !important;
-    max-height: calc(100vh - 160px) !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    height: auto !important;
     -webkit-overflow-scrolling: touch;
     white-space: nowrap;
     scrollbar-width: thin;
