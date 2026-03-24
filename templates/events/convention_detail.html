@@ -1131,7 +1131,7 @@ window.addEventListener('load', function() {
                             <div class="day-grid-header mb-3">
                                 <h4>{{ day_matrix.day.date|date:"l, M d, Y" }}</h4>
                             </div>
-                            <div class="table-responsive">
+                            <div class="table-responsive table-responsive-x-only">
                                 <table class="table table-bordered table-hover table-grid-schedule" style="min-width: 900px;">
                                     <thead class="table-dark">
                                         <tr>
@@ -1162,12 +1162,9 @@ window.addEventListener('load', function() {
                                                             {% if panel.is_featured %}
                                                             <span class="badge bg-light text-dark mb-1">Featured</span>
                                                             {% endif %}
-                                                            <div class="tag-pill-container mb-1">
-                                                                {% for tag in panel.ordered_tags %}
-                                                                    <span class="tag-pill" style="background: {{ tag.color }}; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; margin-right: 0.25rem; font-size: 0.72rem; display: inline-flex; align-items:center; white-space: nowrap;">{{ tag.name }}</span>
-                                                                {% empty %}
-                                                                    <span class="tag-pill" style="background: #6c757d; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.72rem;">No Tag</span>
-                                                                {% endfor %}
+                                                            <div class="panel-time-range mb-1" style="font-size: 0.95rem; font-weight: 500; color: #fff;">
+                                                                <i class="material-icons fs-6" style="font-size: 1.1rem; vertical-align: middle;">schedule</i>
+                                                                {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                             </div>
                                                             <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatewords:8 }}</div>
                                                         </div>
@@ -1410,10 +1407,6 @@ window.addEventListener('load', function() {
     background: #f8f9fa !important;
     border-radius: 6px 0 0 6px;
 }
-html[data-bs-theme="dark"] .time-label {
-    color: #fff !important;
-    background: #23272f !important;
-}
 
 .table-grid-schedule th:first-child,
 .table-grid-schedule td:first-child {
@@ -1421,12 +1414,10 @@ html[data-bs-theme="dark"] .time-label {
 }
 
 html[data-bs-theme="dark"] .table-grid-schedule th:first-child,
-html[data-bs-theme="dark"] .table-grid-schedule td:first-child {
+html[data-bs-theme="dark"] .table-grid-schedule td:first-child,
+html[data-bs-theme="dark"] .table-grid-schedule th.table-secondary,
+html[data-bs-theme="dark"] .table-grid-schedule th.table-secondary:first-child {
     background: #23272f !important;
-    color: #fff !important;
-}
-
-html[data-bs-theme="dark"] .time-label {
     color: #fff !important;
 }
 
@@ -1434,7 +1425,6 @@ html[data-bs-theme="dark"] .time-label {
 .time-content {
     flex-grow: 1; /* Take up remaining space */
     padding-left: 20px;
-    border-left: 2px solid var(--bs-border-color); /* Vertical separator line */
     position: relative;
 }
 
@@ -1564,7 +1554,20 @@ body.grid-view .day-grid {
     justify-content: space-between;
     cursor: pointer;
     transition: box-shadow 0.2s ease, transform 0.2s ease;
+
+.table-grid-schedule td,
+.table-grid-schedule th {
+    vertical-align: top;
+    padding: 0 !important;
     border: none !important;
+}
+
+/* Horizontal scroll only for schedule table */
+.table-responsive-x-only {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    white-space: nowrap;
+    width: 100%;
 }
 
 .table-grid-schedule td,
@@ -1585,16 +1588,39 @@ body.grid-view .day-grid {
 
 .table-grid-schedule th:first-child,
 .table-grid-schedule td:first-child {
-    background: #23272f !important;
+    position: relative;
     color: #fff !important;
     text-align: center;
     font-size: 1.05rem;
     font-weight: 700;
     padding: 0;
-    width: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 120px;
+    min-width: 120px;
+    max-width: 130px;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 1;
+}
+
+.table-grid-schedule th:first-child::before,
+.table-grid-schedule td:first-child::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #23272f !important;
+    z-index: 0;
+    border-radius: 0;
+}
+
+.table-grid-schedule th:first-child > *,
+.table-grid-schedule td:first-child > * {
+    position: relative;
+    z-index: 1;
 }
 
 .empty-room-col {
