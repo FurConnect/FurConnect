@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_GET
 from datetime import timedelta, datetime, time
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -1183,3 +1184,25 @@ def convention_ical_feed(request, pk):
     response = HttpResponse(cal.to_ical(), content_type='text/calendar')
     response['Content-Disposition'] = f'inline; filename="{convention.name}_schedule.ics"'
     return response
+
+# Batch host details AJAX endpoint
+@require_GET
+def get_hosts_batch_ajax(request):
+    """
+    AJAX view to get details for multiple PanelHosts by IDs (comma-separated in ?ids=).
+    Returns: { hosts: [ {id, name, profile_picture}, ... ] }
+    """
+    ids_param = request.GET.get('ids', '')
+    try:
+        ids = [int(i) for i in ids_param.split(',') if i.strip().isdigit()]
+        hosts = PanelHost.objects.filter(pk__in=ids)
+        hosts_data = []
+        for host in hosts:
+            hosts_data.append({
+                'id': host.pk,
+                'name': host.name,
+                'profile_picture': host.image if host.image else host.get_initials_avatar(),
+            })
+        return JsonResponse({'hosts': hosts_data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

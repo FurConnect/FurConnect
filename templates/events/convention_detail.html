@@ -45,82 +45,103 @@ window.addEventListener('load', function() {
             }
         }
 
-        // Function to load and update host images using fetched base64 data
-        function loadHostImages(containerElement) {
-            // Wait for the next frame to ensure DOM is ready
-            requestAnimationFrame(() => {
-                // Find all host avatar containers within the specified element
-                const hostContainers = containerElement.querySelectorAll('.host-avatar-container');
+                // Batch host image loader with loading bar (single request)
+        function showLoadingBar() {
+            let bar = document.getElementById('host-loading-bar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.id = 'host-loading-bar';
+                bar.style.position = 'fixed';
+                bar.style.top = '0';
+                bar.style.left = '0';
+                bar.style.width = '0%';
+                bar.style.height = '4px';
+                bar.style.background = 'linear-gradient(90deg, #7c4dff, #6200ea)';
+                bar.style.zIndex = '2000';
+                bar.style.transition = 'width 0.2s';
+                document.body.appendChild(bar);
+            }
+            bar.style.width = '60%';
+            bar.style.display = 'block';
+        }
+        
+        function hideLoadingBar() {
+            let bar = document.getElementById('host-loading-bar');
+            if (bar) {
+                bar.style.width = '100%';
+                setTimeout(() => { bar.style.display = 'none'; bar.style.width = '0%'; }, 400);
+            }
+        }
 
+
+        // Function to load and update host images using bulk endpoint (single request)
+        function loadHostImages(containerElement) {
+            requestAnimationFrame(() => {
+                const hostContainers = containerElement.querySelectorAll('.host-avatar-container');
                 if (hostContainers.length === 0) {
                     setTimeout(() => loadHostImages(containerElement), 100);
                     return;
                 }
 
-                hostContainers.forEach(hostContainer => {
-                    const hostId = hostContainer.dataset.hostId;
-                    if (hostId) {
-                        // Fetch host details via AJAX
-                        fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`), {
-                            method: 'GET',
-                            headers: {
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest'
-                            },
-                            credentials: 'same-origin'
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            const imgElement = hostContainer.querySelector('img.host-avatar');
-                            if (!imgElement) {
-                                console.error('No img element found for host:', hostId);
-                                return;
-                            }
+                const hostIds = Array.from(hostContainers).map(c => c.dataset.hostId).filter(Boolean);
+                if (hostIds.length === 0) return;
 
-                            // Handle different image source types
-                            if (data && data.profile_picture) {
-                                let imageUrl = data.profile_picture;
-                                // If it's a relative URL, make it absolute
+                showLoadingBar();
+                fetch(`/ajax/hosts/batch/?ids=${hostIds.join(',')}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        const hostsById = {};
+                        if (data && Array.isArray(data.hosts)) {
+                            data.hosts.forEach(h => {
+                                hostsById[String(h.id)] = h;
+                            });
+                        }
+
+                        hostContainers.forEach(hostContainer => {
+                            const hostId = String(hostContainer.dataset.hostId);
+                            const hostData = hostsById[hostId];
+                            const imgElement = hostContainer.querySelector('img.host-avatar');
+                            if (!imgElement) return;
+
+                            if (hostData && hostData.profile_picture) {
+                                let imageUrl = hostData.profile_picture;
                                 if (imageUrl.startsWith('/') && !imageUrl.startsWith('//') && !imageUrl.startsWith('data:')) {
                                     imageUrl = window.location.origin + imageUrl;
                                 }
-                                // Set the image source
                                 imgElement.src = imageUrl;
-                                // Add error handling for the image
-                                imgElement.onerror = function() {
-                                    // Generate initials avatar as fallback
-                                    const hostName = data.name || '?';
-                                    const initials = generateInitials(hostName);
-                                    const color = generateAvatarColor(hostName);
-                                    imgElement.src = generateInitialsAvatar(initials, color);
-                                    imgElement.onerror = null; // Prevent infinite loop
-                                };
                             } else {
-                                // Generate initials avatar when no profile picture
-                                const hostName = data.name || '?';
+                                const hostName = hostData?.name || hostContainer.getAttribute('data-title') || '?';
                                 const initials = generateInitials(hostName);
                                 const color = generateAvatarColor(hostName);
                                 imgElement.src = generateInitialsAvatar(initials, color);
                             }
-                        })
-                        .catch(error => {
-                            console.error('Error loading host image:', error);
-                            const imgElement = hostContainer.querySelector('img.host-avatar');
-                            if (imgElement) {
-                                // Generate initials avatar as fallback
-                                const hostName = hostContainer.getAttribute('data-title') || '?';
+
+                            imgElement.onerror = () => {
+                                const hostName = hostData?.name || hostContainer.getAttribute('data-title') || '?';
                                 const initials = generateInitials(hostName);
                                 const color = generateAvatarColor(hostName);
                                 imgElement.src = generateInitialsAvatar(initials, color);
-                            }
+                                imgElement.onerror = null;
+                            };
                         });
-                    }
-                });
+                    })
+                    .catch(error => {
+                        console.error('Bulk host image load failed:', error);
+                        hostContainers.forEach(hostContainer => {
+                            const imgElement = hostContainer.querySelector('img.host-avatar');
+                            if (!imgElement) return;
+                            const hostName = hostContainer.getAttribute('data-title') || '?';
+                            const initials = generateInitials(hostName);
+                            const color = generateAvatarColor(hostName);
+                            imgElement.src = generateInitialsAvatar(initials, color);
+                        });
+                    })
+                    .finally(hideLoadingBar);
             });
         }
 
@@ -655,15 +676,8 @@ window.addEventListener('load', function() {
                 const speakerId = this.dataset.speakerId;
                 currentSpeakerId = speakerId;
                 
-                // Fetch speaker details and panels
-                fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${speakerId}/`), {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    credentials: 'same-origin'
-                })
+                // Fetch speaker details and panels using bulk endpoint (single request)
+                fetch(`/ajax/hosts/batch/?ids=${speakerId}`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('Network response was not ok');
