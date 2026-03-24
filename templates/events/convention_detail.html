@@ -1163,11 +1163,11 @@ window.addEventListener('load', function() {
                                                                 {% if panel.is_featured %}
                                                                 <span class="badge bg-light text-dark mb-1">Featured</span>
                                                                 {% endif %}
-                                                                <div class="panel-time-range mb-1" style="font-size: 0.95rem; font-weight: 500; color: #fff;">
+                                                                <div class="panel-time-range mb-1" style="font-size: 0.95rem; font-weight: 500;">
                                                                     <i class="material-icons fs-6" style="font-size: 1.1rem; vertical-align: middle;">schedule</i>
                                                                     {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                                 </div>
-                                                                <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatechars:130 }}</div>
+                                                                <div class="small">{{ panel.description|truncatechars:130 }}</div>
                                                             </div>
                                                         </div>
                                                         {% endwith %}
@@ -1425,6 +1425,22 @@ html[data-bs-theme="dark"] .table-grid-schedule th.table-secondary:first-child {
     background: #23272f !important;
     color: #fff !important;
 }
+html[data-bs-theme="light"] .table-grid-schedule th:first-child,
+html[data-bs-theme="light"] .table-grid-schedule td:first-child,
+html[data-bs-theme="light"] .table-grid-schedule th.table-secondary,
+html[data-bs-theme="light"] .table-grid-schedule th.table-secondary:first-child {
+    background: #f1f3f5 !important;
+    color: #23272f !important;
+}
+
+html[data-bs-theme="dark"] .text-primary {
+    color: #eee !important; /* lighter blue for dark mode */
+}
+
+html[data-bs-theme="light"] .text-primary {
+    color: #23272f !important;
+}
+
 
 /* Style for the content column containing panels */
 .time-content {
@@ -1610,7 +1626,71 @@ body.grid-view .grid-table-container {
     justify-content: space-between;
     cursor: pointer;
     transition: box-shadow 0.2s ease, transform 0.2s ease;
+    color: var(--bs-body-color, #222222) !important;
 }
+
+html[data-bs-theme="dark"] .grid-cell-card,
+html[data-bs-theme="dark"] .grid-cell-content {
+    color: var(--bs-light, #f8f9fa) !important;
+}
+
+html[data-bs-theme="light"] .grid-cell-card,
+html[data-bs-theme="light"] .grid-cell-content {
+    color: var(--bs-body-color, #222222) !important;
+}
+
+html[data-bs-theme="dark"] .grid-cell-card .panel-time-range,
+html[data-bs-theme="dark"] .grid-cell-card .grid-cell-content .small,
+html[data-bs-theme="dark"] .grid-cell-card .grid-cell-content div {
+    color: #f0f0f0 !important;
+}
+
+html[data-bs-theme="light"] .grid-cell-card .panel-time-range,
+html[data-bs-theme="light"] .grid-cell-card .grid-cell-content .small,
+html[data-bs-theme="light"] .grid-cell-card .grid-cell-content div {
+    color: #222222 !important;
+}
+
+html[data-bs-theme="light"] .table-grid-schedule,
+html[data-bs-theme="light"] .table-grid-schedule th,
+html[data-bs-theme="light"] .table-grid-schedule td {
+    color: #222222 !important;
+    background-color: #ffffff !important;
+
+}
+
+html[data-bs-theme="light"] .nav-tabs {
+    background-color: #ffffff !important;
+    border-color: #dee2e6 !important;
+}
+html[data-bs-theme="light"] .nav-tabs .nav-link {
+    color: #0d2149 !important;
+    background-color: #ffffff !important;
+    border-color: #dee2e6 !important;
+}
+html[data-bs-theme="light"] .nav-tabs .nav-link.active,
+html[data-bs-theme="light"] .nav-tabs .nav-link.show {
+    color: #0d2149 !important;
+    background-color: #eaf1ff !important;
+    font-weight: 700 !important;
+    border: 1px solid #0d2149 !important;
+    border-bottom-color: #eaf1ff !important;
+    box-shadow: 0 2px 6px rgba(13, 33, 73, 0.18) !important;
+    border-radius: 0.35rem 0.35rem 0 0 !important;
+}
+
+html[data-bs-theme="dark"] .nav-tabs .nav-link {
+    color: #cbd5e1 !important;
+}
+
+html[data-bs-theme="dark"] .nav-tabs .nav-link.active,
+html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 8px rgba(147, 197, 253, 0.35) !important;
+    border-radius: 0.35rem 0.35rem 0 0 !important;
+}
+
 
 .speaker-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
