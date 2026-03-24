@@ -1157,19 +1157,21 @@ window.addEventListener('load', function() {
                                                     {% with tag_color=panel.ordered_tags.0.color|default:'#f8f9fa' %}
                                                     <td class="p-0" rowspan="{{ cell.rowspan }}">
                                                         {% with panel_color=panel.ordered_tags.0.color|default:'#ffc107' %}
-                                                        <div class="grid-cell-card p-2" data-panel-id="{{ panel.pk }}" data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}" data-room="{{ panel.room.name|lower|slugify }}" data-tag-color="{{ panel_color }}" style="border-left: 4px solid {{ panel_color }}; background: {{ panel_color }}22; color: #fff;">
-                                                            <div class="fw-bold">{{ panel.title }}</div>
-                                                            {% if panel.is_featured %}
-                                                            <span class="badge bg-light text-dark mb-1">Featured</span>
-                                                            {% endif %}
-                                                            <div class="panel-time-range mb-1" style="font-size: 0.95rem; font-weight: 500; color: #fff;">
-                                                                <i class="material-icons fs-6" style="font-size: 1.1rem; vertical-align: middle;">schedule</i>
-                                                                {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
+                                                        <div class="grid-cell-card" data-panel-id="{{ panel.pk }}" data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}" data-room="{{ panel.room.name|lower|slugify }}" data-tag-color="{{ panel_color }}" style="border-left: 4px solid {{ panel_color }}; background: {{ panel_color }}22; color: #fff; width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start;">
+                                                            <div class="grid-cell-content" style="padding: 1rem; height: 100%; display: flex; flex-direction: column; justify-content: flex-start;">
+                                                                <div class="fw-bold">{{ panel.title }}</div>
+                                                                {% if panel.is_featured %}
+                                                                <span class="badge bg-light text-dark mb-1">Featured</span>
+                                                                {% endif %}
+                                                                <div class="panel-time-range mb-1" style="font-size: 0.95rem; font-weight: 500; color: #fff;">
+                                                                    <i class="material-icons fs-6" style="font-size: 1.1rem; vertical-align: middle;">schedule</i>
+                                                                    {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
+                                                                </div>
+                                                                <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatewords:8 }}</div>
                                                             </div>
-                                                            <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatewords:8 }}</div>
                                                         </div>
                                                         {% endwith %}
-                                                        </div>
+                                                    </td>
                                                     </td>
                                                     {% endwith %}
                                                     {% endwith %}
@@ -1577,10 +1579,6 @@ body.grid-view .day-grid {
     border: none !important;
 }
 
-.table-grid-schedule tbody tr {
-    height: 40px !important;
-}
-
 .table-grid-schedule th:not(:first-child),
 .table-grid-schedule td:not(:first-child) {
     border-left: none !important;
@@ -1632,13 +1630,18 @@ body.grid-view .day-grid {
     min-height: 100% !important;
 }
 
-.table-grid-schedule td > .grid-cell-card {
-    width: 100% !important;
-    min-width: 100% !important;
-    height: 100% !important;
-    min-height: 100% !important;
-    margin: 0 !important;
+.table-grid-schedule td {
+    height: 100%;
+    min-height: 40px;
     padding: 0 !important;
+    vertical-align: stretch !important;
+    box-sizing: border-box;
+}
+.table-grid-schedule td > .grid-cell-card {
+    width: 100%;
+    height: 100%;
+    margin: 0 !important;
+    padding: 1rem !important;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -2223,7 +2226,6 @@ body.grid-view .grid-panel-row {
 
 /* Sidebar styles */
 .col-md-3 {
-    border-left: 1px solid var(--bs-border-color);
     padding-left: 1.5rem;
 }
 
