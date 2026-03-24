@@ -960,7 +960,7 @@ window.addEventListener('load', function() {
                                 <span class="tag-pill" style="background: #6c757d; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.72rem;">No Tag</span>
                             {% endfor %}
                         </div>
-                        <div class="card-text small">{{ panel.description|truncatewords:8 }}</div>
+                        <div class="card-text small">{{ panel.description|truncatechars:130 }}</div>
                         {% if panel.is_cancelled %}
                         <div class="cancelled-banner mt-2"><span class="material-icons">block</span> <span class="cancelled-text">Cancelled</span></div>
                         {% endif %}
@@ -1167,7 +1167,7 @@ window.addEventListener('load', function() {
                                                                     <i class="material-icons fs-6" style="font-size: 1.1rem; vertical-align: middle;">schedule</i>
                                                                     {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                                 </div>
-                                                                <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatewords:8 }}</div>
+                                                                <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatechars:130 }}</div>
                                                             </div>
                                                         </div>
                                                         {% endwith %}
@@ -1415,6 +1415,11 @@ window.addEventListener('load', function() {
     color: #222 !important;
 }
 
+:root {
+    --bs-table-border-color: transparent;
+    --bs-table-hover-bg: rgba(0, 0, 0, 0.50);
+}
+
 html[data-bs-theme="dark"] .table-grid-schedule th:first-child,
 html[data-bs-theme="dark"] .table-grid-schedule td:first-child,
 html[data-bs-theme="dark"] .table-grid-schedule th.table-secondary,
@@ -1534,10 +1539,47 @@ body.grid-view .grid-table-container::-webkit-scrollbar-vertical {
 
 body.grid-view .day-grid {
     display: block !important;
-    min-width: 1000px;
+    min-width: auto !important;
     page-break-after: always;
-    width: 100%;
+    width: auto !important;
+    max-width: 100%;
+    margin: 0 auto;
 }
+
+body.grid-view .grid-table-container {
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+
+.table-grid-schedule {
+    width: auto !important;
+    table-layout: auto !important;
+    margin: 0 !important;
+    border: 3px solid rgba(41, 41, 41, 0.7) !important;
+    border-radius: 24px !important;
+    border-collapse: collapse !important;
+}
+
+.table-grid-schedule td,
+.table-grid-schedule th {
+    padding: 0.2rem 0.35rem !important;
+    border: none !important;
+}
+
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    border-right: 1px solid rgba(0,0,0,0.4) !important;
+}
+
+.table-grid-schedule tbody tr:first-child + tr th,
+.table-grid-schedule tbody tr:first-child + tr td {
+    border-top: 1px solid rgba(0,0,0,0.4) !important;
+}
+
+.table-grid-schedule td > .grid-cell-card {
+    padding: 0.5rem !important;
+}
+
 
 @media print {
     .day-grid {
@@ -1556,807 +1598,8 @@ body.grid-view .day-grid {
     justify-content: space-between;
     cursor: pointer;
     transition: box-shadow 0.2s ease, transform 0.2s ease;
-
-.table-grid-schedule td,
-.table-grid-schedule th {
-    vertical-align: top;
-    padding: 0 !important;
-    border: none !important;
-}
-
-/* Horizontal scroll only for schedule table */
-.table-responsive-x-only {
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    white-space: nowrap;
-    width: 100%;
-}
-
-.table-grid-schedule td,
-.table-grid-schedule th {
-    vertical-align: top;
-    padding: 0 !important;
-    border: none !important;
-}
-
-.table-grid-schedule th:not(:first-child),
-.table-grid-schedule td:not(:first-child) {
-    border-left: none !important;
-}
-
-.table-grid-schedule th:first-child,
-.table-grid-schedule td:first-child {
-    position: relative;
-    color: #fff !important;
-    text-align: center;
-    font-size: 1.05rem;
-    font-weight: 700;
-    padding: 0;
-    width: 120px;
-    min-width: 120px;
-    max-width: 130px;
-    vertical-align: middle;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    z-index: 1;
-}
-
-.table-grid-schedule th:first-child::before,
-.table-grid-schedule td:first-child::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: #23272f !important;
-    z-index: 0;
-    border-radius: 0;
-}
-
-.table-grid-schedule th:first-child > *,
-.table-grid-schedule td:first-child > * {
-    position: relative;
-    z-index: 1;
-}
-
-.empty-room-col {
-    display: none !important;
-}
-
-.table-grid-schedule td {
-    height: 100% !important;
-    min-height: 100% !important;
-}
-
-.table-grid-schedule td {
-    height: 100%;
-    min-height: 40px;
-    padding: 0 !important;
-    vertical-align: stretch !important;
-    box-sizing: border-box;
-}
-.table-grid-schedule td > .grid-cell-card {
-    width: 100%;
-    height: 100%;
-    margin: 0 !important;
-    padding: 1rem !important;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    overflow: hidden;
-}
-
-.table-grid-schedule td > .grid-cell-card .card-body {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 0.6rem;
-}
-
-.table-grid-schedule td > .grid-cell-card .card-title,
-.table-grid-schedule td > .grid-cell-card .card-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.table-grid-schedule td, .table-grid-schedule th {
-    padding: 0 !important;
-    border-collapse: collapse;
-    height: 100% !important;
-    min-height: 100% !important;
-}
-
-.table-grid-schedule td > .grid-cell-card {
-    width: 100% !important;
-    min-width: 100% !important;
-    height: 100% !important;
-    min-height: 100% !important;
-    margin: 0 !important;
-    padding: 0.75rem !important;
-}
-
-.table-grid-schedule {
-    table-layout: fixed;
-    width: 100%;
-}
-.table-grid-schedule tbody tr {
-    height: 40px !important;
-}
-.table-grid-schedule tbody tr.time-slot-hour th {
-    font-weight: 700;
-}
-.table-grid-schedule tbody tr.time-slot-half th {
-    opacity: 0.35;
-}
-.table-grid-schedule th:first-child,
-.table-grid-schedule td:first-child {
-    width: 120px;
-    min-width: 120px;
-    max-width: 130px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.table-grid-schedule th:not(:first-child),
-.table-grid-schedule td:not(:first-child) {
-    width: auto;
-    min-width: 120px;
-    white-space: normal;
-    overflow-wrap: anywhere;
-}
-.table-grid-schedule th,
-.table-grid-schedule td {
-    vertical-align: top;
-    padding: 0.35rem 0.45rem;
-}
-
-body.grid-view .grid-panel-row {
-    cursor: pointer;
-}
-
-.panel-card.hidden {
-    display: none;
-}
-
-.panel-card:hover {
-    transform: scale(1.01) translateY(-1px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
-    z-index: 20;
-    position: relative;
-}
-
-.panel-card:hover {
-    transform: scale(1.01) translateY(-1px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
-    z-index: 20;
-    position: relative;
-}
-
-.grid-cell-card:hover {
-    transform: scale(1.01) translateY(-1px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
-    z-index: 20;
-    position: relative;
-}
-
-.panel-card .card-body {
-    padding: 0;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    z-index: 1;
-}
-
-.panel-card .card-title,
-.panel-card .card-text,
-.panel-card .text-muted,
-.panel-card .material-icons {
-    color: inherit;
-    text-shadow: inherit;
-}
-
-.panel-card .text-muted {
-    color: inherit !important;
-    opacity: 0.8;
-}
-
-.panel-card .cancelled-text {
-    text-shadow: none;
-    color: inherit !important;
-    opacity: 0.7;
-}
-
-/* New class for featured panel titles */
-.featured-panel-title {
-    font-weight: bold;
-}
-
-/* Add styles for split background text */
-.panel-card[style*="linear-gradient"] .card-body::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: inherit;
-    z-index: -1;
-    border-radius: 8px;
-}
-
-.panel-card[style*="linear-gradient"] .card-title,
-.panel-card[style*="linear-gradient"] .card-text,
-.panel-card[style*="linear-gradient"] .text-muted,
-.panel-card[style*="linear-gradient"] .material-icons {
-    color: black !important;
-    text-shadow: 0 1px 2px rgba(255,255,255,0.3);
-}
-
-/* Adjust styles for panel details to prevent time overlap */
-.panel-details {
-    margin-top: 0.5rem; /* Ensure some space above details */
-}
-
-.panel-details h6 {
-    white-space: normal; /* Allow text to wrap */
-    word-break: break-word; /* Break long words if necessary */
-    line-height: 1.4; /* Improve readability */
-    margin-bottom: 0.5rem; /* Space below each h6 */
-}
-
-.panel-details h6:last-child {
-     margin-bottom: 0; /* No bottom margin for the last h6 */
-}
-
-.panel-details h6 .material-icons {
-    vertical-align: middle; /* Align icon vertically with text */
-    margin-right: 0.25rem; /* Space between icon and text */
-}
-
-/* Potentially adjust panel-card padding if needed */
-/*
-.panel-card {
-     padding: 1.5rem 1rem; /* Adjust horizontal padding if content is too wide *
-}
-*/
-
-/* Tag badge styles */
-.tag-badge {
-    padding: 6px 12px;
-    border-radius: 16px;
-    font-weight: 500;
-    font-size: 0.875rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-}
-
-.tag-badge:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.btn-admin-action {
-    padding: 0.15rem 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    height: 15%; /* Consider removing fixed height if not necessary */
-}
-
-.btn-admin-action .material-icons {
-    font-size: 1.2rem;
-    font-weight: bold;
-    height: 52%;
-    margin-right: 5px;
-}
-
-/* Specific style for the 'Add to Calendar' button in the modal footer */
-#panelDetailModal .modal-footer a.btn-outline-primary {
-    display: inline-flex !important;
-    color: var(--bs-primary) !important;
-    border-color: var(--bs-primary) !important;
-    background-color: transparent !important;
-}
-
-/* Host name hover styles */
-.host-names {
-    position: relative;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    max-width: 200px; /* Adjust as needed */
-}
-
-.host-names::after {
-    content: '...';
-    position: absolute;
-    right: 0;
-    top: 0;
-    background: inherit; /* Use inherited background to blend */
-    padding-left: 5px;
-}
-
-.host-names:hover {
-    overflow: visible;
-    white-space: normal;
-    background: var(--bs-body-bg); /* Use theme background color */
-    z-index: 1000; /* Ensure tooltip is above other content */
-    padding: 0.5rem; /* Add padding around tooltip content */
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
-}
-
-.host-names:hover::after {
-    display: none; /* Hide ellipsis on hover */
-}
-
-.host-name {
-    display: inline-block;
-    transition: all 0.2s ease;
-}
-
-.host-name:hover {
-    color: var(--bs-primary) !important; /* Highlight on hover */
-    text-decoration: underline !important; /* Add underline on hover */
-}
-
-/* Host avatar tooltip styles */
-.host-avatar-container {
-    position: relative;
-    display: inline-block;
-}
-
-.host-avatar-container:hover::after {
-    content: attr(data-title);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 4px 8px;
-    background-color: rgba(0, 0, 0, 0.8); /* Dark background */
-    color: white; /* White text */
-    border-radius: 4px;
-    font-size: 18px; /* Match panel title font size */
-    white-space: nowrap;
-    z-index: 1000; /* Ensure tooltip is above other content */
-    margin-bottom: 4px; /* Space between avatar and tooltip */
-}
-
-.host-avatar-container:hover::before {
-    content: '';
-    position: absolute;
-    bottom: calc(100% - 4px); /* Position above the tooltip */
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 4px; /* Size of the arrow */
-    border-style: solid;
-    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent; /* Dark arrow pointing down */
-    z-index: 1000; /* Ensure arrow is above other content */
-}
-
-/* Add these styles to your existing styles */
-.cancelled-banner {
-    font-weight: bold;
-    font-size: 1.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.cancelled-banner .material-icons {
-    font-size: 1.2rem;
-}
-
-.panel-card[data-cancelled="true"] {
-    opacity: 0.8;
-    position: relative;
-    border: 2px solid #dc3545; /* Red border for cancelled */
-}
-
-.panel-card[data-cancelled="true"]::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: repeating-linear-gradient(
-        45deg,
-        rgba(255, 0, 0, 0.1),
-        rgba(255, 0, 0, 0.1) 10px,
-        rgba(255, 0, 0, 0.2) 10px,
-        rgba(255, 0, 0, 0.2) 20px
-    ); /* Red diagonal stripes */
-    pointer-events: none; /* Allow clicks to pass through */
-    z-index: 1;
-}
-
-/* Print-specific styles */
-@media print {
-    /* Hide elements that shouldn't be printed */
-    .print-button,
-    .btn-admin-action,
-    .search-container,
-    .filter-tags,
-    #prevDay,
-    #nextDay,
-    .modal,
-    .host-avatar-container,
-    .day-navigation,
-    .theme-switch-wrapper,
-    .day-list,
-    .row.mb-4:first-child,  /* Hide the header row (which includes the container) - kept for clarity */
-    .row.mb-4:first-child .col-auto:last-child, /* Hide the button container */
-    .card.mb-4,  /* Hide all cards with mb-4 class */
-    .theme-switch,
-    .slider,
-    .theme-switch-label,
-    [class*="theme-switch"],
-    [class*="dark-mode"],
-    [class*="light-mode"],
-    .theme-switch-wrapper *,
-    .theme-switch *,
-    .slider *,
-    .theme-switch-label *,
-    .material-icons:not([class*="schedule"]):not([class*="room"]):not([class*="location"]):not([class*="calendar"])
-    {
-        display: none !important;
-    }
-
-    /* Reset and clean up base styles */
-    body {
-        background: white !important;
-        color: #333 !important;
-        font-size: 10pt;
-        line-height: 1.3;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-
-    /* Adjust container for full width */
-    .container {
-        width: 100% !important;
-        max-width: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-
-    /* Optimize page margins */
-    @page {
-        margin: 1cm; /* Use physical page margins for spacing */
-    }
-
-    /* Add date display for each day */
-    .day-schedule::before {
-        content: attr(data-date);
-        display: block;
-        font-size: 18pt;
-        font-weight: 600;
-        color: #000;
-        margin-bottom: 15px;
-        padding: 0 1cm 8px 1cm; /* Add padding matching page margin */
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* Optimize timeline layout for full width */
-    .timeline {
-        margin: 0 !important;
-        padding: 0 1cm !important; /* Add padding matching page margin */
-        display: flex;
-        flex-direction: column;
-    }
-
-    .timeline-hour {
-        page-break-inside: avoid;
-        margin: 0 !important;
-        padding: 0 !important;
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start; /* Align items to the top */
-    }
-
-    .hour-label {
-        width: 80px !important;
-        min-width: 80px !important;
-        font-size: 9pt !important;
-        padding: 4px 10px 4px 0 !important;
-        text-align: right;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-    }
-
-    .hour-content {
-        flex-grow: 1;
-        padding: 4px 0 4px 5px !important;
-        box-sizing: border-box;
-    }
-
-    /* Optimize panel cards */
-    .panel-card {
-        margin: 4px 0 !important;
-        padding: 8px 10px !important;
-        border-radius: 3px !important;
-        width: 100% !important; /* Ensure card takes full width */
-        box-sizing: border-box;
-    }
-
-    .panel-card .card-body {
-        padding: 0 !important;
-    }
-
-    .panel-card .card-title {
-        font-size: 11pt !important;
-        margin-bottom: 4px !important;
-        line-height: 1.2 !important;
-    }
-
-    .panel-card .card-text {
-        font-size: 9pt !important;
-        margin-bottom: 6px !important;
-        line-height: 1.2 !important;
-    }
-
-    .panel-card .text-muted {
-        font-size: 9pt !important;
-        margin-bottom: 2px !important;
-    }
-
-    .panel-card .material-icons {
-        font-size: 10pt !important;
-        vertical-align: -2px !important;
-        margin-right: 2px !important;
-    }
-
-    /* Optimize panel details */
-    .panel-details {
-        margin-top: 4px !important;
-        padding-top: 4px !important;
-    }
-
-    .panel-details h6 {
-        font-size: 9pt !important;
-        margin-bottom: 2px !important;
-    }
-
-    /* Optimize spacing */
-    .mb-4 {
-        margin-bottom: 15px !important;
-    }
-
-    /* Optimize time labels */
-    .time-label-specific {
-        font-size: 8pt !important;
-        position: static !important;
-        transform: none !important;
-        display: block !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        color: #555 !important;
-        text-align: right !important;
-        width: 100% !important;
-        margin-top: 2px !important;
-    }
-
-    /* Ensure proper page breaks */
-    .day-schedule {
-        display: block !important;
-        page-break-after: always;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    .day-schedule:last-child {
-        page-break-after: avoid;
-    }
-
-    /* Remove d-none class from all day schedules */
-    .d-none {
-        display: block !important;
-    }
-
-    /* Optimize cancelled event styling */
-    .panel-card[data-cancelled="true"] {
-        opacity: 0.6 !important;
-    }
-
-    .cancelled-text {
-        text-decoration: line-through !important;
-        color: #999 !important;
-    }
-
-    /* Add page numbers */
-    @page {
-        margin: 1cm;
-        @bottom-center {
-            content: counter(page);
-            font-size: 9pt;
-            color: #666;
-        }
-    }
-}
-
-/* Print button styles */
-.print-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    border: 2px solid var(--bs-primary);
-    background: transparent;
-}
-
-.print-button:hover {
-    background-color: var(--bs-primary);
-    color: white;
-    transform: translateY(-1px);
-}
-
-.print-button .material-icons {
-    font-size: 1.2rem;
-}
-
-/* Add styles for cancelled panels */
-.cancelled-text {
-    text-decoration: line-through;
-    opacity: 0.7;
-}
-
-/* Sidebar styles */
-.col-md-3 {
-    padding-left: 1.5rem;
-}
-
-/* Checkbox filter styles */
-.filter-tags .form-check,
-.filter-rooms .form-check {
-    margin-bottom: 0.5rem;
-}
-
-.filter-tags h5,
-.filter-rooms h5 {
-    margin-bottom: 1rem;
-}
-
-/* Day select dropdown styles */
-#daySelect {
-    margin-bottom: 1.5rem;
-}
-
-/* Mobile styles */
-@media (max-width: 767.98px) { /* Bootstrap's breakpoint for 'sm' */
-    .col-md-9,
-    .col-md-3 {
-        padding-left: 15px;
-        padding-right: 15px;
-        border-left: none; /* Remove sidebar border on mobile */
-    }
-
-    /* Adjust timeline layout for mobile */
-    .timeline-row {
-        flex-direction: column;
-        margin-bottom: 1rem;
-    }
-
-    .time-label {
-        width: 100%;
-        text-align: left;
-        padding: 0.5rem 0;
-        margin-bottom: 0.5rem;
-    }
-
-    .time-content {
-        padding-left: 0;
-        border-left: none;
-        width: 100%;
-    }
-
-    /* Adjust panel card width and spacing */
-    .panel-card {
-        width: 100%;
-        margin: 0;
-        padding: 1rem;
-        border-radius: 0;
-        box-shadow: none;
-        border-bottom: 1px solid var(--bs-border-color);
-    }
-
-    .panel-card:last-child {
-        border-bottom: none;
-    }
-
-    .panel-card .card-body {
-        padding: 0;
-    }
-
-    /* Adjust spacing for filter sections and day select */
-    .day-navigation,
-    .filter-tags,
-    .filter-rooms {
-        margin-bottom: 1.5rem;
-    }
-
-    /* Adjust host avatars for mobile */
-    .host-avatar-container {
-        width: 32px;
-        height: 32px;
-    }
-
-    .host-avatar-container img {
-        width: 32px !important;
-        height: 32px !important;
-    }
-
-    /* Adjust text sizes for mobile */
-    .panel-card .card-title {
-        font-size: 1.4rem !important;
-    }
-
-    .panel-card .card-text {
-        font-size: 1.1rem !important;
-    }
-
-    .panel-card .text-muted {
-        font-size: 1.1rem !important;
-    }
-
-    .panel-card .material-icons {
-        font-size: 1.1rem !important;
-    }
-
-    /* Reposition theme switcher on mobile */
-    .floating-theme-switch {
-        position: static !important;
-        margin-top: 1rem;
-        justify-content: flex-start;
-        right: auto !important;
-        bottom: auto !important;
-    }
-}
-
-/* Add this to your existing styles */
-.host-avatar-container.highlight-host {
-    border: 2px solid #007bff;
-    border-radius: 50%;
-    padding: 2px;
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
-    }
 }
 
-/* Speaker card styles */
 .speaker-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     border: none;
@@ -2424,170 +1667,6 @@ body.grid-view .grid-panel-row {
     box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
-/* Dark mode adjustments */
-html[data-bs-theme="dark"] .speaker-card {
-    background: var(--bs-dark);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-html[data-bs-theme="dark"] .speaker-card:hover {
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-}
-
-html[data-bs-theme="dark"] #speakerDetailModal .modal-content {
-    background: var(--bs-dark);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-/* Mobile adjustments */
-@media (max-width: 767.98px) {
-    .speaker-card {
-        margin-bottom: 1rem;
-    }
-    
-    #speakerDetailModal .modal-body {
-        padding: 1rem;
-    }
-    
-    #speakerDetailModal .panels-list {
-        max-height: 50vh;
-    }
-}
-
-/* Tab styles */
-.nav-tabs .nav-link {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
-    font-size: 1.1rem;
-    color: var(--bs-gray-600);
-    border: none;
-    border-bottom: 2px solid transparent;
-}
-
-.nav-tabs .nav-link:hover {
-    color: var(--bs-primary);
-    border-color: transparent;
-}
-
-.nav-tabs .nav-link.active {
-    color: var(--bs-primary);
-    border-color: var(--bs-primary);
-    background: none;
-}
-
-.nav-tabs .nav-link .material-icons {
-    font-size: 1.25rem;
-}
-
-/* Responsive adjustments */
-@media (max-width: 767.98px) {
-    .nav-tabs .nav-link {
-        padding: 0.5rem 1rem;
-        font-size: 1rem;
-    }
-    
-    .nav-tabs .nav-link .material-icons {
-        font-size: 1.1rem;
-    }
-}
-
-.improved-nav-tabs {
-    border-bottom: none;
-    background: #fff;
-    border-radius: 14px 14px 0 0;
-    margin: 2px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: background 0.2s;
-}
-
-.improved-nav-tabs .nav-link {
-    color: #000;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    font-size: 1.15rem;
-    font-weight: 500;
-    padding: 1rem 2.5rem 0.8rem 2.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    transition: background 0.2s, color 0.2s, border-bottom 0.2s;
-    border-radius: 0;
-    position: relative;
-    z-index: 1;
-}
-
-.improved-nav-tabs .nav-link:first-child {
-    border-top-left-radius: 14px;
-}
-
-.improved-nav-tabs .nav-link:last-child {
-    border-top-right-radius: 14px;
-}
-
-.improved-nav-tabs .nav-link.active {
-    color: #007bff;
-    background: #fff6f6;
-    border-bottom: 3px solid #007bff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    z-index: 2;
-    border-radius: 14px 14px 0 0;
-}
-
-.improved-nav-tabs .nav-link:hover:not(.active) {
-    color: #007bff;
-    background: #000;
-    border-bottom: 3px solid #007bff;
-}
-
-.improved-nav-tabs .material-icons {
-    font-size: 1.35rem;
-    vertical-align: middle;
-}
-
-/* DARK MODE: follow your global dark mode class */
-html[data-bs-theme="dark"] .improved-nav-tabs {
-    background: #23272f !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-}
-html[data-bs-theme="dark"] .improved-nav-tabs .nav-link {
-    color: #bfc7d5 !important;
-}
-html[data-bs-theme="dark"] .improved-nav-tabs .nav-link.active {
-    color: #fff !important;
-    background: #2d323c !important;
-    border-bottom: 3px solid #007bff !important;
-}
-html[data-bs-theme="dark"] .improved-nav-tabs .nav-link:hover:not(.active) {
-    color: #fff !important;
-    background: #23272f !important;
-    border-bottom: 5px solid #495057 !important;
-}
-html[data-bs-theme="light"] .improved-nav-tabs .nav-link:hover:not(.active) {
-    color: #23272f !important;
-    background: #fff !important;
-    border-bottom: 3px solid #495057 !important;
-}
-html[data-bs-theme="light"] .improved-nav-tabs .nav-link.active {
-    color: #2d323c !important;
-    background: #fff !important;
-    border-bottom: 5px solid #007bff !important;
-}
-html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
-    color: #3e434e !important;
-}
-
-@media (max-width: 767.98px) {
-    .improved-nav-tabs .nav-link {
-        padding: 0.7rem 1.2rem 0.7rem 1.2rem;
-        font-size: 1rem;
-    }
-}
-
-/* Remove pointer/hover from modal-panel-card */
 .modal-panel-card {
     background: var(--bs-card-bg, #fff);
     border-radius: 12px;
@@ -2660,8 +1739,120 @@ html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
     }
 }
 
+
+
+/* Print button styles */
+.print-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: 2px solid var(--bs-primary);
+    background: transparent;
+}
+
+.print-button:hover {
+    background-color: var(--bs-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.print-button .material-icons {
+    font-size: 1.2rem;
+}
+
+/* Add styles for cancelled panels */
+.cancelled-text {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* Sidebar styles */
+.col-md-3 {
+    padding-left: 1.5rem;
+}
+
+/* Checkbox filter styles */
+.filter-tags .form-check,
+.filter-rooms .form-check {
+    margin-bottom: 0.5rem;
+}
+
+.filter-tags h5,
+.filter-rooms h5 {
+    margin-bottom: 1rem;
+}
+
+
+.table-grid-schedule tbody tr {
+    height: 40px !important;
+    
+}
+
+.table-grid-schedule tbody tr.time-slot-hour th {
+    font-weight: 700;
+}
+
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    width: 120px;
+    min-width: 120px;
+    max-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    width: auto;
+    min-width: 120px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.table-grid-schedule th,
+.table-grid-schedule td {
+    vertical-align: top;
+    padding: 0.35rem 0.45rem;
+}
+
+.table-grid-schedule {
+    table-layout: fixed;
+    width: 100%;
+}
+
+#daySelect {
+    margin-bottom: 1.5rem;
+}
+
 .day-grid-header {
     margin-top: 4px !important;
 }
+
+.table-grid-schedule td > .grid-cell-card .card-title,
+.table-grid-schedule td > .grid-cell-card .card-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    
+}
+
+.table-grid-schedule td, .table-grid-schedule th {
+    padding: 4px !important;
+    border-collapse: collapse;
+    height: 100% !important;
+    min-height: 100% !important;
+
+}
+
+.table-grid-schedule td > .grid-cell-card {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+
+}
+
 </style>
 {% endblock %}
