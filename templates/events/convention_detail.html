@@ -1488,8 +1488,8 @@ html[data-bs-theme="light"] .text-primary {
     transition: transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
     border: none !important;
-    width: calc(100% - 40px);
-    margin: 0.5rem 20px;
+    width: 100%;
+    margin: 0.5rem 0;
     box-sizing: border-box;
     color: var(--primary-color);
     padding: 1.5rem;
@@ -1499,6 +1499,17 @@ html[data-bs-theme="light"] .text-primary {
     position: relative;
     text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
+
+/* Prevent any horizontal overflow from the timeline */
+.timeline {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.time-content {
+    overflow-wrap: break-word;
+}
+
 
 /* Grid view styles for convention detail schedule */
 body.grid-view .schedule-container .timeline {

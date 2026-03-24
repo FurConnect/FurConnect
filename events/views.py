@@ -1187,10 +1187,11 @@ def convention_ical_feed(request, pk):
 
 # Batch host details AJAX endpoint
 @require_GET
+@login_required
 def get_hosts_batch_ajax(request):
     """
     AJAX view to get details for multiple PanelHosts by IDs (comma-separated in ?ids=).
-    Returns: { hosts: [ {id, name, profile_picture}, ... ] }
+    Returns: { hosts: [ {id, name, profile_picture, panels, panels_count}, ... ] }
     """
     ids_param = request.GET.get('ids', '')
     try:
@@ -1198,10 +1199,27 @@ def get_hosts_batch_ajax(request):
         hosts = PanelHost.objects.filter(pk__in=ids)
         hosts_data = []
         for host in hosts:
+            panels = host.panels.all().select_related('convention_day', 'room').prefetch_related('tags')
+            panels_data = []
+            for panel in panels:
+                tag_color = panel.tags.first().color if panel.tags.exists() else '#ffffff'
+                panels_data.append({
+                    'id': panel.pk,
+                    'title': panel.title,
+                    'description': panel.description,
+                    'start_time': panel.start_time.strftime('%I:%M %p') if panel.start_time else '',
+                    'end_time': panel.end_time.strftime('%I:%M %p') if panel.end_time else '',
+                    'room_name': panel.room.name if panel.room else '',
+                    'tag_color': tag_color,
+                    'day_of_week': panel.convention_day.date.strftime('%A') if panel.convention_day and panel.convention_day.date else '',
+                })
+            panels_data.sort(key=lambda x: x.get('start_time', ''))
             hosts_data.append({
                 'id': host.pk,
                 'name': host.name,
                 'profile_picture': host.image if host.image else host.get_initials_avatar(),
+                'panels': panels_data,
+                'panels_count': len(panels_data),
             })
         return JsonResponse({'hosts': hosts_data})
     except Exception as e:
