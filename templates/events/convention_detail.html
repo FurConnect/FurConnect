@@ -256,7 +256,7 @@ window.addEventListener('load', function() {
                     dayGrids.forEach(grid => {
                         grid.classList.remove('d-none');
                     });
-                } else {
+            } else {
                     // Show only selected day
                     daySchedules.forEach((schedule, index) => {
                         const isSelected = index === parseInt(selectedValue);
@@ -268,7 +268,7 @@ window.addEventListener('load', function() {
                     dayGrids.forEach((grid, index) => {
                         const isSelected = index === parseInt(selectedValue);
                         grid.classList.toggle('d-none', !isSelected);
-                    });
+            });
                 }
                 
                 // Store the current selection
@@ -301,22 +301,27 @@ window.addEventListener('load', function() {
                  .filter(checkbox => checkbox.checked && checkbox.dataset.filter !== 'all')
                  .map(checkbox => checkbox.dataset.filter);
 
-            const panels = document.querySelectorAll('.panel-card');
+            const panels = document.querySelectorAll('.panel-card, .grid-cell-card');
             panels.forEach(panel => {
-                const panelTags = panel.dataset.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
-                const panelRoom = panel.querySelector('.panel-details h6:last-child').textContent.toLowerCase().replace('room', '').trim();
-                const panelRoomSlug = panelRoom.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                const panelTags = (panel.dataset.tags || '').split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+                const panelRoomSlug = (panel.dataset.room || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
                 // Check if panel has at least one active tag filter OR no tag filters are active (if 'All Events' is checked)
                 const tagMatch = activeTagFilters.length === 0 || activeTagFilters.some(filter => panelTags.includes(filter));
-                
+
                 // Check if panel is in an active room filter OR no room filters are active (if 'All Rooms' is checked)
                 const roomMatch = activeRoomFilters.length === 0 || activeRoomFilters.includes(panelRoomSlug);
-
                 const shouldShow = tagMatch && roomMatch;
 
                 panel.classList.toggle('hidden', !shouldShow);
-                panel.style.display = shouldShow ? 'block' : 'none'; // Also control display for search
+                panel.style.display = shouldShow ? 'block' : 'none';
+
+                if (panel.classList.contains('grid-cell-card')) {
+                    const parentTd = panel.closest('td');
+                    if (parentTd) {
+                        parentTd.style.display = shouldShow ? '' : 'none';
+                    }
+                }
             });
 
             // Update time slots visibility after filtering
@@ -506,6 +511,7 @@ window.addEventListener('load', function() {
             
             setTimeout(() => {
                 loadHostImages(document);
+                normalizeHourRowHeights();
             }, initialDelay);
         });
 
@@ -518,10 +524,115 @@ window.addEventListener('load', function() {
                 (lastWidth > 767.98 && currentWidth <= 767.98)) {
                 setTimeout(() => {
                     loadHostImages(document);
+                    normalizeHourRowHeights();
                 }, 500);
             }
             lastWidth = currentWidth;
+            normalizeHourRowHeights();
         });
+
+        // Normalize each hour block height (2 x 30m slots must match tallest hour)
+        function normalizeHourRowHeights() {
+            document.querySelectorAll('.day-grid').forEach(dayGrid => {
+                const table = dayGrid.querySelector('.table-grid-schedule');
+                if (!table || !table.tBodies.length) return;
+
+                const rows = Array.from(table.tBodies[0].rows);
+                for (let i = 0; i < rows.length; i += 2) {
+                    const rowGroup = rows.slice(i, i + 2);
+                    let maxHeight = 0;
+
+                    // Measure current heights including merged cells
+                    rowGroup.forEach(r => {
+                        r.style.height = 'auto';
+                        const rowHeight = r.getBoundingClientRect().height;
+                        maxHeight = Math.max(maxHeight, rowHeight);
+                    });
+
+                    // Set exact heights on the row and all cell cards inside
+                    rowGroup.forEach(r => {
+                        r.style.height = `${maxHeight}px`;
+                        Array.from(r.cells).forEach(cell => {
+                            cell.style.height = `${maxHeight}px`;
+                            const card = cell.querySelector('.grid-cell-card');
+                            if (card) {
+                                card.style.height = '100%';
+                                card.style.minHeight = '100%';
+                            }
+                        });
+                    });
+                }
+            });
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        window.addEventListener('load', debounce(function() {
+            normalizeHourRowHeights();
+        }, 80));
+        window.addEventListener('resize', debounce(function() {
+            normalizeHourRowHeights();
+        }, 120));
+
+        function removeEmptyRoomColumnsAndRows() {
+            document.querySelectorAll('.day-grid').forEach(dayGrid => {
+                const table = dayGrid.querySelector('.table-grid-schedule');
+                if (!table || !table.tBodies.length) return;
+
+                const headerCells = Array.from(table.tHead.rows[0].cells);
+                const colHasPanel = new Array(headerCells.length).fill(false);
+
+                const rows = Array.from(table.tBodies[0].rows);
+                rows.forEach(row => {
+                    Array.from(row.cells).forEach(cell => {
+                        if (cell.querySelector('.grid-cell-card')) {
+                            colHasPanel[cell.cellIndex] = true;
+                        }
+                    });
+                });
+
+                // Hide columns that are entirely empty
+                headerCells.forEach((headerCell, col) => {
+                    if (col === 0) return;
+                    const shouldHide = !colHasPanel[col];
+                    headerCell.classList.toggle('empty-room-col', shouldHide);
+                    headerCell.style.display = shouldHide ? 'none' : '';
+
+                    rows.forEach(row => {
+                        const cell = Array.from(row.cells).find(c => c.cellIndex === col);
+                        if (cell) {
+                            cell.classList.toggle('empty-room-col', shouldHide);
+                            cell.style.display = shouldHide ? 'none' : '';
+                        }
+                    });
+                });
+
+                // Collapse empty sequential row blocks (top-down)
+                let currentEmptyRun = [];
+                rows.forEach(row => {
+                    const hasPanel = !!row.querySelector('.grid-cell-card');
+                    if (!hasPanel) {
+                        currentEmptyRun.push(row);
+                    } else {
+                        if (currentEmptyRun.length > 0) {
+                            currentEmptyRun.forEach(r => r.style.height = '0px');
+                            currentEmptyRun = [];
+                        }
+                    }
+                });
+                if (currentEmptyRun.length > 0) {
+                    currentEmptyRun.forEach(r => r.style.height = '0px');
+                }
+            });
+        }
+
+
 
         // Speaker search functionality
         const speakerSearch = document.getElementById('speakerSearch');
@@ -826,22 +937,33 @@ window.addEventListener('load', function() {
                         <h5 class="modal-title" id="calendarFeedModalLabel">Subscribe to Live Calendar Feed</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body">
-                        <p>To get live updates in your calendar, <strong>subscribe</strong> using this URL (do not download and import):</p>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" id="calendarFeedUrl"
-                                value="{{ request.build_absolute_uri|cut:request.get_full_path }}{% url 'events:convention_ical_feed' pk=convention.pk %}"
-                                readonly>
-                            <button class="btn btn-outline-secondary" type="button" id="copyCalendarUrlBtn">Copy URL</button>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-2">
+                            {% for host in panel.ordered_hosts %}
+                                <span class="host-avatar-container" data-title="{{ host.name }}">
+                                    {% if host.image %}
+                                        <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar rounded-circle host-avatar" style="width: 32px; height: 32px; object-fit: cover; margin-right: 6px;">
+                                    {% else %}
+                                        <span class="rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 32px; height: 32px; background-color: {{ host.get_avatar_color }}; color: white; font-weight: bold; font-size: 1rem; margin-right: 6px;">{{ host.get_initials }}</span>
+                                    {% endif %}
+                                </span>
+                            {% endfor %}
                         </div>
-                        <div class="alert alert-info" style="font-size:0.97em;">
-                            <strong>Google Calendar:</strong> Go to Google Calendar (web), click <b>+</b> next to "Other calendars" &rarr; <b>From URL</b>, and paste the link above.<br><br>
-                            <strong>Apple Calendar:</strong> File &rarr; New Calendar Subscription, paste the link.<br><br>
-                            <strong>Outlook:</strong> Add calendar &rarr; Subscribe from web, paste the link.
+                        <div class="card-title fw-bold">{{ panel.title }}</div>
+                        {% if panel.is_featured %}
+                        <span class="badge bg-light text-dark mb-1">Featured</span>
+                        {% endif %}
+                        <div class="tag-pill-container mb-1">
+                            {% for tag in panel.ordered_tags %}
+                                <span class="tag-pill" style="background: {{ tag.color }}; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; margin-right: 0.25rem; font-size: 0.72rem; display: inline-flex; align-items:center; white-space: nowrap;">{{ tag.name }}</span>
+                            {% empty %}
+                                <span class="tag-pill" style="background: #6c757d; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.72rem;">No Tag</span>
+                            {% endfor %}
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <div class="card-text small">{{ panel.description|truncatewords:8 }}</div>
+                        {% if panel.is_cancelled %}
+                        <div class="cancelled-banner mt-2"><span class="material-icons">block</span> <span class="cancelled-text">Cancelled</span></div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -1010,34 +1132,53 @@ window.addEventListener('load', function() {
                                 <h4>{{ day_matrix.day.date|date:"l, M d, Y" }}</h4>
                             </div>
                             <div class="table-responsive">
-                                <table class="table table-bordered table-hover table-grid-schedule">
+                                <table class="table table-bordered table-hover table-grid-schedule" style="min-width: 900px;">
                                     <thead class="table-dark">
                                         <tr>
                                             <th style="min-width: 120px;">Time</th>
-                                            {% for room in unique_rooms %}
+                                            {% for room in day_matrix.rooms %}
                                             <th>{{ room.name }}</th>
                                             {% endfor %}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for time_row in day_matrix.rows %}
-                                        <tr>
-                                            <th class="table-secondary">{{ time_row.time|time:"g:i A" }}</th>
-                                            {% for cell in time_row.cells %}
-                                            <td class="p-0">
-                                                {% if cell %}
-                                                {% with tag_color=cell.ordered_tags.0.color|default:'#f8f9fa' %}
-                                                <div class="grid-cell-card p-2" data-panel-id="{{ cell.pk }}" data-tag-color="{{ tag_color }}" style="border-left: 4px solid {{ tag_color }};">
-                                                    <div class="fw-bold">{{ cell.title }}</div>
-                                                    {% if cell.is_featured %}
-                                                    <span class="badge bg-warning text-dark mb-1">Featured</span>
-                                                    {% endif %}
-                                                    <div class="small text-muted">{{ cell.room }}</div>
-                                                    <div class="small">{{ cell.description|truncatewords:8 }}</div>
-                                                </div>
-                                                {% endwith %}
+                                        <tr class="{% if time_row.time.minute == 0 %}time-slot-hour{% else %}time-slot-half{% endif %}">
+                                            <th class="table-secondary">
+                                                {% if time_row.time.minute == 0 %}
+                                                    {{ time_row.time|time:"g:i A" }}
                                                 {% endif %}
-                                            </td>
+                                            </th>
+                                            {% for cell in time_row.cells %}
+                                                {% if cell.type == 'skip' %}
+                                                    {# skip output for rowspanned occupied cell #}
+                                                {% elif cell.type == 'panel' %}
+                                                    {% with panel=cell.panel %}
+                                                    {% with tag_color=panel.ordered_tags.0.color|default:'#f8f9fa' %}
+                                                    <td class="p-0" rowspan="{{ cell.rowspan }}">
+                                                        {% with panel_color=panel.ordered_tags.0.color|default:'#ffc107' %}
+                                                        <div class="grid-cell-card p-2" data-panel-id="{{ panel.pk }}" data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}" data-room="{{ panel.room.name|lower|slugify }}" data-tag-color="{{ panel_color }}" style="border-left: 4px solid {{ panel_color }}; background: {{ panel_color }}22; color: #fff;">
+                                                            <div class="fw-bold">{{ panel.title }}</div>
+                                                            {% if panel.is_featured %}
+                                                            <span class="badge bg-light text-dark mb-1">Featured</span>
+                                                            {% endif %}
+                                                            <div class="tag-pill-container mb-1">
+                                                                {% for tag in panel.ordered_tags %}
+                                                                    <span class="tag-pill" style="background: {{ tag.color }}; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; margin-right: 0.25rem; font-size: 0.72rem; display: inline-flex; align-items:center; white-space: nowrap;">{{ tag.name }}</span>
+                                                                {% empty %}
+                                                                    <span class="tag-pill" style="background: #6c757d; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.72rem;">No Tag</span>
+                                                                {% endfor %}
+                                                            </div>
+                                                            <div class="small" style="color:#f0f0f0;">{{ panel.description|truncatewords:8 }}</div>
+                                                        </div>
+                                                        {% endwith %}
+                                                        </div>
+                                                    </td>
+                                                    {% endwith %}
+                                                    {% endwith %}
+                                                {% else %}
+                                                    <td class="p-0"></td>
+                                                {% endif %}
                                             {% endfor %}
                                         </tr>
                                         {% endfor %}
@@ -1054,7 +1195,6 @@ window.addEventListener('load', function() {
                             <hr class="my-3">
                         </div>
                         <div class="timeline">
-                            {# Iterate through time groups and display time on the left and panels on the right #}
                             {% for time_group in day.panels_by_time %}
                             <div class="timeline-row">
                                 <div class="time-label">
@@ -1104,11 +1244,11 @@ window.addEventListener('load', function() {
                                                         {% endfor %}
                                                     </div>
                                                     {% endif %}
-                                                    <h6 class="text-muted mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
+                                                    <h6 class="mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
                                                         <i class="material-icons fs-6" style="font-size: 1.32rem;">schedule</i>
                                                         {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                     </h6>
-                                                    <h6 class="text-muted mb-0 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
+                                                    <h6 class="mb-0 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
                                                         <i class="material-icons fs-6" style="font-size: 1.32rem;">room</i>
                                                         {{ panel.room }}
                                                     </h6>
@@ -1200,6 +1340,41 @@ window.addEventListener('load', function() {
 </div>
 
 <style>
+/* Host avatar tooltip styles (fix for all views) */
+.host-avatar-container {
+    position: relative;
+    display: inline-block;
+}
+
+.host-avatar-container:hover::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 1rem;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.15s;
+}
+
+.host-avatar-container:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: rgba(0,0,0,0.85) transparent transparent transparent;
+    z-index: 1001;
+}
 /* Timeline styles */
 .timeline {
     position: relative;
@@ -1221,16 +1396,38 @@ window.addEventListener('load', function() {
 }
 
 /* Style for the time label column */
+
 .time-label {
     width: 120px; /* Fixed width for the time label */
     text-align: right;
     padding-right: 20px;
-    color: var(--primary-color);
     font-weight: 500;
     font-size: 1.2rem;
     padding-top: 0.5rem; /* Adjust top padding */
     padding-bottom: 0.5rem; /* Adjust bottom padding */
     flex-shrink: 0; /* Prevent shrinking */
+    color: #111 !important;
+    background: #f8f9fa !important;
+    border-radius: 6px 0 0 6px;
+}
+html[data-bs-theme="dark"] .time-label {
+    color: #fff !important;
+    background: #23272f !important;
+}
+
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    color: #222 !important;
+}
+
+html[data-bs-theme="dark"] .table-grid-schedule th:first-child,
+html[data-bs-theme="dark"] .table-grid-schedule td:first-child {
+    background: #23272f !important;
+    color: #fff !important;
+}
+
+html[data-bs-theme="dark"] .time-label {
+    color: #fff !important;
 }
 
 /* Style for the content column containing panels */
@@ -1259,12 +1456,12 @@ window.addEventListener('load', function() {
     display: block;
 } 
 
+
 /* Event card styles */
 .panel-card {
     transition: transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
-    border: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: none !important;
     width: calc(100% - 40px);
     margin: 0.5rem 20px;
     box-sizing: border-box;
@@ -1326,96 +1523,148 @@ body.grid-view .col-md-9 {
 body.grid-view .grid-table-container {
     display: block !important;
     overflow-x: auto;
+    overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    scrollbar-width: thin;
+}
+
+body.grid-view .grid-table-container::-webkit-scrollbar {
+    height: 8px;
+    background: transparent;
+}
+body.grid-view .grid-table-container::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+}
+body.grid-view .grid-table-container::-webkit-scrollbar-vertical {
+    display: none !important;
 }
 
 body.grid-view .day-grid {
     display: block !important;
-    min-width: 1000px; /* keep grid table horizontally scrollable when many rooms */
+    min-width: 1000px;
+    page-break-after: always;
+    width: 100%;
+}
+
+@media print {
+    .day-grid {
+        page-break-after: always;
+        break-after: page;
+    }
 }
 
 .grid-cell-card {
-    border: 1px solid rgba(0,0,0,0.12);
-    border-radius: 0.45rem;
-    background: #fff;
     min-height: 90px;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     cursor: pointer;
     transition: box-shadow 0.2s ease, transform 0.2s ease;
+    border: none !important;
 }
 
-html[data-bs-theme="dark"] #viewToggleBtn {
-    color: #fff;
-    border-color: #c8d6e5;
-    background: rgba(255,255,255,0.08);
-}
-html[data-bs-theme="dark"] #viewToggleBtn:hover {
-    color: #fff;
-    background: rgba(255,255,255,0.15);
+.table-grid-schedule td,
+.table-grid-schedule th {
+    vertical-align: top;
+    padding: 0 !important;
+    border: none !important;
 }
 
-html[data-bs-theme="dark"] .grid-cell-card {
-    border-color: rgba(156, 163, 175, 0.4);
-    background: #1a1f27;
-    color: #e6edf9;
+.table-grid-schedule tbody tr {
+    height: 40px !important;
 }
 
-.grid-cell-card[data-tag-color] {
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    border-left: none !important;
 }
 
-html[data-bs-theme="dark"] .grid-cell-card[data-tag-color] {
-    background: rgba(255, 255, 255, 0.06);
-}
-
-html[data-bs-theme="dark"] .grid-cell-card .fw-bold {
-    color: #f7fbff;
-}
-
-html[data-bs-theme="dark"] .grid-cell-card .small {
-    color: #d9e2f5;
-}
-
-html[data-bs-theme="dark"] .grid-cell-card .badge {
-    opacity: 0.95;
-}
-
-html[data-bs-theme="dark"] .table-grid-schedule {
-    border-color: rgba(148, 163, 184, 0.35);
-    background-color: #131820;
-}
-
-html[data-bs-theme="dark"] .table-grid-schedule th,
-html[data-bs-theme="dark"] .table-grid-schedule td {
-    border-color: rgba(148, 163, 184, 0.25);
-}
-
-html[data-bs-theme="dark"] .table-grid-schedule th {
-    background: #0f1420;
-    color: #cfd9e8;
-}
-
-html[data-bs-theme="dark"] .table-grid-schedule th:hover,
-html[data-bs-theme="dark"] .table-grid-schedule td:hover {
-    background: var(--bs-table-hover-bg, rgba(255,255,255,0.12)) !important;
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    background: #23272f !important;
     color: #fff !important;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    text-align: center;
+    font-size: 1.05rem;
+    font-weight: 700;
+    padding: 0;
+    width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-body.grid-view .table-grid-schedule tbody tr:hover,
-body.grid-view .table-grid-schedule tbody tr:focus-within {
-    background: var(--bs-table-hover-bg, rgba(255,255,255,0.12)) !important;
+.empty-room-col {
+    display: none !important;
 }
 
-body.grid-view .table-grid-schedule tbody tr:hover th,
-body.grid-view .table-grid-schedule tbody tr:hover td,
-body.grid-view .table-grid-schedule tbody tr:focus-within th,
-body.grid-view .table-grid-schedule tbody tr:focus-within td {
-    color: #fff !important;
+.table-grid-schedule td {
+    height: 100% !important;
+    min-height: 100% !important;
+}
+
+.table-grid-schedule td > .grid-cell-card {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+}
+
+.table-grid-schedule td > .grid-cell-card .card-body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0.6rem;
+}
+
+.table-grid-schedule td > .grid-cell-card .card-title,
+.table-grid-schedule td > .grid-cell-card .card-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-grid-schedule td, .table-grid-schedule th {
+    padding: 0 !important;
+    border-collapse: collapse;
+    height: 100% !important;
+    min-height: 100% !important;
+}
+
+.table-grid-schedule td > .grid-cell-card {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0.75rem !important;
 }
 
 .table-grid-schedule {
     table-layout: fixed;
     width: 100%;
+}
+.table-grid-schedule tbody tr {
+    height: 40px !important;
+}
+.table-grid-schedule tbody tr.time-slot-hour th {
+    font-weight: 700;
+}
+.table-grid-schedule tbody tr.time-slot-half th {
+    opacity: 0.35;
 }
 .table-grid-schedule th:first-child,
 .table-grid-schedule td:first-child {
@@ -1443,17 +1692,29 @@ body.grid-view .grid-panel-row {
     cursor: pointer;
 }
 
-body.grid-view .grid-panel-row:hover {
-    background: rgba(0,0,0,0.04);
-}
-
 .panel-card.hidden {
     display: none;
 }
 
 .panel-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: scale(1.01) translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    z-index: 20;
+    position: relative;
+}
+
+.panel-card:hover {
+    transform: scale(1.01) translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    z-index: 20;
+    position: relative;
+}
+
+.grid-cell-card:hover {
+    transform: scale(1.01) translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    z-index: 20;
+    position: relative;
 }
 
 .panel-card .card-body {
@@ -1506,7 +1767,7 @@ body.grid-view .grid-panel-row:hover {
 .panel-card[style*="linear-gradient"] .card-text,
 .panel-card[style*="linear-gradient"] .text-muted,
 .panel-card[style*="linear-gradient"] .material-icons {
-    color: black !important; /* Assuming the intent was black text on gradient */
+    color: black !important;
     text-shadow: 0 1px 2px rgba(255,255,255,0.3);
 }
 
@@ -1762,7 +2023,6 @@ body.grid-view .grid-panel-row:hover {
         color: #000;
         margin-bottom: 15px;
         padding: 0 1cm 8px 1cm; /* Add padding matching page margin */
-        border-bottom: 1px solid #eee;
         text-align: center;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -1780,7 +2040,6 @@ body.grid-view .grid-panel-row:hover {
         page-break-inside: avoid;
         margin: 0 !important;
         padding: 0 !important;
-        border-bottom: 1px solid #eee !important;
         display: flex;
         flex-direction: row;
         align-items: flex-start; /* Align items to the top */
@@ -1801,7 +2060,6 @@ body.grid-view .grid-panel-row:hover {
     .hour-content {
         flex-grow: 1;
         padding: 4px 0 4px 5px !important;
-        border-left: 1px solid #eee !important;
         box-sizing: border-box;
     }
 
@@ -1979,7 +2237,6 @@ body.grid-view .grid-panel-row:hover {
         text-align: left;
         padding: 0.5rem 0;
         margin-bottom: 0.5rem;
-        border-bottom: 1px solid var(--bs-border-color);
     }
 
     .time-content {
@@ -2375,5 +2632,8 @@ html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
     }
 }
 
+.day-grid-header {
+    margin-top: 4px !important;
+}
 </style>
 {% endblock %}

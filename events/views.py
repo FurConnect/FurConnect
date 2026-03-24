@@ -1,4 +1,4 @@
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch
 import csv
+import math
 
 def logout_view(request):
     logout(request)
@@ -54,6 +55,8 @@ def convention_detail(request, pk):
 
         # Group panels by exact start time
         for panel in sorted_panels:
+            if panel.cancelled:
+                continue
             start_time = panel.start_time
 
             # Get hosts ordered by their priority in PanelHostOrder
@@ -84,38 +87,108 @@ def convention_detail(request, pk):
         sorted_times = sorted(panels_by_display_time[day_date].keys())
         
         # Add each time group to the day
-        for time in sorted_times:
+        for slot_time in sorted_times:
             display_day['panels_by_time'].append({
-                'start_time': time,
-                'panels': panels_by_display_time[day_date][time]
+                'start_time': slot_time,
+                'panels': panels_by_display_time[day_date][slot_time]
             })
         
         display_days_with_panels.append(display_day)
 
-    # Build a 2D grid matrix (times x rooms) for grid view, only for rooms used that day
+    # Build a 2D grid matrix (hourly slots x rooms) for grid view, with rowspan for multi-hour panels
     days_matrix = []
     for display_day in display_days_with_panels:
         # Find rooms used for this day
         rooms_used = []
+        panels_for_day = []
         for time_group in display_day['panels_by_time']:
             for panel in time_group['panels']:
                 if panel.room and panel.room not in rooms_used:
                     rooms_used.append(panel.room)
-        # Sort rooms by name for consistency
+                panels_for_day.append(panel)
+
         rooms_used = sorted(rooms_used, key=lambda r: r.name)
-        matrix_rows = []
-        for time_group in display_day['panels_by_time']:
-            row = {
-                'time': time_group['start_time'],
-                'cells': []
+
+        # Determine daily span from first booked event to last event (30-min grid)
+        day_date = display_day['original_day_obj'].date
+
+        if panels_for_day:
+            min_start_time = min(panel.start_time for panel in panels_for_day)
+            max_end_time = max(panel.end_time for panel in panels_for_day)
+
+            start_dt = datetime.combine(day_date, min_start_time)
+            if start_dt.minute < 30:
+                start_dt = start_dt.replace(minute=0, second=0, microsecond=0)
+            else:
+                start_dt = start_dt.replace(minute=30, second=0, microsecond=0)
+
+            end_dt = datetime.combine(day_date, max_end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+
+            if end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+                pass
+            elif end_dt.minute <= 30:
+                end_dt = end_dt.replace(minute=30, second=0, microsecond=0)
+            else:
+                end_dt = (end_dt + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+
+            # Extend to at least one hour so there is room to draw
+            if end_dt <= start_dt + timedelta(hours=1):
+                end_dt = start_dt + timedelta(hours=1)
+        else:
+            start_dt = datetime.combine(day_date, time(0, 0))
+            end_dt = datetime.combine(day_date, time(23, 30)) + timedelta(minutes=30)
+
+        total_half_hours = int((end_dt - start_dt).total_seconds() // (30 * 60))
+        time_slots = [start_dt + timedelta(minutes=30 * i) for i in range(total_half_hours)]
+
+        # Prepare panel placement map by room and slot-start
+        panel_map = {}
+        for panel in panels_for_day:
+            panel_start = datetime.combine(day_date, panel.start_time)
+            panel_end = datetime.combine(day_date, panel.end_time)
+            if panel_end <= panel_start:
+                panel_end += timedelta(days=1)
+
+            # Round panel start down to 30-min slot
+            start_minute = 0 if panel_start.minute < 30 else 30
+            slot_start = panel_start.replace(minute=start_minute, second=0, microsecond=0)
+            if slot_start < start_dt:
+                slot_start = start_dt
+
+            duration_minutes = (panel_end - panel_start).total_seconds() / 60.0
+            rowspan = max(1, math.ceil(duration_minutes / 30.0))
+
+            panel_map[(panel.room.id, slot_start)] = {
+                'panel': panel,
+                'rowspan': rowspan,
+                'end_dt': slot_start + timedelta(minutes=30 * rowspan)
             }
+
+        # Build matrix rows with cells containing panel, empty, or skipped (spanned)
+        room_span_end = {room.id: start_dt for room in rooms_used}
+        matrix_rows = []
+
+        for slot in time_slots:
+            row = {'time': slot.time(), 'cells': []}
             for room in rooms_used:
-                panel_for_room = next(
-                    (panel for panel in time_group['panels'] if panel.room and panel.room.name == room.name),
-                    None
-                )
-                row['cells'].append(panel_for_room)
+                if slot < room_span_end.get(room.id, start_dt):
+                    row['cells'].append({'type': 'skip'})
+                    continue
+
+                panel_entry = panel_map.get((room.id, slot))
+                if panel_entry:
+                    row['cells'].append({
+                        'type': 'panel',
+                        'panel': panel_entry['panel'],
+                        'rowspan': panel_entry['rowspan']
+                    })
+                    room_span_end[room.id] = slot + timedelta(minutes=30 * panel_entry['rowspan'])
+                else:
+                    row['cells'].append({'type': 'empty'})
             matrix_rows.append(row)
+
         days_matrix.append({'day': display_day['original_day_obj'], 'rows': matrix_rows, 'rooms': rooms_used})
 
     return render(request, 'events/convention_detail.html', {

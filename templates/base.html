@@ -18,32 +18,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.4.6/jscolor.min.js"></script>
     <!-- Custom CSS -->
     <style>
-                /* Grid view styles for event cards */
-                .grid-view .event-card-list {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                    gap: 1.5rem;
-                }
-                .grid-view .event-card-list .event-card {
-                    display: block;
-                    background: #fff !important;
-                    border-radius: 1rem;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-                    padding: 1.25rem;
-                    transition: box-shadow 0.2s;
-                    color: #222;
-                }
-                [data-bs-theme="dark"] .grid-view .event-card-list .event-card {
-                    background: #23272b !important;
-                    color: #fff;
-                }
-                .grid-view .event-card-list .event-card:hover {
-                    box-shadow: 0 4px 16px rgba(0,0,0,0.16);
-                }
-                /* Hide grid/list toggle on small screens if needed */
-                @media (max-width: 576px) {
-                    #viewToggleBtn { display: none; }
-                }
         :root {
             --transition-speed: 0.3s;
             --primary-purple: #6200ea;
