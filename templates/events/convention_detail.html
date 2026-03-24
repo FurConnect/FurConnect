@@ -1405,8 +1405,6 @@ window.addEventListener('load', function() {
     padding-top: 0.5rem; /* Adjust top padding */
     padding-bottom: 0.5rem; /* Adjust bottom padding */
     flex-shrink: 0; /* Prevent shrinking */
-    color: #111 !important;
-    background: #f8f9fa !important;
     border-radius: 6px 0 0 6px;
 }
 
@@ -1520,11 +1518,24 @@ body.grid-view .col-md-9 {
 body.grid-view .grid-table-container {
     display: block !important;
     overflow-x: auto;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
+    max-height: calc(100vh - 160px) !important;
     -webkit-overflow-scrolling: touch;
     white-space: nowrap;
     scrollbar-width: thin;
 }
+
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    min-width: 180px !important;
+}
+
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    min-width: 120px !important;
+    max-width: 130px !important;
+}
+
 
 body.grid-view .grid-table-container::-webkit-scrollbar {
     height: 8px;
