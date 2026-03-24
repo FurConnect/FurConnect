@@ -32,7 +32,13 @@
             --fc-star: #fff;
         }
 
+        html, body {
+            height: 100%;
+        }
         body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
             transition: background-color var(--transition-speed), color var(--transition-speed);
         }
 
