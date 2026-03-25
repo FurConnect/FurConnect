@@ -1525,6 +1525,19 @@ window.addEventListener('load', function() {
     max-width: 50px !important;
 }
 
+body.grid-view .table-grid-schedule {
+    width: auto !important;
+    min-width: max-content !important;
+    table-layout: fixed !important;
+}
+
+body.grid-view .grid-table-container,
+body.grid-view .table-responsive.table-responsive-x-only {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    max-width: 100% !important;
+}
+
 
 
 .table-grid-schedule th:first-child,
