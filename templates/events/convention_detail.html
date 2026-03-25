@@ -1440,12 +1440,32 @@ window.addEventListener('load', function() {
         min-width: auto;
         text-align: left;
         margin-bottom: 0.5rem;
-        margin-right: -30px;
+        margin-right: 0;
     }
     .time-content {
         width: 100%;
+        min-width: 0;
+    }
+
+    /* Hack: force panel table to downscale on very narrow screens */
+    .table-grid-schedule {
+        min-width: 0 !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+    }
+    .table-grid-schedule td,
+    .table-grid-schedule th {
+        min-width: 60px !important;
+        padding: 0.25rem !important;
+        white-space: normal !important;
+    }
+    .table-grid-schedule th:first-child,
+    .table-grid-schedule td:first-child {
+        min-width: 50px !important;
+        max-width: 50px !important;
     }
 }
+
 
 
 .table-grid-schedule th:first-child,
@@ -1598,42 +1618,6 @@ body {
     padding-bottom: 2rem !important;
 }
 
-@media (min-width: 768px) {
-body.grid-view .flex-md-row {
-    flex-direction: row !important;
-    width: 112.5%;
-    margin-left: -6%;
-}
-
-@media (max-width: 767.98px) {
-    body.grid-view .grid-table-container {
-        max-width: 100%;
-        margin: 0 auto;
-        overflow-x: scroll;
-        padding-bottom: 1rem !important;
-    }
-    body.grid-view .table-grid-schedule {
-        min-width: 100% !important;
-        width: 100% !important;
-        table-layout: auto !important;
-    }
-    body.grid-view .table-grid-schedule th:not(:first-child),
-    body.grid-view .table-grid-schedule td:not(:first-child) {
-        min-width: 110px !important;
-        padding: 0.2rem !important;
-    }
-    body.grid-view .table-grid-schedule th:first-child,
-    body.grid-view .table-grid-schedule td:first-child {
-        min-width: 90px !important;
-        max-width: 90px !important;
-        font-size: 0.82rem;
-    }
-    .grid-cell-card {
-        min-height: 70px;
-        padding: 0.5rem;
-        font-size: 0.92rem;
-    }
-}
 
 .table-grid-schedule th:not(:first-child),
 .table-grid-schedule td:not(:first-child) {
