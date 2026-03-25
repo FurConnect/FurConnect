@@ -1256,9 +1256,6 @@ window.addEventListener('load', function() {
                             <div class="timeline-row">
                                 <div class="time-label">
                                     {{ time_group.start_time|time:"g:i A" }}
-                                    {% if time_group.panels and time_group.panels.0.end_time %}
-                                        - {{ time_group.panels.0.end_time|time:"g:i A" }}
-                                    {% endif %}
                                 </div>
                                 <div class="time-content">
                                     {% for panel in time_group.panels %}
