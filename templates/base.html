@@ -344,6 +344,33 @@
             margin-right: auto !important;
         }
 
+        body {
+            padding-bottom: 70px !important;
+        }
+
+        #sticky-footer {
+            min-height: 44px;
+            padding: 0.45rem 0.9rem;
+            font-size: 0.82rem;
+        }
+
+        @media (max-width: 576px) {
+            #sticky-footer {
+                min-height: 52px;
+                padding: 0.55rem 0.9rem;
+                font-size: 0.78rem;
+            }
+            #sticky-footer .container {
+                flex-direction: column;
+                align-items: center;
+            }
+            #sticky-footer .footer-left,
+            #sticky-footer .footer-right {
+                justify-content: center;
+                width: 100%;
+            }
+        }
+
         .schedule-container {
             max-width: 100% !important;
         }
@@ -590,7 +617,9 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        window.location.reload();
+                        const nextPage = new URLSearchParams(window.location.search).get('next') || localStorage.getItem('nextPath') || window.location.pathname;
+                        localStorage.removeItem('nextPath');
+                        window.location.href = nextPage;
                     } else {
                         loginError.textContent = data.error;
                         loginError.classList.remove('d-none');
@@ -691,14 +720,23 @@
         color: var(--bs-secondary-color, #999);
       }
       .theme-switch-modern {
-        display: inline-flex;
+        display: inline-flex !important;
         align-items: center;
         background: rgba(0, 0, 0, 0.08);
         border-radius: 999px;
         padding: 0.25rem;
+        opacity: 1 !important;
+        visibility: visible !important;
       }
       .theme-switch-modern input {
         display: none;
+      }
+      #sticky-footer .footer-right,
+      #sticky-footer .theme-switch-modern,
+      #sticky-footer .theme-switch-modern .slider-modern {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
       }
       .slider-modern {
         display: inline-flex;
@@ -742,6 +780,9 @@
     </footer>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+      if (!localStorage.getItem('nextPath') && window.location.pathname !== '/login/') {
+        localStorage.setItem('nextPath', window.location.pathname + window.location.search);
+      }
       const themeToggle = document.getElementById('footer-theme-toggle');
       // Set initial state from localStorage or system preference
       if (localStorage.getItem('theme') === 'dark' ||
