@@ -594,11 +594,39 @@ window.addEventListener('load', function() {
             };
         }
 
+        function updateGridTableScale() {
+            document.querySelectorAll('.grid-table-container').forEach(container => {
+                const table = container.querySelector('.table-grid-schedule');
+                if (!table) {
+                    container.style.transform = '';
+                    container.style.height = '';
+                    return;
+                }
+
+                const availableWidth = container.clientWidth || container.offsetWidth;
+                const tableWidth = table.scrollWidth || table.offsetWidth;
+                let scale = 1;
+
+                if (tableWidth > 0 && availableWidth > 0) {
+                    scale = Math.min(1, availableWidth / tableWidth);
+                }
+
+                // Prevent the table from becoming too small
+                scale = Math.max(0.55, scale);
+
+                container.style.transformOrigin = 'top left';
+                container.style.transform = `scale(${scale})`;
+                container.style.height = `${Math.ceil((table.offsetHeight || 0) * scale + 10)}px`;
+            });
+        }
+
         window.addEventListener('load', debounce(function() {
             normalizeHourRowHeights();
+            updateGridTableScale();
         }, 80));
         window.addEventListener('resize', debounce(function() {
             normalizeHourRowHeights();
+            updateGridTableScale();
         }, 120));
 
         function removeEmptyRoomColumnsAndRows() {
@@ -1177,7 +1205,7 @@ window.addEventListener('load', function() {
                                                                 {% if panel.is_featured %}
                                                                 <span class="badge bg-light text-dark mb-1">Featured</span>
                                                                 {% endif %}
-                                                                <div class="panel-time-range mb-1" style="font-size: 0.95rem; font-weight: 500;">
+                                                                <div class="panel-time-range mb-1">
                                                                     <i class="material-icons fs-6" style="font-size: 1.1rem; vertical-align: middle;">schedule</i>
                                                                     {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                                 </div>
@@ -1415,12 +1443,30 @@ window.addEventListener('load', function() {
 
 /* Style for the time label block */
 .time-label {
-    flex: 0 0 90px;
-    min-width: 90px;
+    flex: 0 0 min(90px, 13vw);
+    min-width: 50px;
     max-width: 90px;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: clamp(0.70rem, 0.8vw, 0.95rem);
     text-align: left;
+}
+
+@media (max-width: 1200px) {
+    .time-label {
+        flex: 0 0 min(70px, 12vw);
+        min-width: 45px;
+        max-width: 70px;
+        font-size: clamp(0.65rem, 0.9vw, 0.85rem);
+    }
+}
+
+@media (max-width: 767.98px) {
+    .time-label {
+        flex: 0 0 min(60px, 14vw);
+        min-width: 40px;
+        max-width: 60px;
+        font-size: clamp(0.60rem, 1.0vw, 0.80rem);
+    }
 }
 
 .time-content {
@@ -1611,6 +1657,7 @@ body.grid-view .grid-table-container {
     white-space: nowrap;
     scrollbar-width: thin;
     padding-bottom: 2rem !important;
+    width: 100% !important;
 }
 
 /* add body-level bottom padding so final scrollbar position can be reached */
@@ -1947,6 +1994,50 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 .filter-tags .form-check,
 .filter-rooms .form-check {
     margin-bottom: 0.5rem;
+}
+
+/* Responsive grid table downscale behavior */
+.grid-table-container {
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    transition: transform 0.2s ease, height 0.2s ease;
+}
+
+.table-grid-schedule,
+.table-grid-schedule th,
+.table-grid-schedule td,
+.table-grid-schedule .grid-cell-card {
+    font-size: clamp(0.58rem, 0.94vw, 0.93rem) !important;
+}
+
+@media (max-width: 1600px) {
+    .table-grid-schedule th:not(:first-child),
+    .table-grid-schedule td:not(:first-child) {
+        min-width: 150px !important;
+    }
+}
+
+@media (max-width: 1200px) {
+    .table-grid-schedule th:not(:first-child),
+    .table-grid-schedule td:not(:first-child) {
+        min-width: 120px !important;
+    }
+    .table-grid-schedule th:first-child,
+    .table-grid-schedule td:first-child {
+        min-width: 90px !important;
+        max-width: 90px !important;
+    }
+}
+
+@media (max-width: 992px) {
+    .table-grid-schedule th:not(:first-child),
+    .table-grid-schedule td:not(:first-child) {
+        min-width: 90px !important;
+    }
+    .table-grid-schedule {
+        border-width: 2px !important;
+    }
 }
 
 .filter-tags h5,
