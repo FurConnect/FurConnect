@@ -87,12 +87,27 @@ window.addEventListener('load', function() {
                 if (hostIds.length === 0) return;
 
                 showLoadingBar();
-                fetch(`/ajax/hosts/batch/?ids=${hostIds.join(',')}`)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+                const batchUrl = `/ajax/hosts/batch/?ids=${hostIds.join(',')}`;
+                fetch(batchUrl, { headers: { 'Accept': 'application/json' } })
+                    .then(async response => {
+                        const text = await response.text();
+
+                        // Detect common HTML login redirect or error page
+                        const trimmedText = text.trim();
+                        if (trimmedText.startsWith('<') && trimmedText.toLowerCase().includes('<html')) {
+                            throw new Error(`Non-JSON response from ${batchUrl} (HTML/login page).`);
                         }
-                        return response.json();
+
+                        if (!response.ok) {
+                            const msg = `HTTP error! status: ${response.status} - ${trimmedText.substring(0, 256)}`;
+                            throw new Error(msg);
+                        } 
+
+                        try {
+                            return JSON.parse(trimmedText);
+                        } catch (parseError) {
+                            throw new Error(`Invalid JSON from ${batchUrl}: ${parseError.message}; response: ${trimmedText.substring(0, 256)}`);
+                        }
                     })
                     .then(data => {
                         const hostsById = {};
@@ -710,17 +725,17 @@ window.addEventListener('load', function() {
                     `;
                     
                     // Handle profile picture or generate initials avatar
-                    if (data.profile_picture && !data.profile_picture.includes('placeholder.webp')) {
+                    const initials = generateInitials(data.name);
+                    const color = generateAvatarColor(data.name);
+                    if (data.profile_picture) {
                         html += `
                             <img src="${data.profile_picture}" 
                                  alt="${data.name}" 
                                  class="rounded-circle mb-3" 
-                                 style="width: 150px; height: 150px; object-fit: cover;">
+                                 style="width: 150px; height: 150px; object-fit: cover;"
+                                 onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=150 height=150><rect width=150 height=150 fill=\'${encodeURIComponent(color)}\' /><text x=50% y=50% fill=\'white\' font-family=\'Arial\' font-size=60 text-anchor=middle dominant-baseline=middle>${initials}</text></svg>'">
                         `;
                     } else {
-                        // Generate initials avatar
-                        const initials = generateInitials(data.name);
-                        const color = generateAvatarColor(data.name);
                         html += `
                             <div class="rounded-circle mb-3 d-flex align-items-center justify-content-center" 
                                  style="width: 150px; height: 150px; background-color: ${color}; color: white; font-weight: bold; font-size: 60px; text-align: center; line-height: 150px;">

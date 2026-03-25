@@ -1187,7 +1187,6 @@ def convention_ical_feed(request, pk):
 
 # Batch host details AJAX endpoint
 @require_GET
-@login_required
 def get_hosts_batch_ajax(request):
     """
     AJAX view to get details for multiple PanelHosts by IDs (comma-separated in ?ids=).
