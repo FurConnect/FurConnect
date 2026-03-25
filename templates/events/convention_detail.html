@@ -690,22 +690,6 @@ window.addEventListener('load', function() {
                     });
                 });
 
-                // Collapse empty sequential row blocks (top-down)
-                let currentEmptyRun = [];
-                rows.forEach(row => {
-                    const hasPanel = !!row.querySelector('.grid-cell-card');
-                    if (!hasPanel) {
-                        currentEmptyRun.push(row);
-                    } else {
-                        if (currentEmptyRun.length > 0) {
-                            currentEmptyRun.forEach(r => r.style.height = '0px');
-                            currentEmptyRun = [];
-                        }
-                    }
-                });
-                if (currentEmptyRun.length > 0) {
-                    currentEmptyRun.forEach(r => r.style.height = '0px');
-                }
             });
         }
 
@@ -2061,7 +2045,7 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 
 .table-grid-schedule th:not(:first-child),
 .table-grid-schedule td:not(:first-child) {
-    min-width: 120px !important;
+    min-width: 180px !important;
 }
 .table-grid-schedule th:first-child,
 .table-grid-schedule td:first-child {
@@ -2099,6 +2083,7 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 .table-grid-schedule td:not(:first-child) {
     width: auto;
     min-width: 90px;
+    height: 100px !important;
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -2150,16 +2135,32 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     vertical-align: top !important;
 }
 
-.table-grid-schedule td > .grid-cell-card,
-.table-grid-schedule td > .grid-cell-card .card-body {
+.table-grid-schedule td {
+    position: relative !important;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.table-grid-schedule td > .grid-cell-card {
+    position: absolute !important;
+    inset: 0 !important;
     width: 100% !important;
-    min-width: 100% !important;
     height: 100% !important;
+    min-width: 100% !important;
     min-height: 100% !important;
     max-height: 100% !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: flex-start !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    padding: 0.35rem !important;
+}
+
+.table-grid-schedule td > .grid-cell-card .card-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
     box-sizing: border-box !important;
 }
 
