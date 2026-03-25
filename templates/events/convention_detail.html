@@ -1001,68 +1001,61 @@ window.addEventListener('load', function() {
                         <h5 class="modal-title" id="calendarFeedModalLabel">Subscribe to Live Calendar Feed</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="card-body">
-                        <div class="d-flex align-items-center mb-2">
-                            {% for host in panel.ordered_hosts %}
-                                <span class="host-avatar-container" data-title="{{ host.name }}">
-                                    {% if host.image %}
-                                        <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar rounded-circle host-avatar" style="width: 32px; height: 32px; object-fit: cover; margin-right: 6px;">
-                                    {% else %}
-                                        <span class="rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 32px; height: 32px; background-color: {{ host.get_avatar_color }}; color: white; font-weight: bold; font-size: 1rem; margin-right: 6px;">{{ host.get_initials }}</span>
-                                    {% endif %}
-                                </span>
-                            {% endfor %}
+                    <div class="modal-body">
+                        <p>To get live updates in your calendar, <strong>subscribe</strong> using this URL (do not download and import):</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="calendarFeedUrl" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copyCalendarUrlBtn">Copy URL</button>
                         </div>
-                        <div class="card-title fw-bold">{{ panel.title }}</div>
-                        {% if panel.is_featured %}
-                        <span class="badge bg-light text-dark mb-1">Featured</span>
-                        {% endif %}
-                        <div class="tag-pill-container mb-1">
-                            {% for tag in panel.ordered_tags %}
-                                <span class="tag-pill" style="background: {{ tag.color }}; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; margin-right: 0.25rem; font-size: 0.72rem; display: inline-flex; align-items:center; white-space: nowrap;">{{ tag.name }}</span>
-                            {% empty %}
-                                <span class="tag-pill" style="background: #6c757d; color: #fff; padding: 0.15rem 0.45rem; border-radius: 10px; font-size: 0.72rem;">No Tag</span>
-                            {% endfor %}
+                        <div class="alert alert-info" style="font-size:0.97em;">
+                            <strong>Google Calendar:</strong> Go to Google Calendar (web), click <b>+</b> next to "Other calendars" → <b>From URL</b>, and paste the link above.<br><br>
+                            <strong>Apple Calendar:</strong> File → New Calendar Subscription, paste the link above.<br><br>
+                            <strong>Outlook:</strong> Add calendar → Subscribe from web, paste the link above.
                         </div>
-                        <div class="card-text small">{{ panel.description|truncatechars:130 }}</div>
-                        {% if panel.is_cancelled %}
-                        <div class="cancelled-banner mt-2"><span class="material-icons">block</span> <span class="cancelled-text">Cancelled</span></div>
-                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
         </div>
         <script>
-            // Hack: force modal open, event delegation, clipboard fallback, z-index, etc.
             document.addEventListener('DOMContentLoaded', function () {
-                // Always re-create modal instance on click
+                var feedPath = '{% url "events:convention_ical_feed" pk=convention.pk %}';
+
+                function getFeedUrl() {
+                    var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+                    return origin + feedPath;
+                }
+
+                function refreshCalendarFeedUrl() {
+                    var urlInput = document.getElementById('calendarFeedUrl');
+                    if (urlInput) {
+                        urlInput.value = getFeedUrl();
+                    }
+                }
+
                 document.body.addEventListener('click', function (e) {
                     var trigger = e.target.closest('#calendarFeedModalTrigger');
                     if (trigger) {
                         e.preventDefault();
+                        refreshCalendarFeedUrl();
                         var modalEl = document.getElementById('calendarFeedModal');
                         if (modalEl) {
-                            // Remove lingering .show class if present
-                            modalEl.classList.remove('show');
-                            modalEl.style.display = '';
-                            // Remove any lingering backdrop
-                            var backdrops = document.querySelectorAll('.modal-backdrop');
-                            backdrops.forEach(function (bd) {
-                                bd.parentNode.removeChild(bd);
-                            });
-                            // Create and show modal
+                            // Remove lingering backdrop
+                            document.querySelectorAll('.modal-backdrop').forEach(function (bd) { bd.remove(); });
                             var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
                             modal.show();
-                            // Focus the input for easy copy
                             setTimeout(function () {
                                 var urlInput = document.getElementById('calendarFeedUrl');
-                                if (urlInput) urlInput.focus();
+                                if (urlInput) {
+                                    urlInput.select();
+                                    urlInput.focus();
+                                }
                             }, 300);
                         }
                     }
-                });
-                // Copy button logic (with fallback)
-                document.body.addEventListener('click', function (e) {
+
                     var copyBtn = e.target.closest('#copyCalendarUrlBtn');
                     if (copyBtn) {
                         var urlInput = document.getElementById('calendarFeedUrl');
@@ -1070,21 +1063,22 @@ window.addEventListener('load', function() {
                             urlInput.select();
                             urlInput.setSelectionRange(0, 99999);
                             try {
-                                if (navigator.clipboard) {
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
                                     navigator.clipboard.writeText(urlInput.value);
                                 } else {
                                     document.execCommand('copy');
                                 }
                                 copyBtn.innerText = 'Copied!';
-                                setTimeout(function () {
-                                    copyBtn.innerText = 'Copy URL';
-                                }, 1200);
+                                setTimeout(function () { copyBtn.innerText = 'Copy URL'; }, 1200);
                             } catch (err) {
-                                alert('Copy failed. Please copy manually.');
+                                alert('Copy failed. Please copy the URL manually.');
                             }
                         }
                     }
                 });
+
+                // initial value on page load in case modal is opened later
+                refreshCalendarFeedUrl();
             });
         </script>
     </div>
