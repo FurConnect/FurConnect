@@ -40,6 +40,14 @@
             display: flex;
             flex-direction: column;
             transition: background-color var(--transition-speed), color var(--transition-speed);
+            visibility: hidden;
+            opacity: 0;
+        }
+
+        body.visible {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.2s ease-in, visibility 0s ease 0s;
         }
 
         .navbar {
@@ -326,15 +334,7 @@
             padding: 2;
             margin: 0;
         }
-        @media (max-width: 576px) {
-            #sticky-footer .container {
-                flex-direction: column;
-                align-items: flex-start;
-                justify-content: center;
-                gap: 0.35rem;
-            }
-        }
-
+        
         .container,
         .container-fluid,
         .grid-table-container {
@@ -622,6 +622,9 @@
                 loginError.classList.add('d-none');
                 loginSubmit.disabled = false;
             });
+
+            // show content after all core JS has initialized
+            document.body.classList.add('visible');
         });
     </script>
     <script>
@@ -657,11 +660,71 @@
         window.addEventListener('load', updateUiScaleByPpi);
         window.addEventListener('resize', updateUiScaleByPpi);
     </script>
+    <style>
+      #sticky-footer {
+        background: var(--bs-body-bg);
+        border-top: 1px solid rgba(255,255,255,0.1);
+        box-shadow: inset 0 1px 0 rgba(0,0,0,0.05);
+        color: var(--bs-body-color);
+        font-size: 0.9rem;
+        padding: 0.5rem 0;
+        z-index: 9999;
+        position: relative;
+      }
+
+      #sticky-footer .container {
+        max-width: 100%;
+        gap: 0.4rem;
+      }
+      #sticky-footer .footer-left,
+      #sticky-footer .footer-right {
+        display: flex;
+        align-items: center;
+      }
+      #sticky-footer .footer-right {
+        gap: 0.5rem;
+      }
+      #sticky-footer .footer-version {
+        color: var(--bs-secondary-color, #999);
+      }
+      .theme-switch-modern {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.08);
+        border-radius: 999px;
+        padding: 0.25rem;
+      }
+      .theme-switch-modern input {
+        display: none;
+      }
+      .slider-modern {
+        display: inline-flex;
+        gap: 0.25rem;
+        font-size: 0.8rem;
+      }
+
+      @media (max-width: 768px) {
+        #sticky-footer .container {
+          flex-direction: column;
+          align-items: stretch;
+          text-align: center;
+        }
+        #sticky-footer .footer-left,
+        #sticky-footer .footer-right {
+          justify-content: center;
+          width: 100%;
+        }
+        #sticky-footer .footer-right {
+          margin-top: 0.35rem;
+        }
+      }
+    </style>
+
     <footer id="sticky-footer" class="footer mt-auto">
-        <div class="container d-flex justify-content-between align-items-center" style="padding-top:0.05rem; padding-bottom:0.05rem;">
+        <div class="container d-flex justify-content-between align-items-center">
             <div class="footer-left">
                 <span>Powered by <strong>FurConnect</strong></span>
-                <span class="footer-version ms-2 text-muted" style="font-size:0.95em;">{{ FURCONNECT_VERSION }}</span>
+                <span class="footer-version ms-2 text-muted">{{ FURCONNECT_VERSION }}</span>
             </div>
             <div class="footer-right">
                 <label class="theme-switch-modern" title="Toggle day/night mode">
