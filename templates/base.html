@@ -334,6 +334,27 @@
                 gap: 0.35rem;
             }
         }
+
+        /* Make primary containers fluid width to avoid large fixed max-width that causes side overflow */
+        .container,
+        .container-fluid,
+        .schedule-container,
+        .grid-table-container {
+            max-width: 90% !important;
+            width: 90% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+
+        @media (max-width: 768px) {
+            .container,
+            .container-fluid,
+            .schedule-container,
+            .grid-table-container {
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+        }
         @media (max-width: 576px) {
             #sticky-footer .container {
                 flex-direction: column;
