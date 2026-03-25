@@ -604,37 +604,9 @@ window.addEventListener('load', function() {
                     return;
                 }
 
-                const availableWidth = container.clientWidth || container.offsetWidth;
-                const tableWidth = table.scrollWidth || table.offsetWidth;
-
-                // Force no transform scaling if table is already at max controlled column width
-                const headerCells = table.tHead?.rows[0]?.cells || [];
-                const roomCols = Math.max(0, headerCells.length - 1);
-                const minTimeCol = 90;
-                const minRoomCol = 120;
-                const minFullWidth = minTimeCol + (roomCols * minRoomCol);
-
-                let finalScale = 1;
-                if (availableWidth >= minFullWidth) {
-                    finalScale = 1;
-                } else if (tableWidth > 0 && availableWidth > 0) {
-                    finalScale = availableWidth / minFullWidth;
-                }
-
-                finalScale = Math.min(1, finalScale);
-
-                const minScale = window.innerWidth >= 1520 ? 0.75 : 0.55;
-                finalScale = Math.max(minScale, finalScale);
-
-                if (finalScale >= 0.99) {
-                    container.style.transform = 'none';
-                    container.style.height = 'auto';
-                } else {
-                    container.style.transformOrigin = 'top left';
-                    container.style.transform = `scale(${finalScale})`;
-                    container.style.height = `${Math.ceil((table.offsetHeight || 0) * finalScale + 10)}px`;
-                }
-
+                // Disable automatic transform scaling (remove DPI/PPI responsive scaling)
+                container.style.transform = 'none';
+                container.style.height = 'auto';
                 container.style.overflowX = 'auto';
             });
         }
