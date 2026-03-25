@@ -725,18 +725,23 @@ window.addEventListener('load', function() {
                     return response.json();
                 })
                 .then(data => {
+                    const host = (data && Array.isArray(data.hosts) && data.hosts.length > 0) ? data.hosts[0] : null;
+                    if (!host) {
+                        throw new Error('Host not found');
+                    }
+                    
                     // Create HTML for speaker details and panels
                     let html = `
                         <div class="text-center mb-4">
                     `;
                     
                     // Handle profile picture or generate initials avatar
-                    const initials = generateInitials(data.name);
-                    const color = generateAvatarColor(data.name);
-                    if (data.profile_picture) {
+                    const initials = generateInitials(host.name || 'Unknown');
+                    const color = generateAvatarColor(host.name || 'Unknown');
+                    if (host.profile_picture) {
                         html += `
-                            <img src="${data.profile_picture}" 
-                                 alt="${data.name}" 
+                            <img src="${host.profile_picture}" 
+                                 alt="${host.name || 'Speaker'}" 
                                  class="rounded-circle mb-3" 
                                  style="width: 150px; height: 150px; object-fit: cover;"
                                  onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=150 height=150><rect width=150 height=150 fill=\'${encodeURIComponent(color)}\' /><text x=50% y=50% fill=\'white\' font-family=\'Arial\' font-size=60 text-anchor=middle dominant-baseline=middle>${initials}</text></svg>'">
@@ -751,8 +756,8 @@ window.addEventListener('load', function() {
                     }
                     
                     html += `
-                            <h3>${data.name}</h3>
-                            <p class="text-muted">${data.panels_count || 0} Event${data.panels_count !== 1 ? 's' : ''}</p>
+                            <h3>${host.name || 'Unknown'}</h3>
+                            <p class="text-muted">${host.panels_count || 0} Event${(host.panels_count || 0) !== 1 ? 's' : ''}</p>
                         </div>
                     `;
 
@@ -775,9 +780,9 @@ window.addEventListener('load', function() {
                         return luminance > 0.5;
                     }
 
-                    if (data.panels && Array.isArray(data.panels) && data.panels.length > 0) {
+                    if (host.panels && Array.isArray(host.panels) && host.panels.length > 0) {
                         html += '<div class="panels-list">';
-                        data.panels.forEach(panel => {
+                        host.panels.forEach(panel => {
                             const tagColor = panel.tag_color || '#ffffff';
                             const textColor = isLightColor(tagColor) ? '#222' : '#fff';
                             html += `
