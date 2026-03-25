@@ -1262,7 +1262,7 @@ window.addEventListener('load', function() {
                         <div class="timeline">
                             {% for time_group in day.panels_by_time %}
                             <div class="timeline-row">
-                                <div class="time-label">
+                                <div class="time-label time-label-list">
                                     {{ time_group.start_time|time:"g:i A" }}
                                 </div>
                                 <div class="time-content">
@@ -1309,11 +1309,11 @@ window.addEventListener('load', function() {
                                                         {% endfor %}
                                                     </div>
                                                     {% endif %}
-                                                    <h6 class="mb-1 {% if panel.cancelled %}cancelled-text{% endif %}">
+                                                    <h6 class="card-info mb-1 {% if panel.cancelled %}cancelled-text{% endif %}">
                                                         <i class="material-icons fs-6">schedule</i>
                                                         {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                     </h6>
-                                                    <h6 class="mb-0 {% if panel.cancelled %}cancelled-text{% endif %}">
+                                                    <h6 class="card-info mb-1 {% if panel.cancelled %}cancelled-text{% endif %}">
                                                         <i class="material-icons fs-6">room</i>
                                                         {{ panel.room }}
                                                     </h6>
@@ -1453,6 +1453,7 @@ window.addEventListener('load', function() {
 .schedule-container .timeline-row .time-label,
 .schedule-container .form-check-label,
 .schedule-container .form-select {
+    text-align: center !important;
     font-size: clamp(0.45rem, 4.1vw, 0.95rem) !important;
 }
 
@@ -1491,22 +1492,37 @@ window.addEventListener('load', function() {
     position: relative;
 }
 
-.timeline-row {
-    display: block;
+.schedule-container .timeline .timeline-row {
+    display: block !important;
+    margin-bottom: 0.75rem;
 }
 
-.time-label {
-    width: 100%;
-    max-width: none;
-    min-width: auto;
-    text-align: left;
-    margin-bottom: 0.5rem;
-    margin-right: 0;
+.schedule-container .timeline .time-label,
+.schedule-container .timeline .time-label-list {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: auto !important;
+    text-align: center;
+    margin-bottom: 0.35rem;
+    font-size: clamp(0.65rem, 1.15vw, 0.85rem);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    color: var(--bs-body-color);
+    font-weight: 600;
 }
-.time-content {
-    width: 100%;
-    min-width: 0;
+
+.schedule-container .timeline .time-content {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-top: 0.15rem;
 }
+
+.schedule-container .timeline .time-label + .time-content {
+    margin-top: 0.2rem;
+}
+
 /* Hack: force panel table to downscale on very narrow screens */
 .table-grid-schedule {
     min-width: 0 !important;
@@ -1630,8 +1646,8 @@ html[data-bs-theme="light"] .text-primary {
 
 .host-avatar-container .host-avatar,
 .host-avatar-container .host-avatar-initials {
-	width: clamp(24px, min(8vw, 36px), 36px) !important;
-	height: clamp(24px, min(8vw, 36px), 36px) !important;
+	width: clamp(16px, min(8vw, 36px), 36px) !important;
+	height: clamp(16px, min(8vw, 36px), 36px) !important;
 	border-radius: 50% !important;
 	display: inline-flex !important;
 	align-items: center !important;
@@ -1686,7 +1702,8 @@ html[data-bs-theme="light"] .text-primary {
 .panel-card .card-text,
 .panel-card .panel-time-range,
 .panel-card .grid-cell-content .small,
-.panel-details,
+.panel-card .card-info.mb-1,
+.material-icons .panel-card,
 .panel-details,
 .panel-details.tag-dots-container,
 .panel-details .tag-dots-container {
