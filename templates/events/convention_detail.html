@@ -1532,7 +1532,37 @@ window.addEventListener('load', function() {
     color: #222 !important;
 }
 
-:root {
+.table-grid-schedule thead th {
+    position: sticky !important;
+    top: 0;
+    z-index: 25;
+    background: var(--bs-body-bg, #fff) !important;
+    border-bottom: 1px solid rgba(0,0,0,0.3);
+}
+
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    position: sticky !important;
+    left: 0;
+    z-index: 30;
+    background: var(--bs-body-bg, #fff) !important;
+    border-right: 1px solid rgba(0,0,0,0.3);
+}
+
+.table-grid-schedule thead th:first-child {
+    z-index: 35;
+}
+
+.table-grid-schedule tbody th {
+    position: sticky !important;
+    left: 0;
+    z-index: 28;
+    background: var(--bs-body-bg, #fff) !important;
+    border-right: 1px solid rgba(0,0,0,0.3);
+}
+
+.table-grid-schedule td, .table-grid-schedule th {
+    transition: transform 0.2s ease;
     --bs-table-border-color: transparent;
     --bs-table-hover-bg: rgba(0, 0, 0, 0.50);
 }
