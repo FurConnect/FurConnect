@@ -589,12 +589,19 @@ window.addEventListener('load', function() {
                     // Set exact heights on the row and all cell cards inside
                     rowGroup.forEach(r => {
                         r.style.height = `${maxHeight}px`;
+                        r.style.minHeight = `${maxHeight}px`;
                         Array.from(r.cells).forEach(cell => {
                             cell.style.height = `${maxHeight}px`;
+                            cell.style.minHeight = `${maxHeight}px`;
+                            cell.style.position = 'relative';
                             const card = cell.querySelector('.grid-cell-card');
                             if (card) {
                                 card.style.height = '100%';
                                 card.style.minHeight = '100%';
+                                card.style.maxHeight = '100%';
+                                card.style.display = 'flex';
+                                card.style.flexDirection = 'column';
+                                card.style.justifyContent = 'space-between';
                             }
                         });
                     });
@@ -2124,7 +2131,10 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     min-width: 100% !important;
     height: 100% !important;
     min-height: 100% !important;
-
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
 }
 
 </style>
