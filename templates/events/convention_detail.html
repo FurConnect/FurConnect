@@ -1405,23 +1405,48 @@ window.addEventListener('load', function() {
 /* New style for the row containing time label and panels */
 .timeline-row {
     display: flex;
-    margin-bottom: 1.5rem; /* Add space between time blocks */
-    align-items: flex-start; /* Align items to the top */
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-/* Style for the time label column */
-
+/* Style for the time label block */
 .time-label {
-    width: 120px; /* Fixed width for the time label */
-    text-align: right;
-    padding-right: 20px;
-    font-weight: 500;
-    font-size: 1.2rem;
-    padding-top: 0.5rem; /* Adjust top padding */
-    padding-bottom: 0.5rem; /* Adjust bottom padding */
-    flex-shrink: 0; /* Prevent shrinking */
-    border-radius: 6px 0 0 6px;
+    flex: 0 0 90px;
+    min-width: 90px;
+    max-width: 90px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-align: left;
 }
+
+.time-content {
+    flex: 1;
+    width: auto;
+    margin-top: 0;
+    position: relative;
+}
+
+@media (max-width: 767.98px) {
+    .timeline-row {
+        display: block;
+    }
+    .time-label {
+        width: 100%;
+        max-width: none;
+        min-width: auto;
+        text-align: left;
+        margin-bottom: 0.5rem;
+        margin-right: -30px;
+    }
+    .time-content {
+        width: 100%;
+    }
+}
+
 
 .table-grid-schedule th:first-child,
 .table-grid-schedule td:first-child {
@@ -1460,7 +1485,6 @@ html[data-bs-theme="light"] .text-primary {
 /* Style for the content column containing panels */
 .time-content {
     flex-grow: 1; /* Take up remaining space */
-    padding-left: 20px;
     position: relative;
 }
 
@@ -1572,6 +1596,36 @@ body.grid-view .grid-table-container {
 /* add body-level bottom padding so final scrollbar position can be reached */
 body {
     padding-bottom: 2rem !important;
+}
+
+@media (max-width: 767.98px) {
+    body.grid-view .grid-table-container {
+        max-width: 100%;
+        margin: 0 auto;
+        overflow-x: scroll;
+        padding-bottom: 1rem !important;
+    }
+    body.grid-view .table-grid-schedule {
+        min-width: 100% !important;
+        width: 100% !important;
+        table-layout: auto !important;
+    }
+    body.grid-view .table-grid-schedule th:not(:first-child),
+    body.grid-view .table-grid-schedule td:not(:first-child) {
+        min-width: 110px !important;
+        padding: 0.2rem !important;
+    }
+    body.grid-view .table-grid-schedule th:first-child,
+    body.grid-view .table-grid-schedule td:first-child {
+        min-width: 90px !important;
+        max-width: 90px !important;
+        font-size: 0.82rem;
+    }
+    .grid-cell-card {
+        min-height: 70px;
+        padding: 0.5rem;
+        font-size: 0.92rem;
+    }
 }
 
 .table-grid-schedule th:not(:first-child),

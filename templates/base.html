@@ -288,7 +288,18 @@
             border-radius: 0;
         }
 
+        :root {
+            --ui-scale: 1;
+        }
+
+        html {
+            font-size: calc(100% * var(--ui-scale));
+        }
+
         @media (max-width: 768px) {
+            :root {
+                --ui-scale: 0.95;
+            }
             .floating-theme-switch {
                 bottom: 1.5rem;
                 right: 1.5rem;
@@ -759,6 +770,22 @@
             }
             return cookieValue;
         }
+    </script>
+    <script>
+        function updateUiScaleByPpi() {
+            const dpr = window.devicePixelRatio || 1;
+            // Estimate screen diagonal size in inches (inferred from CSS pixels + PPI assumption)
+            const widthPx = window.screen.width * dpr;
+            const heightPx = window.screen.height * dpr;
+            const diagonalPx = Math.sqrt(widthPx * widthPx + heightPx * heightPx);
+
+            // Use dpr to tune scale, with a comfortable minimum/maximum
+            const scale = Math.max(0.85, Math.min(1.25, 1 + (dpr - 1) * 0.35));
+            document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
+        }
+
+        window.addEventListener('load', updateUiScaleByPpi);
+        window.addEventListener('resize', updateUiScaleByPpi);
     </script>
     <footer id="sticky-footer" class="footer mt-auto">
         <div class="container d-flex justify-content-between align-items-center" style="padding-top:0.05rem; padding-bottom:0.05rem;">
