@@ -586,26 +586,41 @@ window.addEventListener('load', function() {
                         maxHeight = Math.max(maxHeight, rowHeight);
                     });
 
-                    // Set exact heights on the row and all cell cards inside
+                    // Set exact heights on the rows inside
                     rowGroup.forEach(r => {
                         r.style.height = `${maxHeight}px`;
                         r.style.minHeight = `${maxHeight}px`;
-                        Array.from(r.cells).forEach(cell => {
-                            cell.style.height = `${maxHeight}px`;
-                            cell.style.minHeight = `${maxHeight}px`;
-                            cell.style.position = 'relative';
-                            const card = cell.querySelector('.grid-cell-card');
-                            if (card) {
-                                card.style.height = '100%';
-                                card.style.minHeight = '100%';
-                                card.style.maxHeight = '100%';
-                                card.style.display = 'flex';
-                                card.style.flexDirection = 'column';
-                                card.style.justifyContent = 'space-between';
-                            }
-                        });
                     });
                 }
+
+                // Adjust cells and cards (including row-spanned cells) with complete height
+                rows.forEach((r, rowIndex) => {
+                    Array.from(r.cells).forEach(cell => {
+                        const rowSpan = parseInt(cell.getAttribute('rowspan') || '1', 10);
+                        let cellHeight = rows[rowIndex].getBoundingClientRect().height;
+
+                        if (rowSpan > 1) {
+                            cellHeight = 0;
+                            for (let k = 0; k < rowSpan && (rowIndex + k) < rows.length; k++) {
+                                cellHeight += rows[rowIndex + k].getBoundingClientRect().height;
+                            }
+                        }
+
+                        cell.style.height = `${cellHeight}px`;
+                        cell.style.minHeight = `${cellHeight}px`;
+                        cell.style.position = 'relative';
+
+                        const card = cell.querySelector('.grid-cell-card');
+                        if (card) {
+                            card.style.height = '100%';
+                            card.style.minHeight = '100%';
+                            card.style.maxHeight = '100%';
+                            card.style.display = 'flex';
+                            card.style.flexDirection = 'column';
+                            card.style.justifyContent = 'space-between';
+                        }
+                    });
+                });
             });
         }
 
