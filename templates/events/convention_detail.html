@@ -550,6 +550,7 @@ window.addEventListener('load', function() {
             }
             lastWidth = currentWidth;
             normalizeHourRowHeights();
+            updateGridTableScale();
         });
 
         // Normalize each hour block height (2 x 30m slots must match tallest hour)
@@ -605,18 +606,36 @@ window.addEventListener('load', function() {
 
                 const availableWidth = container.clientWidth || container.offsetWidth;
                 const tableWidth = table.scrollWidth || table.offsetWidth;
-                let scale = 1;
 
-                if (tableWidth > 0 && availableWidth > 0) {
-                    scale = Math.min(1, availableWidth / tableWidth);
+                // Force no transform scaling if table is already at max controlled column width
+                const headerCells = table.tHead?.rows[0]?.cells || [];
+                const roomCols = Math.max(0, headerCells.length - 1);
+                const minTimeCol = 90;
+                const minRoomCol = 120;
+                const minFullWidth = minTimeCol + (roomCols * minRoomCol);
+
+                let finalScale = 1;
+                if (availableWidth >= minFullWidth) {
+                    finalScale = 1;
+                } else if (tableWidth > 0 && availableWidth > 0) {
+                    finalScale = availableWidth / minFullWidth;
                 }
 
-                // Prevent the table from becoming too small
-                scale = Math.max(0.55, scale);
+                finalScale = Math.min(1, finalScale);
 
-                container.style.transformOrigin = 'top left';
-                container.style.transform = `scale(${scale})`;
-                container.style.height = `${Math.ceil((table.offsetHeight || 0) * scale + 10)}px`;
+                const minScale = window.innerWidth >= 1520 ? 0.75 : 0.55;
+                finalScale = Math.max(minScale, finalScale);
+
+                if (finalScale >= 0.99) {
+                    container.style.transform = 'none';
+                    container.style.height = 'auto';
+                } else {
+                    container.style.transformOrigin = 'top left';
+                    container.style.transform = `scale(${finalScale})`;
+                    container.style.height = `${Math.ceil((table.offsetHeight || 0) * finalScale + 10)}px`;
+                }
+
+                container.style.overflowX = 'auto';
             });
         }
 
@@ -898,6 +917,11 @@ window.addEventListener('load', function() {
                                     currentView = (currentView === 'list') ? 'grid' : 'list';
                                     localStorage.setItem('scheduleView', currentView);
                                     updateExportPdfLink();
+
+                                    // Keep table scale refreshed when switching modes
+                                    if (typeof updateGridTableScale === 'function') {
+                                        updateGridTableScale();
+                                    }
                                 });
                             }
                         });
@@ -1174,8 +1198,8 @@ window.addEventListener('load', function() {
                                 <h4>{{ day_matrix.day.date|date:"l, M d, Y" }}</h4>
                             </div>
                             <div class="table-responsive table-responsive-x-only">
-                                <table class="table table-bordered table-hover table-grid-schedule" style="min-width: 900px;">
-                                    <thead class="table-dark">
+                                <table class="table-grid-schedule" style="min-width: 900px;">
+                                    <thead>
                                         <tr>
                                             <th style="min-width: 120px;">Time</th>
                                             {% for room in day_matrix.rooms %}
@@ -1200,7 +1224,7 @@ window.addEventListener('load', function() {
                                                     <td class="p-0" rowspan="{{ cell.rowspan }}">
                                                         {% with panel_color=panel.ordered_tags.0.color|default:'#ffc107' %}
                                                         <div class="grid-cell-card" data-panel-id="{{ panel.pk }}" data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}" data-room="{{ panel.room.name|lower|slugify }}" data-tag-color="{{ panel_color }}" style="border-left: 4px solid {{ panel_color }}; background: {{ panel_color }}22; color: #fff; width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start;">
-                                                            <div class="grid-cell-content" style="padding: 1rem; height: 100%; display: flex; flex-direction: column; justify-content: flex-start;">
+                                                            <div class="grid-cell-content" style="height: 100%; display: flex; flex-direction: column; justify-content: flex-start;">
                                                                 <div class="fw-bold">{{ panel.title }}</div>
                                                                 {% if panel.is_featured %}
                                                                 <span class="badge bg-light text-dark mb-1">Featured</span>
@@ -1423,14 +1447,12 @@ window.addEventListener('load', function() {
     padding-bottom: 36px;
 }
 
-/* Print styles */
 @media print {
     .filter-rooms {
         display: none !important;
     }
 }
 
-/* New style for the row containing time label and panels */
 .timeline-row {
     display: flex;
     align-items: flex-start;
@@ -1451,22 +1473,18 @@ window.addEventListener('load', function() {
     text-align: left;
 }
 
-@media (max-width: 1200px) {
-    .time-label {
-        flex: 0 0 min(70px, 12vw);
-        min-width: 45px;
-        max-width: 70px;
-        font-size: clamp(0.65rem, 0.9vw, 0.85rem);
-    }
+.time-label {
+    flex: 0 0 min(70px, 12vw);
+    min-width: 45px;
+    max-width: 70px;
+    font-size: clamp(0.65rem, 0.9vw, 0.85rem);
 }
 
-@media (max-width: 767.98px) {
-    .time-label {
-        flex: 0 0 min(60px, 14vw);
-        min-width: 40px;
-        max-width: 60px;
-        font-size: clamp(0.60rem, 1.0vw, 0.80rem);
-    }
+.time-label {
+    flex: 0 0 min(60px, 14vw);
+    min-width: 40px;
+    max-width: 60px;
+    font-size: clamp(0.60rem, 1.0vw, 0.80rem);
 }
 
 .time-content {
@@ -1476,40 +1494,37 @@ window.addEventListener('load', function() {
     position: relative;
 }
 
-@media (max-width: 767.98px) {
-    .timeline-row {
-        display: block;
-    }
-    .time-label {
-        width: 100%;
-        max-width: none;
-        min-width: auto;
-        text-align: left;
-        margin-bottom: 0.5rem;
-        margin-right: 0;
-    }
-    .time-content {
-        width: 100%;
-        min-width: 0;
-    }
-
-    /* Hack: force panel table to downscale on very narrow screens */
-    .table-grid-schedule {
-        min-width: 0 !important;
-        width: 100% !important;
-        table-layout: fixed !important;
-    }
-    .table-grid-schedule td,
-    .table-grid-schedule th {
-        min-width: 60px !important;
-        padding: 0.25rem !important;
-        white-space: normal !important;
-    }
-    .table-grid-schedule th:first-child,
-    .table-grid-schedule td:first-child {
-        min-width: 50px !important;
-        max-width: 50px !important;
-    }
+.timeline-row {
+    display: block;
+}
+.time-label {
+    width: 100%;
+    max-width: none;
+    min-width: auto;
+    text-align: left;
+    margin-bottom: 0.5rem;
+    margin-right: 0;
+}
+.time-content {
+    width: 100%;
+    min-width: 0;
+}
+/* Hack: force panel table to downscale on very narrow screens */
+.table-grid-schedule {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+}
+.table-grid-schedule td,
+.table-grid-schedule th {
+    min-width: 60px !important;
+    padding: 0.25rem !important;
+    white-space: normal !important;
+}
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    min-width: 50px !important;
+    max-width: 50px !important;
 }
 
 
@@ -1948,6 +1963,7 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     font-size: 1.1em;
     user-select: none;
 }
+
 @media (max-width: 767.98px) {
     .modal-panel-info {
         gap: 0.5rem;
@@ -1999,9 +2015,23 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 /* Responsive grid table downscale behavior */
 .grid-table-container {
     width: 100%;
-    overflow-x: hidden;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
     overflow-y: hidden;
+    -webkit-transition: -webkit-transform 0.2s ease, height 0.2s ease;
+    -moz-transition: -moz-transform 0.2s ease, height 0.2s ease;
     transition: transform 0.2s ease, height 0.2s ease;
+    -webkit-transform-origin: top left;
+    -moz-transform-origin: top left;
+    transform-origin: top left;
+    box-sizing: border-box;
+}
+
+.table-grid-schedule {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .table-grid-schedule,
@@ -2011,34 +2041,23 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     font-size: clamp(0.58rem, 0.94vw, 0.93rem) !important;
 }
 
-@media (max-width: 1600px) {
-    .table-grid-schedule th:not(:first-child),
-    .table-grid-schedule td:not(:first-child) {
-        min-width: 150px !important;
-    }
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    min-width: 150px !important;
 }
 
-@media (max-width: 1200px) {
-    .table-grid-schedule th:not(:first-child),
-    .table-grid-schedule td:not(:first-child) {
-        min-width: 120px !important;
-    }
-    .table-grid-schedule th:first-child,
-    .table-grid-schedule td:first-child {
-        min-width: 90px !important;
-        max-width: 90px !important;
-    }
+
+.table-grid-schedule th:not(:first-child),
+.table-grid-schedule td:not(:first-child) {
+    min-width: 120px !important;
+}
+.table-grid-schedule th:first-child,
+.table-grid-schedule td:first-child {
+    min-width: 90px !important;
+    max-width: 90px !important;
 }
 
-@media (max-width: 992px) {
-    .table-grid-schedule th:not(:first-child),
-    .table-grid-schedule td:not(:first-child) {
-        min-width: 90px !important;
-    }
-    .table-grid-schedule {
-        border-width: 2px !important;
-    }
-}
+
 
 .filter-tags h5,
 .filter-rooms h5 {
@@ -2057,9 +2076,9 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 
 .table-grid-schedule th:first-child,
 .table-grid-schedule td:first-child {
-    width: 120px;
-    min-width: 120px;
-    max-width: 130px;
+    width: auto;
+    min-width: 56px;
+    max-width: 180px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2067,10 +2086,12 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 .table-grid-schedule th:not(:first-child),
 .table-grid-schedule td:not(:first-child) {
     width: auto;
-    min-width: 120px;
+    min-width: 90px;
     white-space: normal;
     overflow-wrap: anywhere;
+    word-break: break-word;
 }
+
 .table-grid-schedule th,
 .table-grid-schedule td {
     vertical-align: top;
