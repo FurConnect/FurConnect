@@ -1273,13 +1273,13 @@ window.addEventListener('load', function() {
                                                 </div>
                                             {% endif %}
                                             <div class="card-body p-2">
-                                                <h5 class="card-title mb-1 {% if panel.cancelled %}cancelled-text{% endif %} {% if panel.is_featured %}featured-panel-title{% endif %}" style="font-size: 1.65rem; display: flex; align-items: center;">
+                                                <h5 class="card-title mb-1 {% if panel.cancelled %}cancelled-text{% endif %} {% if panel.is_featured %}featured-panel-title{% endif %}" style="display: flex; align-items: center;">
                                                     {% if panel.is_featured %}
-                                                    <span class="material-icons-round me-2" style="font-size: 2.3rem; color: currentColor;">star</span>
+                                                    <span class="material-icons-round me-2" style="color: currentColor;">star</span>
                                                     {% endif %}
                                                     {{ panel.title }}
                                                 </h5>
-                                                <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">{{ panel.description|linebreaksbr|truncatechars:130 }}</p>
+                                                <p class="card-text small mb-1 {% if panel.cancelled %}cancelled-text{% endif %}">{{ panel.description|linebreaksbr|truncatechars:130 }}</p>
                                                 <div class="panel-details mt-2">
                                                     {% if panel.host.all %}
                                                     <div class="d-flex gap-2 mb-2">
@@ -1290,10 +1290,10 @@ window.addEventListener('load', function() {
                                                                 {% endif %}>
                                                                 {% if host.image %}
                                                                     <img src="{{ host.image }}" alt="{{ host.name }}" class="host-avatar"
-                                                                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                                                                         style="border-radius: 50%; object-fit: cover;">
                                                                 {% else %}
-                                                                    <div class="host-avatar-initials" 
-                                                                         style="width: 40px; height: 40px; border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                                                    <div class="host-avatar-initials"
+                                                                         style="border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
                                                                         {{ host.get_initials }}
                                                                     </div>
                                                                 {% endif %}
@@ -1301,12 +1301,12 @@ window.addEventListener('load', function() {
                                                         {% endfor %}
                                                     </div>
                                                     {% endif %}
-                                                    <h6 class="mb-1 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
-                                                        <i class="material-icons fs-6" style="font-size: 1.32rem;">schedule</i>
+                                                    <h6 class="mb-1 {% if panel.cancelled %}cancelled-text{% endif %}">
+                                                        <i class="material-icons fs-6">schedule</i>
                                                         {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
                                                     </h6>
-                                                    <h6 class="mb-0 {% if panel.cancelled %}cancelled-text{% endif %}" style="font-size: 1.32rem;">
-                                                        <i class="material-icons fs-6" style="font-size: 1.32rem;">room</i>
+                                                    <h6 class="mb-0 {% if panel.cancelled %}cancelled-text{% endif %}">
+                                                        <i class="material-icons fs-6">room</i>
                                                         {{ panel.room }}
                                                     </h6>
                                                 </div>
@@ -1415,7 +1415,6 @@ window.addEventListener('load', function() {
     border-radius: 4px;
     font-size: 1rem;
     white-space: nowrap;
-    z-index: 1000;
     pointer-events: none;
     opacity: 1;
     transition: opacity 0.15s;
@@ -1432,12 +1431,23 @@ window.addEventListener('load', function() {
     border-color: rgba(0,0,0,0.85) transparent transparent transparent;
     z-index: 1001;
 }
-/* Timeline styles */
+
 .timeline {
     position: relative;
     padding: 0;
     padding-bottom: 36px;
 }
+
+.page-header h1, .page-header p, .page-header .btn {
+    font-size: clamp(0.45rem, 4.1vw, 1.15rem) !important;
+}
+.schedule-container .day-header h3,
+.schedule-container .timeline-row .time-label,
+.schedule-container .form-check-label,
+.schedule-container .form-select {
+    font-size: clamp(0.45rem, 4.1vw, 0.95rem) !important;
+}
+
 
 @media print {
     .filter-rooms {
@@ -1455,7 +1465,6 @@ window.addEventListener('load', function() {
     box-sizing: border-box;
 }
 
-/* Style for the time label block */
 .time-label {
     flex: 0 0 min(90px, 13vw);
     min-width: 50px;
@@ -1476,7 +1485,7 @@ window.addEventListener('load', function() {
     flex: 0 0 min(60px, 14vw);
     min-width: 40px;
     max-width: 60px;
-    font-size: clamp(0.60rem, 1.0vw, 0.80rem);
+    font-size: clamp(0.30rem, 1.0vw, 0.80rem);
 }
 
 .time-content {
@@ -1607,8 +1616,34 @@ html[data-bs-theme="light"] .text-primary {
     height: 24px;
     border-radius: 50%; /* Make it round */
     display: block;
-} 
+}
 
+.host-avatar-container .host-avatar,
+.host-avatar-container .host-avatar-initials {
+	width: clamp(24px, min(8vw, 36px), 36px) !important;
+	height: clamp(24px, min(8vw, 36px), 36px) !important;
+	border-radius: 50% !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	font-weight: 700;
+}
+
+.host-avatar-container .host-avatar {
+	object-fit: cover;
+}
+
+.host-avatar-container .host-avatar-initials {
+	font-size: clamp(0.57rem, 1.7vw, 1rem) !important;
+	line-height: 1 !important;
+}
+
+.host-avatar-container .host-avatar img {
+	width: 100% !important;
+	height: 100% !important;
+	border-radius: 50% !important;
+	object-fit: cover !important;
+}
 
 /* Event card styles */
 .panel-card {
@@ -1619,12 +1654,80 @@ html[data-bs-theme="light"] .text-primary {
     margin: 0.5rem 0;
     box-sizing: border-box;
     color: var(--primary-color);
-    padding: 1.5rem;
+    padding: 0.75rem;
     border-radius: 8px;
     height: auto !important;
     min-height: 140px;
     position: relative;
     text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    font-size: clamp(0.9rem, 1.9vw, 1.1rem);
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-card .panel-time-range {
+    order: -1;
+    margin-bottom: 0.5rem;
+}
+
+
+.panel-card .card-title,
+.panel-card .card-text,
+.panel-card .panel-time-range,
+.panel-card .grid-cell-content .small,
+.panel-details,
+.panel-details,
+.panel-details {
+    font-size: clamp(0.30rem, 1.7vw, 2rem) !important;
+}
+
+.panel-card .panel-time-range i,
+.panel-card .grid-cell-content .small i {
+    font-size: 0.95rem !important;
+}
+
+.panel-card {
+    padding: 0.7rem;
+    min-height: 80px;
+    border-radius: 0.55rem;
+    font-size: clamp(0.78rem, 2.6vw, 2rem);
+    line-height: 1.2;
+}
+.panel-card .card-title,
+.panel-card .card-text,
+.panel-card .panel-time-range,
+.panel-card .grid-cell-content .small {
+    font-size: clamp(0.68rem, 2.4vw, 0.86rem) !important;
+}
+
+.panel-card .card-title {
+    font-weight: 700;
+    font-size: clamp(0.84rem, 2.1vw, 1.12rem) !important;
+    white-space: normal !important;
+    line-height: 1.2 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.panel-card .card-text,
+.panel-card .panel-time-range,
+.panel-card .grid-cell-content .small {
+    font-size: clamp(0.7rem, 2vw, 0.95rem) !important;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
+
+.time-label {
+    font-size: clamp(0.70rem, 2.1vw, 0.82rem) !important;
+    max-width: 6.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Prevent any horizontal overflow from the timeline */
@@ -1929,11 +2032,30 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     padding: 1.25rem 1.5rem 1rem 1.5rem;
     margin-bottom: 1.5rem;
+    margin-top: 0.5rem;
     border: none;
     position: relative;
     cursor: default !important;
     transition: none;
+    font-size: clamp(0.85rem, 1.8vw, 1.05rem);
 }
+
+.modal-panel-card .modal-panel-title,
+.modal-panel-card .modal-panel-time,
+.modal-panel-card .modal-panel-room,
+.modal-panel-card .modal-panel-desc,
+.modal-panel-card .modal-panel-info {
+    font-size: clamp(0.78rem, 1.9vw, 1rem);
+}
+
+.modal-panel-card .modal-panel-title {
+    font-size: clamp(0.98rem, 2.2vw, 1.25rem);
+}
+
+.modal-panel-card .modal-panel-desc {
+    margin-top: 0.5rem;
+}
+
 .modal-panel-card:hover {
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     transform: none;
@@ -1996,7 +2118,104 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     }
 }
 
+.filter-tags.form-check, .filter-rooms.form-check {
+    font-size: clamp(0.72rem, 2.8vw, 1.05rem) !important;
+    padding: 0.7rem 2rem 0.6rem !important;
+    border-radius: 0.65rem !important;
+    margin-bottom: 1rem !important;
+}
 
+.filter-tags.mb-4, .filter-rooms {
+    padding: 0.7rem 0.8rem 0.6rem !important;
+}
+
+.filter-tags .form-check, .filter-rooms .form-check {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0.45rem 0.45rem;
+    margin-bottom: 0.65rem;
+    border-radius: 0.45rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.filter-tags .form-check-input, .filter-rooms .form-check-input {
+    width: auto !important;
+    height: auto !important;
+    min-width: clamp(0.95rem, 3.5vw, 1.3rem) !important;
+    min-height: clamp(0.95rem, 3.5vw, 1.3rem) !important;
+    margin-right: 0.35rem !important;
+    outline: none !important;
+    margin-left: -4px !important;
+    border-width: clamp(1px, 0.14vw, 1.4px) !important;
+    transform: scale(1.07);
+    flex-shrink: 0;
+}
+
+.filter-tags .form-check-label, .filter-rooms .form-check-label {
+    margin: 0;
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-tags .form-check-label span,
+.filter-rooms .form-check-label span {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 0.35rem;
+}
+
+.filter-tags .form-check-input:focus-visible, .filter-rooms .form-check-input:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+.filter-tags .form-check {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.25rem, 0.8vw, 0.45rem);
+    padding: clamp(0.35rem, 1.1vw, 0.5rem);
+}
+
+.filter-tags .form-check-label, .filter-rooms .form-check-label {
+    font-size: clamp(0.72rem, 2.7vw, 1rem) !important;
+    line-height: 1.32;
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.filter-tags h5, .filter-rooms h5 {
+    font-size: clamp(0.84rem, 3vw, 1.1rem) !important;
+    margin-bottom: 0.65rem !important;
+}
+
+.filter-tags .form-check-input:checked ~ .form-check-label,
+.filter-rooms .form-check-input:checked ~ .form-check-label {
+    color: var(--bs-primary) !important;
+    font-weight: 600;
+}
+
+.panel-card:hover {
+    transform: translateY(-1px);
+}
+
+.panel-card {
+    border: 1px solid rgba(255,255,255,0.12);
+    transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.timeline-row {
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    padding-bottom: 0.8rem;
+    margin-bottom: 0.8rem;
+}
 
 /* Print button styles */
 .print-button {
@@ -2054,9 +2273,19 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 }
 
 .table-grid-schedule {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
+    width: min(100%, 100vw) !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+}
+
+.grid-table-container,
+.table-responsive.table-responsive-x-only {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
 }
 
 .table-grid-schedule,
@@ -2133,6 +2362,36 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
 
 #daySelect {
     margin-bottom: 1.5rem;
+}
+
+.day-navigation {
+    padding: 0.65rem 0.65rem 0.5rem;
+    border-radius: 0.7rem;
+    font-size: clamp(0.77rem, 2.6vw, 1.0rem) !important;
+}
+
+#daySelect,
+.day-navigation .form-select,
+.day-navigation select {
+    width: 100% !important;
+    min-height: 2.6rem;
+    font-size: clamp(0.78rem, 2.4vw, 1.05rem) !important;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 0.55rem !important;
+}
+
+.day-navigation label,
+.day-navigation h5 {
+    display: block;
+    font-size: clamp(0.76rem, 2.6vw, 1.0rem) !important;
+    margin-bottom: 0.35rem;
+}
+
+.day-navigation .form-select,
+.day-navigation select {
+    font-size: clamp(0.76rem, 2.6vw, 1.0rem) !important;
+    line-height: 1.35;
+    min-height: 2.7rem;
 }
 
 .day-grid-header {
