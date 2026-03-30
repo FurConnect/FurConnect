@@ -40,4 +40,5 @@ urlpatterns = [
     path('ajax/hosts/reorder/<int:panel_id>/', views.reorder_hosts_ajax, name='reorder_hosts_ajax'),
     path('convention/<int:convention_pk>/import-panels/', views.import_panels_csv, name='import_panels_csv'),
     path('convention/<int:convention_pk>/export-panels/', views.export_panels_csv, name='export_panels_csv'),
+    path('privacy/', views.privacy_policy, name='privacy_policy'),
 ] 

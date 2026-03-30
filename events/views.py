@@ -29,6 +29,10 @@ def schedule(request):
         return redirect('events:convention_detail', pk=convention.pk)
     return render(request, 'events/schedule.html', {'conventions': [], 'current_convention_name': 'FurConnect'})
 
+@require_GET
+def privacy_policy(request):
+    return render(request, 'events/privacy_policy.html')
+
 def convention_detail(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     current_convention_name = convention.name if convention else 'FurConnect'
