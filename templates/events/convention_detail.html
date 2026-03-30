@@ -297,8 +297,13 @@ window.addEventListener('load', function() {
                 }
             });
 
-            // Hide day sections with no visible time rows in list mode
+            // Hide day sections with no visible time rows in list mode, but do not override day filter setting.
             document.querySelectorAll('.day-schedule').forEach(daySection => {
+                if (daySection.classList.contains('day-filter-hidden')) {
+                    // preserve explicit day filter selection
+                    return;
+                }
+
                 const visibleTimeRows = Array.from(daySection.querySelectorAll('.timeline-row')).filter(row => {
                     const rowStyle = window.getComputedStyle(row);
                     return rowStyle.display !== 'none' && rowStyle.visibility !== 'hidden' && rowStyle.opacity !== '0';
@@ -402,19 +407,21 @@ window.addEventListener('load', function() {
 
             if (value === 'all') {
                 daySchedules.forEach(schedule => {
-                    schedule.classList.remove('d-none');
+                    schedule.classList.remove('d-none', 'day-filter-hidden');
                     loadHostImages(schedule);
                 });
-                dayGrids.forEach(grid => grid.classList.remove('d-none'));
+                dayGrids.forEach(grid => grid.classList.remove('d-none', 'day-filter-hidden'));
             } else {
                 daySchedules.forEach((schedule, index) => {
                     const isSelected = index === parseInt(value, 10);
                     schedule.classList.toggle('d-none', !isSelected);
+                    schedule.classList.toggle('day-filter-hidden', !isSelected);
                     if (isSelected) loadHostImages(schedule);
                 });
                 dayGrids.forEach((grid, index) => {
                     const isSelected = index === parseInt(value, 10);
                     grid.classList.toggle('d-none', !isSelected);
+                    grid.classList.toggle('day-filter-hidden', !isSelected);
                 });
             }
 
@@ -591,6 +598,10 @@ window.addEventListener('load', function() {
         }
 
         initFilters();
+
+        // Fallback for select elements (may not always be present in this template)
+        const tagSelect = document.querySelector('select#tagSelect, select[name="tags"], select[name="tag"]');
+        const roomSelect = document.querySelector('select#roomSelect, select[name="rooms"], select[name="room"]');
 
         // Tom Select wrapper for better multi-select tag/room dropdowns
         function initTomSelect() {
@@ -1484,14 +1495,12 @@ window.addEventListener('load', function() {
                                 </li>
                                 <li>
                                     <a class="dropdown-item active filter-tag-item" href="#" data-filter="all">
-                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
                                         <span class="flex-grow-1">All Tags</span>
                                     </a>
                                 </li>
                                 {% for tag in unique_tags %}
                                 <li>
                                     <a class="dropdown-item filter-tag-item" href="#" data-filter="{{ tag.name|lower }}">
-                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
                                         {% with text_color=tag.color|is_light_color|yesno:'#000,#fff' %}
                                         <span class="badge" style="background-color: {{ tag.color }}; color: {{ text_color }};">{{ tag.name }}</span>
                                         {% endwith %}
@@ -1514,14 +1523,12 @@ window.addEventListener('load', function() {
                                 </li>
                                 <li>
                                     <a class="dropdown-item active filter-room-item" href="#" data-filter="all">
-                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
                                         <span class="flex-grow-1">All Rooms</span>
                                     </a>
                                 </li>
                                 {% for room in unique_rooms %}
                                 <li>
                                     <a class="dropdown-item filter-room-item" href="#" data-filter="{{ room.name|lower|slugify }}">
-                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
                                         <span class="flex-grow-1">{{ room.name }}</span>
                                     </a>
                                 </li>
@@ -1824,13 +1831,16 @@ window.addEventListener('load', function() {
     display: flex;
     flex-wrap: wrap;
     gap: 1rem;
-    align-items: flex-start;
-    justify-content: flex-start;
-    text-align: left;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
 .filter-toolbar .day-navigation {
     flex: 1 1 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .filter-tags,
@@ -2299,11 +2309,35 @@ body.grid-view .grid-table-container {
 body.grid-view .time-content,
 body.grid-view .day-header,
 body.grid-view .search-container,
-body.grid-view .filter-tags,
-body.grid-view .filter-rooms,
-body.grid-view .day-navigation,
 body.grid-view .col-md-3 {
     display: none !important;
+}
+
+body.grid-view .filter-toolbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.8rem !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+}
+
+body.grid-view .filter-tags,
+body.grid-view .filter-rooms,
+body.grid-view .day-navigation {
+    display: flex !important;
+    flex: 1 1 48% !important;
+    min-width: 200px !important;
+    max-width: 100% !important;
+    margin-bottom: 0.6rem !important;
+}
+
+body.grid-view .filter-tags,
+body.grid-view .filter-rooms {
+    flex-direction: column !important;
+    padding: 0.6rem !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(148, 163, 184, 0.3) !important;
+    border-radius: 0.65rem !important;
 }
 
 body.grid-view .col-md-9 {
@@ -2950,6 +2984,13 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     font-size: clamp(0.75rem, 1.05vw, 1.02rem) !important;
     font-weight: 600 !important;
     line-height: 1.1 !important;
+}
+
+.control-toolbar #viewToggleBtn,
+.control-toolbar .btn-theme-switch {
+    flex: 0 0 auto !important;
+    min-width: clamp(40px, 9vw, 60px) !important;
+    max-width: clamp(60px, 12vw, 70px) !important;
 }
 
 #viewToggleBtn {
