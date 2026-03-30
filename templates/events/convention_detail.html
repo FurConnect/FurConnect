@@ -8,6 +8,68 @@
 {# Add JSON data for JavaScript #}
 {{ is_staff|json_script:"is-staff-data" }}
 
+<style>
+.filter-dropdown .dropdown-toggle {
+    border: 2px solid rgba(255, 255, 255, 0.14) !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 0 rgba(0,0,0,0);
+}
+
+.filter-dropdown .dropdown-toggle:focus,
+.filter-dropdown .dropdown-toggle:hover {
+    border-color: rgba(40, 167, 69, 0.7) !important;
+    color: #fff !important;
+}
+
+.filter-dropdown .dropdown-menu {
+    border: 1px solid rgba(40, 167, 69, 0.3) !important;
+}
+
+.filter-dropdown .dropdown-item {
+    color: #e9ecef !important;
+    background-color: transparent !important;
+}
+
+.filter-dropdown .dropdown-item:hover {
+    background-color: rgba(40, 167, 69, 0.12) !important;
+    color: #fff !important;
+}
+
+.filter-dropdown .dropdown-item.active {
+    background-color: rgba(40, 167, 69, 0.2) !important;
+    color: #fff !important;
+}
+
+.filter-dropdown .dropdown-item.active .flex-grow-1 {
+    font-weight: 600 !important;
+}
+
+.filter-dropdown .dropdown-item .bi-check-circle-fill {
+    color: #28a745 !important;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.filter-dropdown .dropdown-item.active .bi-check-circle-fill {
+    opacity: 1;
+    transform: scale(1.15);
+    animation: checkboxPop 0.2s ease;
+}
+
+@keyframes checkboxPop {
+    0% { transform: scale(0.7); }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+body.dark-mode .filter-dropdown .dropdown-item,
+body.dark-mode .filter-dropdown .dropdown-item.active {
+    color: #e0e0e0 !important;
+    text-transform: none !important;
+}
+</style>
+
 <script id="base-urls" type="application/json" 
     data-is-staff="{{ is_staff|yesno:'true,false' }}"
     data-host-edit-url-base="{% url 'events:host_edit' 0 %}"
@@ -214,17 +276,72 @@ window.addEventListener('load', function() {
 
         // Function to update time slots visibility
         function updateTimeSlotsVisibility() {
+            const isElementVisible = (el) => {
+                if (!el) return false;
+                if (el.classList.contains('hidden') || el.classList.contains('d-none')) return false;
+                const style = window.getComputedStyle(el);
+                return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+            };
+
+            // List view timeline rows
             document.querySelectorAll('.timeline-row').forEach(timeRow => {
                 const panelsContainer = timeRow.querySelector('.time-content');
-                const panels = panelsContainer ? panelsContainer.querySelectorAll('.panel-card') : [];
-                
-                // Check if there are any visible panels in this time row
-                const hasVisiblePanels = Array.from(panels).some(panel => 
-                    panel.style.display !== 'none' && !panel.classList.contains('hidden')
-                );
-                
-                // Show/hide the time row based on visible panels
-                timeRow.style.display = hasVisiblePanels ? 'flex' : 'none';
+                const timePanels = panelsContainer ? panelsContainer.querySelectorAll('.panel-card, .panel-card-mobile') : [];
+                const hasVisiblePanels = Array.from(timePanels).some(panel => isElementVisible(panel));
+                if (hasVisiblePanels) {
+                    timeRow.style.removeProperty('display');
+                    timeRow.classList.remove('d-none');
+                } else {
+                    timeRow.style.setProperty('display', 'none', 'important');
+                    timeRow.classList.add('d-none');
+                }
+            });
+
+            // Hide day sections with no visible time rows in list mode
+            document.querySelectorAll('.day-schedule').forEach(daySection => {
+                const visibleTimeRows = Array.from(daySection.querySelectorAll('.timeline-row')).filter(row => {
+                    const rowStyle = window.getComputedStyle(row);
+                    return rowStyle.display !== 'none' && rowStyle.visibility !== 'hidden' && rowStyle.opacity !== '0';
+                });
+                if (visibleTimeRows.length > 0) {
+                    daySection.style.removeProperty('display');
+                    daySection.classList.remove('d-none');
+                } else {
+                    daySection.style.setProperty('display', 'none', 'important');
+                    daySection.classList.add('d-none');
+                }
+            });
+
+            // Grid table view time rows (if using grid schedule mode)
+            document.querySelectorAll('.table-grid-schedule tbody tr').forEach(tableRow => {
+                const panelCells = tableRow.querySelectorAll('.grid-cell-card');
+                if (!panelCells.length) {
+                    // No panel cells at all => hide time row as no content remains.
+                    tableRow.style.setProperty('display', 'none', 'important');
+                    return;
+                }
+
+                const hasVisiblePanel = Array.from(panelCells).some(panel => isElementVisible(panel));
+                if (hasVisiblePanel) {
+                    tableRow.style.setProperty('display', '', 'important');
+                } else {
+                    tableRow.style.setProperty('display', 'none', 'important');
+                }
+            });
+
+            // Hide empty grid day sections in grid view
+            document.querySelectorAll('.day-grid').forEach(dayGrid => {
+                const visibleRows = Array.from(dayGrid.querySelectorAll('tr')).filter(row => {
+                    const rowStyle = window.getComputedStyle(row);
+                    return rowStyle.display !== 'none' && rowStyle.visibility !== 'hidden' && rowStyle.opacity !== '0';
+                });
+                if (visibleRows.length > 0) {
+                    dayGrid.style.removeProperty('display');
+                    dayGrid.classList.remove('d-none');
+                } else {
+                    dayGrid.style.setProperty('display', 'none', 'important');
+                    dayGrid.classList.add('d-none');
+                }
             });
         }
 
@@ -265,140 +382,342 @@ window.addEventListener('load', function() {
             }
         });
 
-        // Day Navigation (Dropdown)
-        const daySelect = document.getElementById('daySelect');
+        // Day Navigation (Chip buttons)
+        const dayButtons = document.querySelectorAll('.day-button');
         const daySchedules = document.querySelectorAll('.day-schedule');
         const dayGrids = document.querySelectorAll('.day-grid');
 
-        // Get the stored day index or default to 0
-        let currentDayIndex = parseInt(localStorage.getItem('conventionDayIndex')) || 0;
-        
-        // Ensure the index is valid
-        if (currentDayIndex >= daySelect?.options?.length) {
-            currentDayIndex = 0;
+        let currentDayIndex = localStorage.getItem('conventionDayIndex') || 'all';
+
+        function setActiveDayButton(selectedValue) {
+            dayButtons.forEach(button => {
+                button.classList.toggle('active', button.dataset.dayIndex === String(selectedValue));
+            });
         }
 
-        function updateDayNavigation() {
-            // Only update dropdown if it exists
-            if (daySelect) {
-                const selectedValue = daySelect.value;
-                
-                if (selectedValue === 'all') {
-                    // Show all day schedules and grids
-                    daySchedules.forEach(schedule => {
-                        schedule.classList.remove('d-none');
-                        loadHostImages(schedule);
-                    });
-                    dayGrids.forEach(grid => {
-                        grid.classList.remove('d-none');
-                    });
+        function updateDayNavigation(selectedValue = currentDayIndex) {
+            if (!daySchedules.length) return;
+
+            const value = selectedValue || 'all';
+
+            if (value === 'all') {
+                daySchedules.forEach(schedule => {
+                    schedule.classList.remove('d-none');
+                    loadHostImages(schedule);
+                });
+                dayGrids.forEach(grid => grid.classList.remove('d-none'));
             } else {
-                    // Show only selected day
-                    daySchedules.forEach((schedule, index) => {
-                        const isSelected = index === parseInt(selectedValue);
-                        schedule.classList.toggle('d-none', !isSelected);
-                        if (isSelected) {
-                            loadHostImages(schedule);
-                        }
-                    });
-                    dayGrids.forEach((grid, index) => {
-                        const isSelected = index === parseInt(selectedValue);
-                        grid.classList.toggle('d-none', !isSelected);
-            });
-                }
-                
-                // Store the current selection
-                localStorage.setItem('conventionDayIndex', selectedValue);
-                
-                // Update time slots visibility after day change
-                updateTimeSlotsVisibility();
+                daySchedules.forEach((schedule, index) => {
+                    const isSelected = index === parseInt(value, 10);
+                    schedule.classList.toggle('d-none', !isSelected);
+                    if (isSelected) loadHostImages(schedule);
+                });
+                dayGrids.forEach((grid, index) => {
+                    const isSelected = index === parseInt(value, 10);
+                    grid.classList.toggle('d-none', !isSelected);
+                });
             }
-        }
 
-        // Add event listener for day selection
-        if (daySelect) {
-            daySelect.addEventListener('change', updateDayNavigation);
-            // Initial update - also load images for the initially visible day
-            updateDayNavigation();
-        }
-
-        // Filter Logic (using checkboxes)
-        const tagCheckboxes = document.querySelectorAll('.filter-tag-checkbox');
-        const roomCheckboxes = document.querySelectorAll('.filter-room-checkbox');
-        const allTagsCheckbox = document.getElementById('filterAllTags');
-        const allRoomsCheckbox = document.getElementById('filterAllRooms');
-
-        function applyFilters() {
-            const activeTagFilters = Array.from(tagCheckboxes)
-                .filter(checkbox => checkbox.checked && checkbox.dataset.filter !== 'all')
-                .map(checkbox => checkbox.dataset.filter);
-
-            const activeRoomFilters = Array.from(roomCheckboxes)
-                 .filter(checkbox => checkbox.checked && checkbox.dataset.filter !== 'all')
-                 .map(checkbox => checkbox.dataset.filter);
-
-            const panels = document.querySelectorAll('.panel-card, .grid-cell-card');
-            panels.forEach(panel => {
-                const panelTags = (panel.dataset.tags || '').split(',').map(tag => tag.trim()).filter(tag => tag !== '');
-                const panelRoomSlug = (panel.dataset.room || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-                // Check if panel has at least one active tag filter OR no tag filters are active (if 'All Events' is checked)
-                const tagMatch = activeTagFilters.length === 0 || activeTagFilters.some(filter => panelTags.includes(filter));
-
-                // Check if panel is in an active room filter OR no room filters are active (if 'All Rooms' is checked)
-                const roomMatch = activeRoomFilters.length === 0 || activeRoomFilters.includes(panelRoomSlug);
-                const shouldShow = tagMatch && roomMatch;
-
-                panel.classList.toggle('hidden', !shouldShow);
-                panel.style.display = shouldShow ? 'block' : 'none';
-
-                if (panel.classList.contains('grid-cell-card')) {
-                    const parentTd = panel.closest('td');
-                    if (parentTd) {
-                        parentTd.style.display = shouldShow ? '' : 'none';
-                    }
-                }
-            });
-
-            // Update time slots visibility after filtering
+            setActiveDayButton(value);
+            localStorage.setItem('conventionDayIndex', value);
             updateTimeSlotsVisibility();
         }
 
-        // Event listeners for checkboxes
-        tagCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                if (this.dataset.filter === 'all') {
-                    // If 'All Events' is checked, uncheck all others
-                    tagCheckboxes.forEach(cb => {
-                        if (cb !== this) cb.checked = false;
-                    });
-                } else {
-                    // If any other tag is checked, uncheck 'All Events'
-                    allTagsCheckbox.checked = false;
-                }
-                applyFilters();
+        dayButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const selected = button.dataset.dayIndex;
+                currentDayIndex = selected;
+                updateDayNavigation(selected);
             });
         });
 
-        roomCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                if (this.dataset.filter === 'all') {
-                    // If 'All Rooms' is checked, uncheck all others
-                    roomCheckboxes.forEach(cb => {
-                        if (cb !== this) cb.checked = false;
-                    });
-                } else {
-                    // If any other room is checked, uncheck 'All Rooms'
-                    allRoomsCheckbox.checked = false;
-                }
-                applyFilters();
+        updateDayNavigation(currentDayIndex);
+
+        // Filter logic (programming-style dropdown controls)
+        let activeTagFilters = ['all'];
+        let activeRoomFilters = ['all'];
+
+        function updateFilterSummary(filterType) {
+            const display = document.getElementById(`${filterType}FilterText`);
+            const activeSet = filterType === 'tag' ? activeTagFilters : activeRoomFilters;
+
+            if (!display) return;
+
+            if (activeSet.includes('all') || activeSet.length === 0) {
+                display.textContent = filterType === 'tag' ? 'All Tags' : 'All Rooms';
+            } else if (activeSet.length === 1) {
+                const item = document.querySelector(`.filter-${filterType}-item[data-filter="${activeSet[0]}"]`);
+                display.textContent = item ? item.textContent.trim() : `${activeSet[0]}`;
+            } else {
+                display.textContent = `${activeSet.length} selected`;
+            }
+        }
+
+        function refreshFilterUI(filterType) {
+            const items = document.querySelectorAll(`.filter-${filterType}-item`);
+            const activeSet = filterType === 'tag' ? activeTagFilters : activeRoomFilters;
+
+            items.forEach(item => {
+                const value = item.dataset.filter;
+                const selected = activeSet.includes('all') ? value === 'all' : activeSet.includes(value);
+                item.classList.toggle('active', selected);
+                const icon = item.querySelector('.bi-check-circle-fill');
+                if (icon) icon.classList.toggle('d-none', !selected);
             });
-        });
 
-        // Initial application of filters on page load
-        // Removed automatic initial check of "All Events" and "All Rooms"
+            const badge = document.getElementById(`${filterType}BadgeCount`);
+            if (badge) {
+                const count = activeSet.includes('all') ? 0 : activeSet.length;
+                badge.textContent = count;
+                badge.classList.toggle('d-none', count === 0);
+            }
 
-        applyFilters();
+            updateFilterSummary(filterType);
+        }
+
+        function applyFilters() {
+            const tagFilters = activeTagFilters.includes('all') ? [] : activeTagFilters;
+            const roomFilters = activeRoomFilters.includes('all') ? [] : activeRoomFilters;
+
+            const panels = document.querySelectorAll('.panel-card, .panel-card-mobile, .grid-cell-card');
+            panels.forEach(panel => {
+                const panelTags = (panel.dataset.tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
+                const panelRoomSlug = (panel.dataset.room || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+                const tagMatch = tagFilters.length === 0 || tagFilters.some(filter => panelTags.includes(filter));
+                const roomMatch = roomFilters.length === 0 || roomFilters.includes(panelRoomSlug);
+                const shouldShow = tagMatch && roomMatch;
+
+                panel.classList.toggle('hidden', !shouldShow);
+                if (shouldShow) {
+                    panel.style.setProperty('display', 'block', 'important');
+                    panel.classList.remove('d-none');
+                } else {
+                    panel.style.setProperty('display', 'none', 'important');
+                    panel.classList.add('d-none');
+                }
+
+                if (panel.classList.contains('grid-cell-card')) {
+                    const parentTd = panel.closest('td');
+                    if (parentTd) parentTd.style.display = shouldShow ? '' : 'none';
+                }
+            });
+
+            updateTimeSlotsVisibility();
+        }
+
+        function setFilterState(filterType, value) {
+            let targetSet = filterType === 'tag' ? activeTagFilters : activeRoomFilters;
+
+            if (value === 'all') {
+                targetSet = ['all'];
+            } else {
+                if (targetSet.includes('all')) {
+                    targetSet = [];
+                }
+
+                if (targetSet.includes(value)) {
+                    targetSet = targetSet.filter(v => v !== value);
+                } else {
+                    targetSet.push(value);
+                }
+
+                if (targetSet.length === 0) {
+                    targetSet = ['all'];
+                }
+            }
+
+            if (filterType === 'tag') {
+                activeTagFilters = targetSet;
+            } else {
+                activeRoomFilters = targetSet;
+            }
+
+            refreshFilterUI(filterType);
+            applyFilters();
+        }
+
+        function initFilters() {
+            document.querySelectorAll('.filter-tag-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    setFilterState('tag', this.dataset.filter);
+                });
+            });
+
+            document.querySelectorAll('.filter-room-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    setFilterState('room', this.dataset.filter);
+                });
+            });
+
+            // Keep dropdown open while toggling filters
+            document.querySelectorAll('.filter-dropdown .dropdown-menu .dropdown-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+
+            const tagSearchInput = document.getElementById('tagSearchInput');
+            if (tagSearchInput) {
+                tagSearchInput.addEventListener('input', function() {
+                    const query = this.value.trim().toLowerCase();
+                    document.querySelectorAll('.filter-tag-item').forEach(item => {
+                        if (item.dataset.filter === 'all') return;
+                        const text = item.textContent.trim().toLowerCase();
+                        const li = item.closest('li');
+                        if (li) li.style.display = text.includes(query) ? '' : 'none';
+                    });
+                });
+            }
+
+            const roomSearchInput = document.getElementById('roomSearchInput');
+            if (roomSearchInput) {
+                roomSearchInput.addEventListener('input', function() {
+                    const query = this.value.trim().toLowerCase();
+                    document.querySelectorAll('.filter-room-item').forEach(item => {
+                        if (item.dataset.filter === 'all') return;
+                        const text = item.textContent.trim().toLowerCase();
+                        const li = item.closest('li');
+                        if (li) li.style.display = text.includes(query) ? '' : 'none';
+                    });
+                });
+            }
+
+            refreshFilterUI('tag');
+            refreshFilterUI('room');
+            applyFilters();
+        }
+
+        initFilters();
+
+        // Tom Select wrapper for better multi-select tag/room dropdowns
+        function initTomSelect() {
+            if (typeof window.TomSelect !== 'function') {
+                console.warn('TomSelect not available yet, retrying...');
+                return false;
+            }
+
+            try {
+                if (tagSelect) {
+                    // prevent double init
+                    if (!tagSelect.classList.contains('tomselected')) {
+                        new TomSelect(tagSelect, {
+                            plugins: ['remove_button'],
+                            persist: false,
+                            create: false,
+                            hideSelected: true,
+                            maxItems: null,
+                            placeholder: 'Choose tags (or All Events)',
+                            onChange: function() {
+                                syncDropdownSpecialOption(tagSelect);
+                                applyFilters();
+                            }
+                        });
+                        tagSelect.classList.add('tomselected');
+                    }
+
+                    // Hide native select when TomSelect is in use
+                    tagSelect.style.display = 'none';
+                    tagSelect.closest('.filter-dropdown')?.classList.add('tomselect-active');
+                }
+
+                if (roomSelect) {
+                    if (!roomSelect.classList.contains('tomselected')) {
+                        new TomSelect(roomSelect, {
+                            plugins: ['remove_button'],
+                            persist: false,
+                            create: false,
+                            hideSelected: true,
+                            maxItems: null,
+                            placeholder: 'Choose rooms (or All Rooms)',
+                            onChange: function() {
+                                syncDropdownSpecialOption(roomSelect);
+                                applyFilters();
+                            }
+                        });
+                        roomSelect.classList.add('tomselected');
+                    }
+
+                    // Hide native select when TomSelect is in use
+                    roomSelect.style.display = 'none';
+                    roomSelect.closest('.filter-dropdown')?.classList.add('tomselect-active');
+                }
+
+                return true;
+            } catch (err) {
+                console.error('TomSelect initialization failed:', err);
+                return false;
+            }
+        }
+
+        function enableNativeSelectFallback() {
+            if (tagSelect) {
+                tagSelect.style.display = '';
+                tagSelect.closest('.filter-dropdown')?.classList.remove('tomselect-active');
+            }
+            if (roomSelect) {
+                roomSelect.style.display = '';
+                roomSelect.closest('.filter-dropdown')?.classList.remove('tomselect-active');
+            }
+        }
+
+        function loadTomSelectScript() {
+            if (window.TomSelect) {
+                return; // Already available
+            }
+            if (document.getElementById('tom-select-cdn-script')) {
+                return; // Already injected
+            }
+            const script = document.createElement('script');
+            script.id = 'tom-select-cdn-script';
+            script.src = 'https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js';
+            script.async = true;
+            script.onload = function() {
+                console.info('TomSelect CDN script loaded dynamically.');
+                if (typeof window.TomSelect === 'function') {
+                    console.info('TomSelect is now available after script load.');
+                    initTomSelect();
+                    applyFilters();
+                } else {
+                    console.warn('TomSelect script loaded but window.TomSelect is not yet defined.');
+                }
+            };
+            script.onerror = function(err) {
+                console.error('Failed loading TomSelect CDN script dynamically.', err);
+            };
+            document.head.appendChild(script);
+            console.info('TomSelect CDN script injection requested.');
+        }
+
+        let tomSetInitAttempts = 0;
+        const tomSetMaxAttempts = 12;
+        let tomSetInitialized = false;
+
+        const tomSetInterval = setInterval(() => {
+            tomSetInitAttempts += 1;
+            console.log('TomSelect init attempt', tomSetInitAttempts, 'window.TomSelect:', typeof window.TomSelect);
+
+            if (!window.TomSelect) {
+                loadTomSelectScript();
+            }
+
+            if (window.TomSelect && !tomSetInitialized) {
+                tomSetInitialized = initTomSelect();
+                if (tomSetInitialized) {
+                    applyFilters();
+                }
+            }
+
+            if (tomSetInitialized || tomSetInitAttempts >= tomSetMaxAttempts) {
+                if (!tomSetInitialized) {
+                    console.warn('TomSelect could not be initialized after multiple attempts. Running fallback filtering mode.');
+                    enableNativeSelectFallback();
+                }
+                clearInterval(tomSetInterval);
+            }
+        }, 250);
 
         // Panel Card Click Handler
         document.querySelectorAll('.panel-card').forEach(panelCard => {
@@ -524,8 +843,14 @@ window.addEventListener('load', function() {
                             });
                         }
                         
-                        card.style.display = isVisible ? 'block' : 'none';
-                        if (isVisible) hasVisiblePanels = true;
+                        if (isVisible) {
+                            card.style.setProperty('display', 'block', 'important');
+                            card.classList.remove('d-none');
+                            hasVisiblePanels = true;
+                        } else {
+                            card.style.setProperty('display', 'none', 'important');
+                            card.classList.add('d-none');
+                        }
                     });
                     
                     schedule.style.display = hasVisiblePanels ? 'block' : 'none';
@@ -1084,7 +1409,7 @@ window.addEventListener('load', function() {
             });
         </script>
         <div class="theme-switch-container mt-3"></div>
-            <button id="page-theme-btn" style="background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark)); border: none; font-weight: 500; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(98,0,234,0.10);" class="btn btn-primary btn-theme-switch" type="button" aria-label="Toggle light/dark theme">
+            <button id="page-theme-btn" style="background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark)); border: none; font-weight: 500; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(98,0,234,0.10);margin-left:-8px;" class="btn btn-primary btn-theme-switch" type="button" aria-label="Toggle light/dark theme">
                 <span class="theme-btn-icon">☀</span>
             </button>
             <input type="hidden" id="page-theme-toggle" />
@@ -1128,66 +1453,92 @@ window.addEventListener('load', function() {
             </div>
         </div>
 
-        <!-- Main Content Row -->
-        <div class="row flex-column flex-md-row">
-            <!-- Sidebar Column: appears on top on mobile, right on desktop -->
-            <div class="col-12 col-md-3 order-1 order-md-2">
-                <!-- Day Navigation (Dropdown) -->
-                {% if convention.days.count > 1 %}
-                <div class="day-navigation mb-4">
-                    <h5>Select day</h5>
-                    <select class="form-select" id="daySelect">
-                        <option value="all">Show entire event</option>
-                        {% for day in convention.days.all %}
-                        <option value="{{ forloop.counter0 }}" data-day-id="{{ day.id }}" data-date="{{ day.date|date:'Y-m-d' }}">
-                            {{ day.date|date:"l, M d, Y" }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {% endif %}
+        <!-- Filter Toolbar (Top) -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="filter-toolbar">
+                    <div class="day-navigation mb-3">
+                        <div class="filter-chip-container" id="dayButtons">
+                            <span class="filter-chip active day-button" data-day-index="all" id="dayButtonAll">
+                                <span class="day-button-day">ALL</span>
+                                <span class="day-button-date">DAYS</span>
+                            </span>
+                            {% for day in convention.days.all %}
+                            <span class="filter-chip day-button" data-day-index="{{ forloop.counter0 }}" title="{{ day.date|date:'l, M d, Y' }}">
+                                <span class="day-button-day">{{ day.date|date:"D"|upper }}</span>
+                                <span class="day-button-date">{{ day.date|date:"M d" }}</span>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
 
-                <!-- Filter Tags (Checkboxes) -->
-                <div class="filter-tags mb-4">
-                    <h5>Filter by Tag</h5>
-                    <div class="form-check">
-                        <input class="form-check-input filter-tag-checkbox" type="checkbox" value="all" id="filterAllTags" data-filter="all" checked>
-                        <label class="form-check-label" for="filterAllTags">
-                            All Events
-                        </label>
+                    <div class="filter-tags mb-3">
+                        <div class="filter-dropdown">
+                            <button class="btn btn-outline-primary btn-sm w-100 dropdown-toggle" type="button" id="tagFilterDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                <i class="bi bi-tag"></i>
+                                <span id="tagFilterText">All Tags</span>
+                            </button>
+                            <ul class="dropdown-menu w-100" aria-labelledby="tagFilterDropdown">
+                                <li class="filter-search">
+                                    <input type="text" id="tagSearchInput" class="form-control form-control-sm" placeholder="Search tags..." autocomplete="off">
+                                </li>
+                                <li>
+                                    <a class="dropdown-item active filter-tag-item" href="#" data-filter="all">
+                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
+                                        <span class="flex-grow-1">All Tags</span>
+                                    </a>
+                                </li>
+                                {% for tag in unique_tags %}
+                                <li>
+                                    <a class="dropdown-item filter-tag-item" href="#" data-filter="{{ tag.name|lower }}">
+                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
+                                        {% with text_color=tag.color|is_light_color|yesno:'#000,#fff' %}
+                                        <span class="badge" style="background-color: {{ tag.color }}; color: {{ text_color }};">{{ tag.name }}</span>
+                                        {% endwith %}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                     </div>
-                    {% for tag in unique_tags %}
-                    <div class="form-check">
-                        <input class="form-check-input filter-tag-checkbox" type="checkbox" value="{{ tag.name|lower }}" id="filterTag_{{ tag.id }}" data-filter="{{ tag.name|lower }}">
-                        <label class="form-check-label" for="filterTag_{{ tag.id }}">
-                            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; background-color: {{ tag.color }};"></span>
-                            {{ tag.name }}
-                        </label>
-                    </div>
-                    {% endfor %}
-                </div>
 
-                <!-- Filter Rooms (Checkboxes) -->
-                <div class="filter-rooms mb-4">
-                    <h5>Filter by Room</h5>
-                    <div class="form-check">
-                        <input class="form-check-input filter-room-checkbox" type="checkbox" value="all" id="filterAllRooms" data-filter="all" checked>
-                        <label class="form-check-label" for="filterAllRooms">
-                            All Rooms
-                        </label>
+                    <div class="filter-rooms mb-3">
+                        <div class="filter-dropdown">
+                            <button class="btn btn-outline-primary btn-sm w-100 dropdown-toggle" type="button" id="roomFilterDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                <i class="bi bi-house-door"></i>
+                                <span id="roomFilterText">All Rooms</span>
+                            </button>
+                            <ul class="dropdown-menu w-100" aria-labelledby="roomFilterDropdown">
+                                <li class="filter-search">
+                                    <input type="text" id="roomSearchInput" class="form-control form-control-sm" placeholder="Search rooms..." autocomplete="off">
+                                </li>
+                                <li>
+                                    <a class="dropdown-item active filter-room-item" href="#" data-filter="all">
+                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
+                                        <span class="flex-grow-1">All Rooms</span>
+                                    </a>
+                                </li>
+                                {% for room in unique_rooms %}
+                                <li>
+                                    <a class="dropdown-item filter-room-item" href="#" data-filter="{{ room.name|lower|slugify }}">
+                                        <i class="bi bi-check-circle-fill me-2 text-success d-none"></i>
+                                        <span class="flex-grow-1">{{ room.name }}</span>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                     </div>
-                    {% for room in unique_rooms %}
-                    <div class="form-check">
-                        <input class="form-check-input filter-room-checkbox" type="checkbox" value="{{ room.name|lower|slugify }}" id="filterRoom_{{ room.id }}" data-filter="{{ room.name|lower|slugify }}">
-                        <label class="form-check-label" for="filterRoom_{{ room.id }}">
-                            {{ room.name }}
-                        </label>
-                    </div>
-                    {% endfor %}
                 </div>
             </div>
-            <!-- Main Schedule Column -->
-            <div class="col-12 col-md-9 order-2 order-md-1">
+        </div>
+
+        <div id="noEventsMessage" class="alert alert-warning d-none" role="alert" style="margin: 1rem 0;">
+            No events match the selected filters.
+        </div>
+
+        <div class="row">
+            <div class="col-12">
                 <!-- Schedule Display -->
                 <div class="schedule-container">
                     <!-- Grid table mode (room columns, time rows) -->
@@ -1449,7 +1800,7 @@ window.addEventListener('load', function() {
 .page-header h1, .page-header p, .page-header .btn {
     font-size: clamp(0.45rem, 4.1vw, 1.15rem) !important;
 }
-.schedule-container .day-header h3,
+
 .schedule-container .timeline-row .time-label,
 .schedule-container .form-check-label,
 .schedule-container .form-select {
@@ -1457,10 +1808,77 @@ window.addEventListener('load', function() {
     font-size: clamp(0.45rem, 4.1vw, 0.95rem) !important;
 }
 
+.schedule-container .day-header h3 {
+    text-align: center !important;
+    font-size: clamp(0.45rem, 4.1vw, 1.25rem) !important;
+}
+
 
 @media print {
     .filter-rooms {
         display: none !important;
+    }
+}
+
+.filter-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.filter-toolbar .day-navigation {
+    flex: 1 1 100%;
+}
+
+.filter-tags,
+.filter-rooms {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: clamp(220px, 30%, 320px);
+    max-width: clamp(320px, 48%, 480px);
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.4rem;
+    padding: 0.6rem;
+    box-sizing: border-box;
+    min-height: clamp(92px, 7vw, 132px);
+    max-height: clamp(112px, 9vw, 140px);
+}
+
+.filter-tags h5,
+.filter-rooms h5 {
+    margin-bottom: 0.35rem !important;
+}
+
+.filter-tags .filter-dropdown,
+.filter-rooms .filter-dropdown {
+    width: 100% !important;
+}
+
+.filter-tags .dropdown-toggle,
+.filter-rooms .dropdown-toggle {
+    width: 100% !important;
+}
+
+@media (max-width: 1024px) {
+    .filter-tags,
+    .filter-rooms {
+        min-width: 220px;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .filter-toolbar {
+        flex-direction: column;
+    }
+    .filter-tags,
+    .filter-rooms {
+        flex: 1 1 100%;
     }
 }
 
@@ -2036,21 +2454,22 @@ html[data-bs-theme="light"] .table-grid-schedule td {
 
 html[data-bs-theme="light"] .nav-tabs {
     background-color: #ffffff !important;
-    border-color: #dee2e6 !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 html[data-bs-theme="light"] .nav-tabs .nav-link {
     color: #0d2149 !important;
-    background-color: #ffffff !important;
-    border-color: #dee2e6 !important;
+    background-color: #f9fbff !important;
+    border-color: #cfd6e2 !important;
 }
 html[data-bs-theme="light"] .nav-tabs .nav-link.active,
 html[data-bs-theme="light"] .nav-tabs .nav-link.show {
-    color: #0d2149 !important;
-    background-color: #eaf1ff !important;
+    color: #ffffff !important;
+    background-color: #1a53d0 !important;
     font-weight: 700 !important;
-    border: 1px solid #0d2149 !important;
-    border-bottom-color: #eaf1ff !important;
-    box-shadow: 0 2px 6px rgba(13, 33, 73, 0.18) !important;
+    border: 1px solid #14429a !important;
+    border-bottom-color: #1a53d0 !important;
+    box-shadow: 0 4px 10px rgba(26, 83, 208, 0.3) !important;
     border-radius: 0.35rem 0.35rem 0 0 !important;
 }
 
@@ -2066,6 +2485,94 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     border-radius: 0.35rem 0.35rem 0 0 !important;
 }
 
+.improved-nav-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+.improved-nav-tabs .nav-item {
+    flex: 0 0 auto !important;
+    min-width: clamp(120px, 22vw, 70px) !important;
+    max-width: clamp(140px, 30vw, 110px) !important;
+}
+
+.improved-nav-tabs .nav-link {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-height: clamp(36px, 4vh, 48px) !important;
+    width: 100% !important;
+}
+
+@media (max-width: 500px) {
+    .improved-nav-tabs {
+        flex-wrap: wrap !important;
+        justify-content: flex-start !important;
+    }
+
+    .improved-nav-tabs .nav-item {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .improved-nav-tabs .nav-link {
+        min-height: clamp(42px, 6vh, 56px) !important;
+        font-size: clamp(0.75rem, 3vw, 0.95rem) !important;
+        border-radius: 0.5rem !important;
+        margin-bottom: 0.3rem !important;
+    }
+
+    .filter-tags, .filter-rooms {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .filter-toolbar {
+        background: rgba(255, 255, 255, 0.06) !important;
+    }
+
+    html[data-bs-theme="light"] .filter-toolbar {
+        background: rgba(245, 245, 245, 0.8) !important;
+        border-color: rgba(186, 193, 206, 0.45) !important;
+    }
+
+    html[data-bs-theme="light"] .filter-tags,
+    html[data-bs-theme="light"] .filter-rooms {
+        background: rgba(255,255,255,0.92) !important;
+        border: 1px solid rgba(175, 184, 206, 0.65) !important;
+    }
+
+    html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
+        background: #f8f9fb !important;
+        border-color: rgba(170, 180, 210, 0.8) !important;
+        color: #1f2c48 !important;
+    }
+
+    html[data-bs-theme="light"] .improved-nav-tabs .nav-link.active,
+    html[data-bs-theme="light"] .improved-nav-tabs .nav-link.show {
+        background: #e7edf8 !important;
+        border-color: #95b3e8 !important;
+        color: #13204d !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .improved-nav-tabs .nav-item {
+        min-width: 100% !important;
+        max-width: 100% !important;
+    }
+}
 
 .speaker-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -2282,7 +2789,31 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     outline-offset: 2px;
 }
 
-.filter-tags .form-check {
+.filter-tags .form-check-input,
+.filter-rooms .form-check-input {
+    width: clamp(0.95rem, 3.5vw, 1.3rem) !important;
+    height: clamp(0.95rem, 3.5vw, 1.3rem) !important;
+    min-width: clamp(0.95rem, 3.5vw, 1.3rem) !important;
+    min-height: clamp(0.95rem, 3.5vw, 1.3rem) !important;
+    border: 1px solid rgba(148, 163, 184, 0.8) !important;
+    border-radius: 0.25rem !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.filter-tags .form-check-input:checked,
+.filter-rooms .form-check-input:checked {
+    background-color: #28a745 !important;
+    border-color: #28a745 !important;
+}
+
+.filter-tags .form-check-input:checked::before,
+.filter-rooms .form-check-input:checked::before {
+    border-color: #fff !important;
+    background-color: #28a745 !important;
+}
+
+.filter-tags .form-check,
+.filter-rooms .form-check {
     display: flex;
     align-items: center;
     gap: clamp(0.25rem, 0.8vw, 0.45rem);
@@ -2481,6 +3012,75 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     margin-bottom: 1rem;
 }
 
+/* Top pill filter toolbar and chips styling */
+.filter-toolbar {
+    background: transparent !important;
+    border-radius: 14px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.filter-tags,
+.filter-rooms {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.filter-toolbar .day-navigation,
+.filter-toolbar .filter-tags,
+.filter-toolbar .filter-rooms {
+    margin-bottom: 0.2rem;
+}
+
+.filter-toolbar h5 {
+    color: #d0d7ff;
+    font-size: 0.86rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.03em;
+}
+
+.filter-chip-container {
+    gap: 0.45rem;
+}
+
+.filter-chip {
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.04);
+    color: #d6d9ff;
+    padding: 0.38rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.filter-chip:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.filter-chip.active {
+    border-color: #4f5ff0;
+    background: linear-gradient(135deg, rgba(95, 115, 255, 0.95), rgba(76, 245, 255, 0.95));
+    color: #0c1d3a;
+    box-shadow: 0 0 0 1px rgba(72, 165, 246, 0.55), 0 4px 20px rgba(14, 78, 198, 0.35);
+}
+
+.filter-chip.active .tag-dot,
+.filter-chip.active .room-dot {
+    opacity: 0.8;
+}
+
+.filter-toolbar .filter-chip-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: center;
+}
 
 .table-grid-schedule tbody tr {
     min-height: 40px !important;
@@ -2523,24 +3123,421 @@ html[data-bs-theme="dark"] .nav-tabs .nav-link.show {
     width: 100%;
 }
 
-#daySelect {
-    margin-bottom: 1.5rem;
+.day-navigation {
+    padding: 0.4rem 0.2rem;
+    border-radius: 0.75rem;
+    background: transparent;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.7rem;
+}
+
+.day-tabs-container,
+.filter-toolbar {
+    background-color: #f8f9fa;
+    padding: 0.75rem 0.9rem;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 0 rgba(16, 24, 40, 0.04);
+}
+
+html[data-bs-theme="dark"] .filter-toolbar,
+html[data-bs-theme="dark"] .day-tabs-container {
+    border: 1px solid rgba(173, 181, 189, 0.35) !important;
+}
+
+
+/* Light mode quick fixes */
+html[data-bs-theme="light"] .filter-toolbar,
+html[data-bs-theme="light"] .day-tabs-container {
+    background-color: #ffffff !important;
+    border: 1px solid #d1d9e5 !important;
+    color: #1b3660 !important;
+}
+
+html[data-bs-theme="light"] .filter-dropdown .dropdown-toggle {
+    border: 1px solid rgba(148, 163, 184, 0.7) !important;
+}
+
+html[data-bs-theme="light"] .filter-tags,
+html[data-bs-theme="light"] .filter-rooms,
+html[data-bs-theme="light"] .day-button,
+html[data-bs-theme="light"] .filter-dropdown .dropdown-toggle {
+    background: #ffffff !important;
+    color: #1b3660 !important;
+    box-shadow: none !important;
+}
+
+html[data-bs-theme="light"] .filter-tags h5,
+html[data-bs-theme="light"] .filter-rooms h5,
+html[data-bs-theme="light"] .hour-label,
+html[data-bs-theme="light"] .time-label,
+html[data-bs-theme="light"] .nav-tabs .nav-link,
+html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
+    color: #1b3660 !important;
+}
+
+html[data-bs-theme="light"] .filter-dropdown .dropdown-menu,
+html[data-bs-theme="light"] .dropdown-item,
+html[data-bs-theme="light"] .nav-tabs .nav-link,
+html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
+    background-color: #ffffff !important;
+}
+
+html[data-bs-theme="light"] .day-button.active {
+    background: linear-gradient(135deg, rgba(46, 103, 255, 0.16), rgba(72, 145, 255, 0.16)) !important;
+    border-color: rgba(45, 109, 255, 0.65) !important;
+    color: #2a3b6e !important;
+}
+
+html[data-bs-theme="light"] .day-button:hover {
+    background-color: #f1f5ff !important;
+}
+
+html[data-bs-theme="light"] .nav-tabs .nav-link,
+html[data-bs-theme="light"] .improved-nav-tabs .nav-link {
+    background: #f8fbff !important;
+    color: #17335a !important;
+    border: 1px solid rgba(151, 163, 188, 0.6) !important;
+}
+
+html[data-bs-theme="light"] .nav-tabs .nav-link.active,
+html[data-bs-theme="light"] .improved-nav-tabs .nav-link.active {
+    background: #e7f0ff !important;
+    border-color: rgba(55, 104, 255, 0.7) !important;
+    color: #0f2a5a !important;
+}
+
+.day-tabs-scroll {
+    display: flex!important;
+    overflow-x: auto!important;
+    scrollbar-width: none!important;
+    -ms-overflow-style: none!important;
+    justify-content: center!important;
+    gap: 6px;
+}
+
+.day-tabs-scroll::-webkit-scrollbar {
+    display: none!important;
+}
+
+.day-button {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: clamp(0.2rem, 0.8vw, 0.45rem) clamp(0.35rem, 0.9vw, 0.65rem);
+    border: 1px solid rgba(109, 118, 147, 0.6);
+    background: transparent;
+    text-align: center;
+    min-width: clamp(70px, 17vw, 96px);
+    max-width: clamp(84px, 22vw, 110px);
+    transition: background-color .2s ease, color .2s ease, box-shadow .2s ease, transform .2s ease;
+    position: relative;
+    border-radius: 12px;
+    margin: 0 clamp(0.14rem, 0.6vw, 0.25rem);
+    color: #c9d5f7;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+@media (max-width: 520px) {
+    .day-button {
+        min-width: 60px !important;
+        max-width: 80px !important;
+        padding: 0.22rem 0.55rem !important;
+        margin: 0 0.16rem !important;
+    }
+
+    .day-button-day {
+        font-size: 0.68rem !important;
+    }
+
+    .day-button-date {
+        font-size: 0.62rem !important;
+    }
+
+    .filter-chip-container {
+        gap: 0.2rem !important;
+    }
+}
+.day-button-day,
+.day-button-date {
+    line-height: 1.1;
+    display: block;
+    width: 100%;
+}
+
+.day-button-day {
+    font-size: clamp(0.76rem, 1.3vw, 0.95rem);
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    color: #1e4f8f !important;
+}
+
+.day-button-date {
+    font-size: clamp(0.66rem, 1.0vw, 0.85rem);
+    font-weight: 600;
+    color: #2a5f9f !important;
+    margin-top: 0.12rem;
+}
+
+html[data-bs-theme="light"] .day-button-day {
+    color: #1f406a !important;
+}
+
+html[data-bs-theme="light"] .day-button-date {
+    color: #284f7f !important;
+}
+
+html[data-bs-theme="dark"] .day-button-day {
+    color: #b9d1ff !important;
+}
+
+html[data-bs-theme="dark"] .day-button-date {
+    color: #d1e1ff !important;
+}
+
+html[data-bs-theme="light"] .dropdown-menu .dropdown-item {
+    color: #0f2f58 !important;
+    font-weight: 500 !important;
+}
+
+html[data-bs-theme="light"] .dropdown-menu .dropdown-item:hover,
+html[data-bs-theme="light"] .dropdown-menu .dropdown-item:focus {
+    background-color: #eaf2ff !important;
+    color: #0c2554 !important;
+}
+
+html[data-bs-theme="light"] .filter-dropdown .form-select,
+html[data-bs-theme="light"] .filter-dropdown .ts-control {
+    color: #142f57 !important;
+    font-weight: 500 !important;
+    font-family: "Segoe UI", Inter, system-ui, -apple-system, sans-serif !important;
+}
+
+
+html[data-bs-theme="light"] .day-button-day {
+    color: #1f3658 !important;
+}
+
+html[data-bs-theme="light"] .day-button-date {
+    color: #2d4a70 !important;
+}
+
+html[data-bs-theme="dark"] .day-button {
+    border: 1px solid rgba(137, 151, 173, 0.55) !important;
+    background: rgba(27, 33, 47, 0.66) !important;
+}
+
+html[data-bs-theme="dark"] .day-button.active {
+    border-color: rgba(81, 112, 226, 0.8) !important;
+    box-shadow: 0 0 0 1px rgba(98, 132, 255, 0.5), 0 6px 18px rgba(7, 14, 34, 0.4) !important;
+}
+
+.filter-chip-container {
+    gap: clamp(0.25rem, 0.7vw, 0.5rem);
 }
 
 .day-navigation {
-    padding: 0.65rem 0.65rem 0.5rem;
-    border-radius: 0.7rem;
-    font-size: clamp(0.77rem, 2.6vw, 1.0rem) !important;
+    padding: clamp(0.35rem, 0.8vw, 0.5rem) 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
 }
 
-#daySelect,
-.day-navigation .form-select,
-.day-navigation select {
-    width: 100% !important;
-    min-height: 2.6rem;
-    font-size: clamp(0.78rem, 2.4vw, 1.05rem) !important;
-    padding: 0.5rem 0.75rem !important;
-    border-radius: 0.55rem !important;
+.filter-chip-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: clamp(0.25rem, 0.7vw, 0.5rem);
+    width: 100%;
+    margin: 0 auto;
+}
+
+
+.day-button:hover {
+    background: linear-gradient(145deg, #2b3761 0%, #293154 100%);
+    transform: translateY(-2px);
+    color: #fff;
+}
+
+.day-button.active {
+    color: #ffffff;
+    border-color: #4f67ff;
+    background: linear-gradient(145deg, #4a72ff 0%, #2c53cc 100%);
+    box-shadow: 0 0 18px rgba(79, 111, 255, 0.55), 0 8px 20px rgba(15, 37, 93, 0.45);
+}
+
+.day-button.active::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 4px;
+    background: #7f96ff;
+    border-radius: 999px;
+    box-shadow: 0 0 10px rgba(127, 150, 255, 0.65);
+}
+
+.filter-dropdown {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 0.75rem;
+    border-radius: 0.8rem;
+    padding: 0.35rem;
+}
+
+.filter-dropdown .filter-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: #9cb7ff;
+    letter-spacing: 0.02em;
+}
+
+.filter-dropdown .form-select,
+.filter-dropdown .ts-control,
+.filter-dropdown .tomselect-control {
+    width: 100%;
+    min-height: 2.8rem;
+    border-radius: 0.58rem;
+    border: 1px solid rgba(150, 165, 220, 0.6);
+    background: rgba(14, 18, 30, 0.95);
+    color: #eaf2ff;
+    box-shadow: inset 0 2px 8px rgba(14, 22, 41, 0.6);
+    padding: 0.4rem 0.65rem !important;
+    font-family: "Segoe UI", Inter, system-ui, -apple-system, sans-serif !important;
+}
+
+.filter-dropdown .form-select option,
+.filter-dropdown .ts-dropdown .ts-option {
+    background: #101523;
+    color: #e8eeff;
+    padding: 0.45rem 0.6rem !important;
+}
+
+.filter-dropdown .ts-dropdown .ts-option {
+    border-radius: 0.45rem !important;
+    margin: 0.15rem 0 !important;
+}
+
+html[data-bs-theme="dark"] .filter-dropdown .form-select,
+html[data-bs-theme="dark"] .filter-dropdown .ts-control {
+    background: rgba(20, 24, 34, 0.96) !important;
+    border-color: rgba(103, 119, 154, 0.75) !important;
+}
+
+html[data-bs-theme="dark"] .ts-control .item {
+    background: rgba(82, 106, 160, 0.23) !important;
+    border: 1px solid rgba(97, 130, 196, 0.8) !important;
+}
+
+html[data-bs-theme="dark"] .ts-control .item .remove {
+    color: #f5f9ff !important;
+}
+
+.filter-dropdown .form-select:focus,
+.filter-dropdown .ts-control.focus,
+.filter-dropdown .ts-control:focus {
+    border-color: #5f78ff;
+    box-shadow: 0 0 0 0.14rem rgba(95, 120, 255, 0.26);
+    outline: none;
+}
+
+.ts-dropdown {
+    border-radius: 0.65rem !important;
+    border: 1px solid rgba(124, 146, 255, 0.4) !important;
+    background: rgba(10, 14, 25, 0.96) !important;
+}
+
+.ts-dropdown-content .ts-option {
+    color: #dbe5ff !important;
+    padding: 0.46rem 0.78rem !important;
+}
+
+.ts-dropdown-content .ts-option:hover,
+.ts-dropdown-content .ts-option.selected {
+    background: rgba(79, 103, 255, 0.2) !important;
+    color: #fff !important;
+}
+
+.ts-control .item {
+    background: rgba(81, 122, 255, 0.22);
+    color: #f1f7ff;
+    border: 1px solid rgba(99, 138, 255, 0.75);
+    border-radius: 999px;
+    padding: 0.18rem 0.55rem;
+    margin: 0.1rem 0.2rem;
+}
+
+.ts-control .item .remove {
+    color: #a5bdfa;
+}
+
+.ts-control .item .remove:hover {
+    color: #ffffff;
+}
+
+.filter-dropdown .form-select:focus {
+    border-color: #5f72ff;
+    box-shadow: 0 0 0 0.2rem rgba(95, 114, 255, 0.32);
+    outline: none;
+}
+
+.filter-dropdown .form-select[multiple] {
+    height: auto;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+/* Tom Select overrides for clean dark-themed pills */
+.ts-control {
+    background: rgba(16, 17, 24, 0.88) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    color: #f0f4ff !important;
+    min-height: 2.8rem;
+    border-radius: 0.65rem;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+}
+
+.ts-control .item {
+    background: rgba(95, 114, 255, 0.2);
+    color: #ffffff;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    margin: 0.12rem 0.2rem;
+    border: 1px solid rgba(95, 114, 255, 0.7); 
+}
+
+.ts-control .item:hover {
+    background: rgba(95, 114, 255, 0.45);
+}
+
+.ts-control .ts-dropdown {
+    background: #14161d !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.35) !important;
+}
+
+.ts-control .ts-dropdown-content .ts-option {
+    color: #e5e5ff !important;
+}
+
+.ts-control .ts-dropdown-content .ts-option.selected,
+.ts-control .ts-dropdown-content .ts-option:hover {
+    background: rgba(95, 114, 255, 0.15) !important;
+    color: #ffffff !important;
 }
 
 .day-navigation label,
