@@ -282,6 +282,35 @@ def get_registration(user_id, token=None):
     return _get_json(f'{settings.CONCAT_API_V0_BASE}/users/{user_id}/registration', bearer=token)
 
 
+def _collect_registration_product_ids(registration):
+    """Extract all product IDs present in a registration payload."""
+    product_ids = set()
+
+    def _add_if_int(value):
+        try:
+            product_ids.add(int(value))
+        except (TypeError, ValueError):
+            return
+
+    if not isinstance(registration, dict):
+        return product_ids
+
+    # Common single-value field.
+    _add_if_int(registration.get('productId'))
+
+    # Some payloads expose multiple IDs directly.
+    for value in registration.get('productIds') or []:
+        _add_if_int(value)
+
+    # Some payloads expose products as objects.
+    for product in registration.get('products') or []:
+        if isinstance(product, dict):
+            _add_if_int(product.get('id'))
+            _add_if_int(product.get('productId'))
+
+    return product_ids
+
+
 def _resolve_concat_role_names(user_id, *, user_data=None):
     """Prefer the service roles API; fall back to OAuth userRoles."""
     try:
@@ -314,9 +343,9 @@ def resolve_concat_access(user_id, *, user_data=None):
             if registration.get('status') != 'paid':
                 can_rsvp = False
             elif settings.CONCAT_RSVP_PRODUCT_IDS:
-                product_id = registration.get('productId')
                 allowed_ids = {int(value) for value in settings.CONCAT_RSVP_PRODUCT_IDS}
-                can_rsvp = product_id in allowed_ids
+                registration_product_ids = _collect_registration_product_ids(registration)
+                can_rsvp = bool(registration_product_ids & allowed_ids)
         except ConcatError:
             can_rsvp = False
 
