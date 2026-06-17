@@ -6,3 +6,4 @@
 */migrations
 panel_hosts/
 staticfiles/
+.env

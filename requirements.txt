@@ -2,6 +2,10 @@ Django
 Pillow
 django-widget-tweaks
 geopy
+gunicorn
 icalendar
+psycopg2-binary
+python-dotenv
+reportlab
 timezonefinder
 weasyprint
