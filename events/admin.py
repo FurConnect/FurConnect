@@ -2,7 +2,14 @@ from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.contrib import messages
-from .models import Convention, ConventionDay, Panel, PanelHost, Tag, PanelHostOrder, PanelTag
+from .models import Convention, ConventionDay, Panel, PanelHost, Tag, PanelHostOrder, PanelTag, PanelRSVP
+
+
+@admin.register(PanelRSVP)
+class PanelRSVPAdmin(admin.ModelAdmin):
+    list_display = ('panel', 'display_name', 'attendee_id', 'avatar_url', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('display_name', 'attendee_id', 'panel__title')
 
 class ConventionDayInline(admin.TabularInline):
     model = ConventionDay
@@ -71,8 +78,8 @@ class PanelAdmin(admin.ModelAdmin):
 
 @admin.register(PanelHost)
 class PanelHostAdmin(admin.ModelAdmin):
-    list_display = ('name',)
-    search_fields = ('name',)
+    list_display = ('name', 'concat_user_id')
+    search_fields = ('name', 'concat_user_id')
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):

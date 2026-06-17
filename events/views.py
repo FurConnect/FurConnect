@@ -1,27 +1,130 @@
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from datetime import timedelta, datetime, time
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.contrib.auth import logout, authenticate, login
 from django.http import JsonResponse, HttpResponse
 from django.http import Http404
-from .models import Convention, ConventionDay, Panel, Tag, PanelHost, Room, PanelTag, PanelHostOrder
+from django.utils.crypto import get_random_string
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
+from django.conf import settings
+from django.urls import reverse
+from urllib.parse import quote
+from .models import Convention, ConventionDay, Panel, Tag, PanelHost, Room, PanelTag, PanelHostOrder, PanelRSVP
 from .forms import ConventionForm, ConventionDayForm, PanelForm, PanelHostForm, TagForm, CSVImportForm
+from .concat import (
+    ConcatError,
+    exchange_code_for_token,
+    get_authorize_url,
+    get_concat_profile_pictures,
+    get_user,
+    parse_concat_user,
+    resolve_concat_access,
+)
+from .auth import can_manage_events, concat_organizer_required
+from .rsvp import _attendee_id_lookup, can_rsvp_with_concat, get_concat_attendee_identity, get_rsvp_attendees, get_rsvp_context
 import icalendar
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch, Q
 import csv
 import math
+
+_concat_oauth_signer = TimestampSigner(salt='furconnect-concat-oauth')
+
+
+def _build_concat_avatar_map(hosts):
+    if not settings.CONCAT_ENABLED:
+        return {}
+    concat_ids = [
+        host.concat_user_id for host in hosts
+        if host.concat_user_id
+    ]
+    if not concat_ids:
+        return {}
+    return get_concat_profile_pictures(concat_ids)
+
+
+def _resolve_host_profile_picture(host, concat_avatars=None):
+    if settings.CONCAT_ENABLED and host.concat_user_id:
+        if concat_avatars is None:
+            concat_avatars = _build_concat_avatar_map([host])
+        avatar_url = concat_avatars.get(str(host.concat_user_id), '')
+        if avatar_url:
+            return avatar_url
+    if host.image:
+        return host.image
+    return host.get_initials_avatar()
+
+
+def _serialize_panel_host(host, concat_avatars=None):
+    if concat_avatars is None and host.concat_user_id:
+        concat_avatars = _build_concat_avatar_map([host])
+    return {
+        'id': host.pk,
+        'name': host.name,
+        'concat_user_id': host.concat_user_id or '',
+        'profile_picture': _resolve_host_profile_picture(host, concat_avatars),
+    }
+
+
+def attach_host_avatar_urls(hosts):
+    hosts = list(hosts)
+    if not hosts:
+        return hosts
+
+    unique_hosts = {host.pk: host for host in hosts}
+    concat_avatars = _build_concat_avatar_map(unique_hosts.values())
+    for host in unique_hosts.values():
+        if settings.CONCAT_ENABLED and host.concat_user_id:
+            host.avatar_url = concat_avatars.get(str(host.concat_user_id)) or None
+        elif host.image:
+            host.avatar_url = host.image
+        else:
+            host.avatar_url = None
+    return hosts
+
+
+def _sanitize_concat_next_url(next_url):
+    next_url = next_url or '/'
+    if next_url.startswith('/login'):
+        return '/'
+    return next_url
+
+
+def _pack_concat_oauth_state(next_url):
+    payload = f'{get_random_string(32)}|{_sanitize_concat_next_url(next_url)}'
+    return _concat_oauth_signer.sign(payload)
+
+
+def _unpack_concat_oauth_state(signed_state):
+    try:
+        payload = _concat_oauth_signer.unsign(signed_state, max_age=600)
+    except (BadSignature, SignatureExpired):
+        return None
+    if '|' not in payload:
+        return None
+    _, next_url = payload.split('|', 1)
+    return _sanitize_concat_next_url(next_url)
+
+
+def _store_concat_session(request, profile, access):
+    request.session['concat_user_id'] = profile['user_id']
+    request.session['concat_user_name'] = profile['display_name']
+    request.session['concat_user_avatar'] = profile['avatar_url']
+    request.session['concat_role_names'] = access.get('role_names', profile.get('role_names', []))
+    request.session['concat_skip_rsvp'] = access.get('skip_rsvp', False)
+    request.session['concat_can_manage'] = access.get('can_manage', False)
+    request.session['concat_can_rsvp'] = access.get('can_rsvp', False)
+    request.session['concat_is_admin'] = access.get('can_manage', False)
+    request.session.modified = True
+    request.session.save()
+
 
 def logout_view(request):
     logout(request)
     messages.success(request, 'You have been successfully logged out.')
     return redirect('events:schedule')
-
-def is_admin(user):
-    return user.is_staff
 
 def schedule(request):
     convention = Convention.objects.first()
@@ -44,8 +147,19 @@ def convention_detail(request, pk):
     unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
     unique_rooms = Room.objects.filter(convention=convention).order_by('name')
     
-    # Get all hosts for the convention
-    convention_hosts = PanelHost.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
+    # Get all hosts for the convention (include hosts with cancelled panels)
+    convention_hosts = (
+        PanelHost.objects.filter(panels__convention_day__convention=convention)
+        .distinct()
+        .annotate(
+            convention_panel_count=Count(
+                'panels',
+                filter=Q(panels__convention_day__convention=convention),
+                distinct=True,
+            )
+        )
+        .order_by('name')
+    )
     
     # Initialize dictionary to store panels grouped by day and time
     panels_by_display_time = {}
@@ -60,8 +174,6 @@ def convention_detail(request, pk):
 
         # Group panels by exact start time
         for panel in sorted_panels:
-            if panel.cancelled:
-                continue
             start_time = panel.start_time
 
             # Get hosts ordered by their priority in PanelHostOrder
@@ -100,6 +212,14 @@ def convention_detail(request, pk):
         
         display_days_with_panels.append(display_day)
 
+    all_panel_hosts = []
+    for display_day in display_days_with_panels:
+        for time_group in display_day['panels_by_time']:
+            for panel in time_group['panels']:
+                all_panel_hosts.extend(panel.ordered_hosts)
+    attach_host_avatar_urls(all_panel_hosts)
+    attach_host_avatar_urls(convention_hosts)
+
     # Build a 2D grid matrix (hourly slots x rooms) for grid view, with rowspan for multi-hour panels
     days_matrix = []
     for display_day in display_days_with_panels:
@@ -108,14 +228,19 @@ def convention_detail(request, pk):
         panels_for_day = []
         for time_group in display_day['panels_by_time']:
             for panel in time_group['panels']:
-                if panel.room and panel.room not in rooms_used:
+                if panel.room_id and panel.room not in rooms_used:
                     rooms_used.append(panel.room)
                 panels_for_day.append(panel)
 
-        rooms_used = sorted(rooms_used, key=lambda r: r.name)
+        rooms_used = sorted(
+            (room for room in rooms_used if room and room.id),
+            key=lambda r: r.name,
+        )
 
-        # Determine daily span from first booked event to last event (30-min grid)
-        day_date = display_day['original_day_obj'].date
+        day_obj = display_day['original_day_obj']
+        if not day_obj:
+            continue
+        day_date = day_obj.date
 
         if panels_for_day:
             min_start_time = min(panel.start_time for panel in panels_for_day)
@@ -151,6 +276,10 @@ def convention_detail(request, pk):
         # Prepare panel placement map by room and slot-start
         panel_map = {}
         for panel in panels_for_day:
+            room_id = panel.room_id
+            if not room_id:
+                continue
+
             panel_start = datetime.combine(day_date, panel.start_time)
             panel_end = datetime.combine(day_date, panel.end_time)
             if panel_end <= panel_start:
@@ -165,7 +294,7 @@ def convention_detail(request, pk):
             duration_minutes = (panel_end - panel_start).total_seconds() / 60.0
             rowspan = max(1, math.ceil(duration_minutes / 30.0))
 
-            panel_map[(panel.room.id, slot_start)] = {
+            panel_map[(room_id, slot_start)] = {
                 'panel': panel,
                 'rowspan': rowspan,
                 'end_dt': slot_start + timedelta(minutes=30 * rowspan)
@@ -204,10 +333,14 @@ def convention_detail(request, pk):
         'unique_rooms': unique_rooms,
         'convention_hosts': convention_hosts,
         'current_convention_name': current_convention_name,
-        'is_staff': request.user.is_staff,
+        'is_staff': can_manage_events(request),
+        'can_manage_events': can_manage_events(request),
+        'concat_enabled': settings.CONCAT_ENABLED,
+        'concat_authenticated': bool(request.session.get('concat_user_id')),
+        'concat_user_name': request.session.get('concat_user_name', ''),
     })
 
-@login_required
+@concat_organizer_required
 def convention_create(request):
     if request.method == 'POST':
         form = ConventionForm(request.POST)
@@ -229,7 +362,7 @@ def convention_create(request):
         # 'states_by_country': STATES_BY_COUNTRY  # Commented out as states are handled by text input now
     })
 
-@login_required
+@concat_organizer_required
 def convention_edit(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     # Fetch the current convention name
@@ -253,7 +386,7 @@ def convention_edit(request, pk):
         'current_convention_name': current_convention_name
     })
 
-@login_required
+@concat_organizer_required
 def panel_create(request, day_pk):
     # Get the ConventionDay using the provided day_pk from the URL
     convention_day_from_url = get_object_or_404(ConventionDay, pk=day_pk)
@@ -310,7 +443,7 @@ def panel_create(request, day_pk):
         'convention_pk': current_convention.pk # Pass convention pk for redirect if needed
     })
 
-@login_required
+@concat_organizer_required
 def panel_edit(request, pk):
     panel = get_object_or_404(Panel.objects.select_related('convention_day__convention').prefetch_related('tags', 'host'), pk=pk)
     # Store the convention_pk before saving, in case the object state changes
@@ -344,7 +477,7 @@ def panel_edit(request, pk):
         'tag_form': tag_form
     })
 
-@login_required
+@concat_organizer_required
 def panel_delete(request, pk):
     panel = get_object_or_404(Panel, pk=pk)
     convention_pk = panel.convention_day.convention.pk
@@ -359,26 +492,169 @@ def panel_delete(request, pk):
         'current_convention_name': panel.convention_day.convention.name
     })
 
-@login_required
-@user_passes_test(is_admin)
+@concat_organizer_required
 def convention_delete(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     if request.method == 'POST':
         convention.delete()
         messages.success(request, 'Convention deleted successfully!')
         return redirect('events:schedule')
-    # Optional: Add a GET request handler to show a confirmation page
-    # else:
-    #     return render(request, 'events/convention_confirm_delete.html', {'convention': convention})
 
 def panel_detail_modal_view(request, pk):
-    panel = get_object_or_404(Panel.objects.select_related('convention_day__convention').prefetch_related('tags', 'host'), pk=pk)
+    panel = get_object_or_404(
+        Panel.objects.select_related('convention_day__convention').prefetch_related('tags', 'host', 'rsvps'),
+        pk=pk,
+    )
     # Add ordered hosts and tags to the panel object
     panel.ordered_hosts = list(panel.host.all().order_by('panelhostorder__priority'))
     panel.ordered_tags = list(panel.tags.all().order_by('paneltag__priority'))
-    return render(request, 'events/panel_detail_modal.html', {'panel': panel})
+    attach_host_avatar_urls(panel.ordered_hosts)
+    context = {'panel': panel}
+    context.update(get_rsvp_context(request, panel))
+    return render(request, 'events/panel_detail_modal.html', context)
+
+def concat_login(request):
+    if not settings.CONCAT_ENABLED:
+        messages.error(request, 'ConCat sign-in is not enabled.')
+        return redirect('events:schedule')
+
+    next_url = _sanitize_concat_next_url(
+        request.GET.get('next') or request.META.get('HTTP_REFERER') or '/'
+    )
+    return redirect(get_authorize_url(_pack_concat_oauth_state(next_url)))
+
+def concat_callback(request):
+    if not settings.CONCAT_ENABLED:
+        messages.error(request, 'ConCat sign-in is not enabled.')
+        return redirect('events:schedule')
+
+    error = request.GET.get('error')
+    if error:
+        messages.error(request, f'ConCat sign-in failed: {error}')
+        return redirect('/')
+
+    state = request.GET.get('state')
+    next_url = _unpack_concat_oauth_state(state) if state else None
+    if not next_url:
+        messages.error(request, 'Invalid or expired ConCat sign-in state. Please try again.')
+        return redirect('/')
+
+    code = request.GET.get('code')
+    if not code:
+        messages.error(request, 'Missing ConCat authorization code.')
+        return redirect(next_url)
+
+    try:
+        token_data = exchange_code_for_token(code)
+        access_token = token_data.get('access_token')
+        if not access_token:
+            raise ConcatError('Missing access token in ConCat response')
+
+        user_data = get_user(access_token)
+        profile = parse_concat_user(user_data)
+        if not profile['user_id']:
+            raise ConcatError('Missing user id in ConCat response')
+
+        try:
+            access = resolve_concat_access(profile['user_id'], user_data=user_data)
+        except ConcatError:
+            access = {
+                'role_names': profile.get('role_names', []),
+                'can_manage': False,
+                'skip_rsvp': False,
+                'can_rsvp': not settings.CONCAT_REQUIRE_PAID_REGISTRATION,
+            }
+
+        _store_concat_session(request, profile, access)
+        display_name = profile['display_name']
+
+        if access['skip_rsvp']:
+            messages.success(request, f'Signed in with ConCat as {display_name}.')
+        elif access['can_rsvp']:
+            messages.success(request, f'Signed in with ConCat as {display_name}. You can RSVP to panels.')
+        else:
+            messages.warning(
+                request,
+                'Signed in with ConCat, but your account is not eligible to RSVP to panels.',
+            )
+    except ConcatError as exc:
+        messages.error(request, str(exc))
+
+    return redirect(next_url)
+
+def concat_logout(request):
+    for key in (
+        'concat_user_id',
+        'concat_user_name',
+        'concat_user_avatar',
+        'concat_role_names',
+        'concat_skip_rsvp',
+        'concat_can_manage',
+        'concat_can_rsvp',
+        'concat_is_admin',
+    ):
+        request.session.pop(key, None)
+    messages.success(request, 'Signed out of ConCat.')
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+@require_POST
+def panel_rsvp_toggle(request, pk):
+    if not settings.CONCAT_ENABLED:
+        return JsonResponse({'error': 'RSVP is not enabled.'}, status=400)
+
+    panel = get_object_or_404(Panel, pk=pk)
+
+    if panel.cancelled:
+        return JsonResponse({'error': 'This event has been cancelled.'}, status=400)
+
+    attendee_id, display_name, avatar_url = get_concat_attendee_identity(request)
+    if not attendee_id:
+        next_url = quote(request.META.get('HTTP_REFERER', '/'))
+        if request.session.get('concat_user_id') and not can_rsvp_with_concat(request):
+            return JsonResponse({
+                'error': 'Your ConCat account is not eligible to RSVP to panels.',
+                'requires_role': True,
+            }, status=403)
+        return JsonResponse({
+            'error': 'Sign in with ConCat to RSVP.',
+            'requires_concat': True,
+            'concat_login_url': f"{reverse('events:concat_login')}?next={next_url}",
+        }, status=401)
+
+    existing = PanelRSVP.objects.filter(
+        panel=panel,
+        attendee_id__in=_attendee_id_lookup(attendee_id),
+    ).first()
+    if existing:
+        existing.delete()
+        return JsonResponse({
+            'rsvped': False,
+            'rsvp_count': panel.rsvps.count(),
+            'rsvp_attendees': get_rsvp_attendees(panel),
+        })
+
+    PanelRSVP.objects.create(
+        panel=panel,
+        attendee_id=attendee_id,
+        display_name=display_name,
+        avatar_url=avatar_url,
+    )
+    return JsonResponse({
+        'rsvped': True,
+        'rsvp_count': panel.rsvps.count(),
+        'rsvp_attendees': get_rsvp_attendees(panel),
+    })
+
+def register_view(request):
+    messages.error(request, 'Staff registration is disabled. Sign in with ConCat using an organizer role.')
+    return redirect('events:schedule')
+
 
 def login_view(request):
+    if settings.CONCAT_ENABLED:
+        messages.info(request, 'Sign in with ConCat using an organizer role to manage events.')
+        return redirect('events:concat_login')
+
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
@@ -397,46 +673,42 @@ def login_view(request):
     # If it was a failed POST, the messages framework will include the error.
     return render(request, 'events/login.html', {
         'current_convention_name': 'FurConnect',
-        # You might need to pass a flag here if you want to show the register prompt
-        # only when there are no users, but let's keep it simple for now.
-        # 'show_register_prompt': True # You would determine this logic elsewhere
     })
 
-@login_required
+@concat_organizer_required
 def add_panel_host_ajax(request):
     print("add_panel_host_ajax called")
     if request.method == 'POST':
         host_id = request.POST.get('host_id')
         image_base64 = request.POST.get('image_base64') # Get base64 string
         name = request.POST.get('name')
+        concat_user_id = (request.POST.get('concat_user_id') or '').strip()
 
         print(f"Received POST data - host_id: {host_id}, name: {name}, image_base64 length: {len(image_base64) if image_base64 else 0}")
 
         if host_id:
             print(f"Attempting to update existing host with ID: {host_id}")
-            # If host_id is provided, try to update the existing host
             try:
                 host = PanelHost.objects.get(pk=host_id)
                 print("Host found.")
-                # Update host instance directly with base64 data
-                host.name = request.POST.get('name', host.name) # Update name if provided
+                host.name = request.POST.get('name', host.name)
                 print(f"Updating host name to: {host.name}")
-                # Only update image if a new base64 string is provided
-                if image_base64:
-                    print("Updating host image with new base64 data.")
-                    host.image = image_base64
-                elif image_base64 == '' and host.image: # Handle explicit clearing of image
-                    print("Clearing existing host image.")
+                if settings.CONCAT_ENABLED:
+                    host.concat_user_id = concat_user_id
                     host.image = None
+                else:
+                    host.concat_user_id = ''
+                    if image_base64:
+                        print("Updating host image with new base64 data.")
+                        host.image = image_base64
+                    elif image_base64 == '' and host.image:
+                        print("Clearing existing host image.")
+                        host.image = None
                 host.save()
                 print("Host updated successfully.")
                 return JsonResponse({
-                    'success': True, 
-                    'host': {
-                        'id': host.pk, 
-                        'name': host.name, 
-                        'profile_picture': host.image if host.image else None
-                    }
+                    'success': True,
+                    'host': _serialize_panel_host(host),
                 })
             except PanelHost.DoesNotExist:
                 print("Error: Host not found for update.")
@@ -446,21 +718,18 @@ def add_panel_host_ajax(request):
                 return JsonResponse({'success': False, 'error': str(e)}, status=400)
         else:
             print("Attempting to create new host.")
-            # If no host_id, create a new host
-            # Manually handle base64 image for creation
-            host = PanelHost(name=name, image=image_base64 if image_base64 else None)
+            if settings.CONCAT_ENABLED:
+                host = PanelHost(name=name, concat_user_id=concat_user_id)
+            else:
+                host = PanelHost(name=name, image=image_base64 if image_base64 else None)
             try:
-                 host.full_clean() # Validate model fields
-                 host.save()
-                 print("New host created successfully.")
-                 return JsonResponse({
-                     'success': True,
-                     'host': {
-                         'id': host.pk,
-                         'name': host.name,
-                         'profile_picture': host.image if host.image else None
-                     }
-                 })
+                host.full_clean()
+                host.save()
+                print("New host created successfully.")
+                return JsonResponse({
+                    'success': True,
+                    'host': _serialize_panel_host(host),
+                })
             except ValidationError as e:
                 print(f"Validation error creating host: {e.message_dict}")
                 return JsonResponse({'success': False, 'errors': e.message_dict}, status=400)
@@ -470,7 +739,7 @@ def add_panel_host_ajax(request):
     print("Invalid request method.")
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@login_required
+@concat_organizer_required
 def add_tag_ajax(request):
     if request.method == 'POST':
         tag_id = request.POST.get('tag_id')
@@ -527,7 +796,7 @@ def panel_calendar(request, pk):
     
     return response
 
-@login_required
+@concat_organizer_required
 def tag_edit(request, name):
     try:
         tag = Tag.objects.get(name__iexact=name)
@@ -554,13 +823,19 @@ def tag_edit(request, name):
         messages.error(request, 'Tag not found.')
         return redirect('events:schedule')
 
-@login_required
+@concat_organizer_required
 def host_edit(request, pk):
     host = get_object_or_404(PanelHost, pk=pk)
     if request.method == 'POST':
-        form = PanelHostForm(request.POST, request.FILES, instance=host)
+        if settings.CONCAT_ENABLED:
+            form = PanelHostForm(request.POST, instance=host)
+        else:
+            form = PanelHostForm(request.POST, request.FILES, instance=host)
         if form.is_valid():
-            form.save()
+            host = form.save(commit=False)
+            if settings.CONCAT_ENABLED:
+                host.image = None
+            host.save()
             messages.success(request, 'Host updated successfully!')
             # Redirect back to the convention detail page, or schedule if host has no panels
             if host.panels.exists():
@@ -577,7 +852,7 @@ def host_edit(request, pk):
         'current_convention_name': 'FurConnect'
     })
 
-@login_required
+@concat_organizer_required
 def delete_room_ajax(request, pk):
     """
     AJAX view to delete a single Room.
@@ -593,7 +868,7 @@ def delete_room_ajax(request, pk):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@login_required
+@concat_organizer_required
 def delete_host_ajax(request, pk):
     """
     AJAX view to delete a single PanelHost.
@@ -609,7 +884,7 @@ def delete_host_ajax(request, pk):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@login_required
+@concat_organizer_required
 def get_tag_details_ajax(request, pk):
     """
     AJAX view to get details of a single Tag.
@@ -626,7 +901,7 @@ def get_tag_details_ajax(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@login_required
+@concat_organizer_required
 def save_room_ajax(request):
     """
     AJAX view to save a new or existing Room.
@@ -674,10 +949,10 @@ def save_room_ajax(request):
         'error': 'Invalid request method.'
     }, status=400)
 
-@login_required
+@concat_organizer_required
 def toggle_cancelled(request, pk):
     """Toggle the cancelled status of a panel."""
-    if not request.user.is_staff:
+    if not can_manage_events(request):
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     try:
@@ -702,8 +977,7 @@ def toggle_cancelled(request, pk):
         messages.error(request, f'Error toggling panel status: {str(e)}')
         return redirect('events:convention_detail', pk=panel.convention_day.convention.pk)
 
-@login_required
-@user_passes_test(is_admin)
+@concat_organizer_required
 def delete_tag_ajax(request, pk):
     """
     AJAX view to delete a single Tag.
@@ -719,29 +993,49 @@ def delete_tag_ajax(request, pk):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
+def _serialize_host_panel(panel):
+    tag_color = panel.tags.first().color if panel.tags.exists() else '#ffffff'
+    day_date = panel.convention_day.date if panel.convention_day and panel.convention_day.date else None
+    return {
+        'id': panel.pk,
+        'title': panel.title,
+        'description': panel.description,
+        'start_time': panel.start_time.strftime('%I:%M %p') if panel.start_time else '',
+        'end_time': panel.end_time.strftime('%I:%M %p') if panel.end_time else '',
+        'room_name': panel.room.name if panel.room else '',
+        'tag_color': tag_color,
+        'cancelled': panel.cancelled,
+        'day_of_week': day_date.strftime('%A') if day_date else '',
+        '_sort_date': day_date,
+        '_sort_time': panel.start_time,
+    }
+
+
+def _get_host_panels_queryset(host, convention_id=None):
+    panels = host.panels.all().select_related('convention_day', 'room').prefetch_related('tags')
+    if convention_id:
+        panels = panels.filter(convention_day__convention_id=convention_id)
+    return panels
+
+
+def _serialize_panel_host(host, concat_avatars=None):
+    return {
+        'id': host.pk,
+        'name': host.name,
+        'concat_user_id': host.concat_user_id,
+        'profile_picture': _resolve_host_profile_picture(host, concat_avatars),
+    }
+
+
 def get_host_details_ajax(request, pk):
     """
     AJAX view to get details of a single PanelHost.
     """
     try:
         host = PanelHost.objects.get(pk=pk)
-        # Get all panels for this host
-        panels = host.panels.all().select_related('convention_day', 'room').prefetch_related('tags')
-        panels_data = []
-        for panel in panels:
-            tag_color = panel.tags.first().color if panel.tags.exists() else '#ffffff'
-            panels_data.append({
-                'id': panel.pk,
-                'title': panel.title,
-                'description': panel.description,
-                'start_time': panel.start_time.strftime('%I:%M %p'),
-                'end_time': panel.end_time.strftime('%I:%M %p'),
-                'room_name': panel.room.name if panel.room else '',
-                'tag_color': tag_color,
-                'day_of_week': panel.convention_day.date.strftime('%A') if hasattr(panel, 'convention_day') and panel.convention_day and hasattr(panel.convention_day, 'date') and panel.convention_day.date else '',
-                '_sort_date': panel.convention_day.date if hasattr(panel, 'convention_day') and panel.convention_day and hasattr(panel.convention_day, 'date') and panel.convention_day.date else None,
-                '_sort_time': panel.start_time
-            })
+        convention_id = request.GET.get('convention_id')
+        panels = _get_host_panels_queryset(host, convention_id)
+        panels_data = [_serialize_host_panel(panel) for panel in panels]
         # Sort by day (date), then by time
         panels_data.sort(key=lambda x: (x['_sort_date'], x['_sort_time']))
         for p in panels_data:
@@ -751,7 +1045,8 @@ def get_host_details_ajax(request, pk):
         return JsonResponse({
             'id': host.pk,
             'name': host.name,
-            'profile_picture': host.image if host.image else host.get_initials_avatar(),
+            'concat_user_id': host.concat_user_id,
+            'profile_picture': _resolve_host_profile_picture(host),
             'panels': panels_data,
             'panels_count': len(panels_data)
         })
@@ -775,7 +1070,7 @@ def get_room_details_ajax(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@login_required
+@concat_organizer_required
 def get_all_hosts_ajax(request):
     """
     AJAX view to get all PanelHosts for a given convention.
@@ -802,11 +1097,13 @@ def get_all_hosts_ajax(request):
                 pass # Panel not found, no hosts are pre-selected
 
         hosts_data = []
+        concat_avatars = _build_concat_avatar_map(hosts)
         for host in hosts:
             hosts_data.append({
                 'id': host.pk,
                 'name': host.name,
-                'profile_picture': host.image if host.image else host.get_initials_avatar(),
+                'concat_user_id': host.concat_user_id,
+                'profile_picture': _resolve_host_profile_picture(host, concat_avatars),
                 'selected': host.id in selected_host_ids
             })
 
@@ -814,7 +1111,7 @@ def get_all_hosts_ajax(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@login_required
+@concat_organizer_required
 def get_all_rooms_ajax(request):
     """
     AJAX view to get all Rooms for a given convention.
@@ -837,7 +1134,7 @@ def get_all_rooms_ajax(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@login_required
+@concat_organizer_required
 def get_all_tags_ajax(request):
     """
     AJAX view to get all Tags for a given convention.
@@ -865,7 +1162,7 @@ def get_all_tags_ajax(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@login_required
+@concat_organizer_required
 def reorder_tags_ajax(request, panel_id):
     """
     AJAX view to reorder tags for a panel.
@@ -887,7 +1184,7 @@ def reorder_tags_ajax(request, panel_id):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@login_required
+@concat_organizer_required
 def reorder_hosts_ajax(request, panel_id):
     """
     AJAX view to reorder hosts for a panel.
@@ -909,7 +1206,7 @@ def reorder_hosts_ajax(request, panel_id):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@login_required
+@concat_organizer_required
 def import_panels_csv(request, convention_pk):
     convention = get_object_or_404(Convention, pk=convention_pk)
     if request.method == 'POST':
@@ -1197,30 +1494,21 @@ def get_hosts_batch_ajax(request):
     Returns: { hosts: [ {id, name, profile_picture, panels, panels_count}, ... ] }
     """
     ids_param = request.GET.get('ids', '')
+    convention_id = request.GET.get('convention_id')
     try:
         ids = [int(i) for i in ids_param.split(',') if i.strip().isdigit()]
         hosts = PanelHost.objects.filter(pk__in=ids)
+        concat_avatars = _build_concat_avatar_map(hosts)
         hosts_data = []
         for host in hosts:
-            panels = host.panels.all().select_related('convention_day', 'room').prefetch_related('tags')
-            panels_data = []
-            for panel in panels:
-                tag_color = panel.tags.first().color if panel.tags.exists() else '#ffffff'
-                panels_data.append({
-                    'id': panel.pk,
-                    'title': panel.title,
-                    'description': panel.description,
-                    'start_time': panel.start_time.strftime('%I:%M %p') if panel.start_time else '',
-                    'end_time': panel.end_time.strftime('%I:%M %p') if panel.end_time else '',
-                    'room_name': panel.room.name if panel.room else '',
-                    'tag_color': tag_color,
-                    'day_of_week': panel.convention_day.date.strftime('%A') if panel.convention_day and panel.convention_day.date else '',
-                })
-            panels_data.sort(key=lambda x: x.get('start_time', ''))
+            panels = _get_host_panels_queryset(host, convention_id)
+            panels_data = [_serialize_host_panel(panel) for panel in panels]
+            panels_data.sort(key=lambda x: (x['_sort_date'], x['_sort_time']))
+            for p in panels_data:
+                p.pop('_sort_date', None)
+                p.pop('_sort_time', None)
             hosts_data.append({
-                'id': host.pk,
-                'name': host.name,
-                'profile_picture': host.image if host.image else host.get_initials_avatar(),
+                **_serialize_panel_host(host, concat_avatars),
                 'panels': panels_data,
                 'panels_count': len(panels_data),
             })

@@ -6,6 +6,7 @@ gunicorn
 icalendar
 psycopg2-binary
 python-dotenv
+requests
 reportlab
 timezonefinder
 weasyprint

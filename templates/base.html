@@ -51,12 +51,14 @@
         }
 
         .navbar {
-            background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark)) !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--bs-body-bg, #fff) !important;
+            color: var(--bs-body-color, #212529);
+            border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
         }
 
         .navbar-brand {
-            color: white !important;
+            color: var(--bs-body-color, #212529) !important;
             font-weight: 600;
             font-size: 1.5rem;
             display: inline-flex;
@@ -70,7 +72,7 @@
         }
 
         .nav-link {
-            color: rgba(255, 255, 255, 0.9) !important;
+            color: var(--bs-body-color, #212529) !important;
             font-weight: 500;
             padding: 0.5rem 1rem !important;
             border-radius: 0.5rem;
@@ -81,8 +83,24 @@
         }
 
         .nav-link:hover {
-            color: white !important;
+            color: var(--bs-body-color, #212529) !important;
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        html[data-bs-theme="dark"] .nav-link:hover {
             background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .navbar-user-name {
+            color: var(--bs-secondary-color, #6c757d);
+        }
+
+        html[data-bs-theme="light"] .navbar .navbar-toggler {
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+
+        html[data-bs-theme="light"] .navbar .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2833, 37, 41, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
         }
 
         .nav-link .material-icons {
@@ -103,7 +121,7 @@
         }
 
         .user-info {
-            color: white;
+            color: var(--bs-body-color, #212529);
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
@@ -153,8 +171,9 @@
             color-scheme: dark;
         }
 
-        [data-bs-theme="dark"] .navbar {
-            background: linear-gradient(135deg, var(--primary-purple-dark), #1a1a1a) !important;
+        html[data-bs-theme="dark"] .navbar {
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
         }
 
         [data-bs-theme="dark"] .card {
@@ -227,13 +246,13 @@
         }
 
         .btn-outline-primary {
-            color: white;
-            border-color: white;
+            color: var(--primary-purple);
+            border-color: var(--primary-purple);
         }
 
         .btn-outline-primary:hover {
-            background-color: white;
-            color: var(--primary-purple);
+            background-color: var(--primary-purple);
+            color: #fff;
         }
 
         .floating-theme-switch {
@@ -431,33 +450,46 @@
         .schedule-container {
             max-width: 100% !important;
         }
+
+        /* Keep modals above the sticky site footer */
+        .modal-backdrop {
+            z-index: 100000009 !important;
+        }
+        .modal {
+            z-index: 100000010 !important;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    {% if user.is_authenticated %}
     <nav class="navbar navbar-expand-lg mb-4">
         <div class="container">
             <a class="navbar-brand" href="{% url 'events:schedule' %}">
                 <i class="material-icons">event</i>
                 {{ current_convention_name|default:"FurConnect" }}
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-                <div class="d-flex align-items-center gap-2">
-                    {% if user.is_authenticated %}
-                    <a href="{% url 'events:logout' %}" class="btn btn-outline-primary">
-                        <i class="material-icons">logout</i>
-                        Logout
-                    </a>
-                    {% else %}
-                        {% if users_exist and is_staff %}
-                        <a href="{% url 'events:login' %}" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#loginModal">
+                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end py-2 py-lg-0">
+                    {% if concat_enabled %}
+                        {% if concat_authenticated %}
+                        <div class="d-flex align-items-center gap-2">
+                            {% if concat_user_avatar %}
+                            <img src="{{ concat_user_avatar }}" alt="" class="rounded-circle" width="28" height="28" style="object-fit: cover;">
+                            {% endif %}
+                            <span class="navbar-user-name small">{{ concat_user_name }}</span>
+                        </div>
+                        <a href="{% url 'events:concat_logout' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="material-icons">logout</i>
+                            Sign out of ConCat
+                        </a>
+                        {% else %}
+                        <a href="{% url 'events:concat_login' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-success btn-sm">
                             <i class="material-icons">login</i>
-                            Login
+                            Login with ConCat
                         </a>
                         {% endif %}
                     {% endif %}
@@ -465,11 +497,6 @@
             </div>
         </div>
     </nav>
-    {% else %}
-    <nav class="navbar-expand-lg mb-4">
-        <div class="container">
-    </nav>
-    {% endif %}
     <!-- Main Content -->
     <div class="container">
         {% if messages %}
@@ -533,35 +560,45 @@
         </div>
     </div>
 
-    {% if not users_exist and request.path != '/register/' %}
-    <!-- Registration Prompt in Login Modal -->
-    <div class="modal fade" id="registerPromptModal" tabindex="-1" aria-labelledby="registerPromptModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="registerPromptModalLabel">No Users Found</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-center">It looks like this is the first time anyone is logging in. Please register to create the first user account.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     {% block extra_js %}{% endblock %}
 
     <!-- Theme Switcher JS -->
     <script>
                 // Grid/List View Toggle Logic
                 document.addEventListener('DOMContentLoaded', function() {
-                    const viewToggleBtn = document.getElementById('viewToggleBtn');
-                    const viewToggleIcon = document.getElementById('viewToggleIcon');
+                    const viewToggleBtns = document.querySelectorAll('.view-toggle-btn');
+                    if (!viewToggleBtns.length) return;
+
                     const body = document.body;
                     const gridTableContainer = document.querySelector('.grid-table-container');
-                    // Get saved view from localStorage
                     let gridView = localStorage.getItem('eventGridView') === 'true';
+
+                    function refreshGridLayout() {
+                        if (!gridView) return;
+                        if (typeof updateGridTableScale === 'function') {
+                            updateGridTableScale();
+                        }
+                        if (typeof normalizeHourRowHeights === 'function') {
+                            normalizeHourRowHeights();
+                        }
+                    }
+
+                    function updateViewToggleButtons() {
+                        viewToggleBtns.forEach(function(btn) {
+                            const isActive = gridView
+                                ? btn.dataset.view === 'grid'
+                                : btn.dataset.view === 'list';
+                            btn.classList.toggle('active', isActive);
+                            btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                        });
+                    }
+
+                    function setScheduleView(view) {
+                        gridView = view === 'grid';
+                        localStorage.setItem('eventGridView', gridView);
+                        localStorage.setItem('scheduleView', gridView ? 'grid' : 'list');
+                        updateView();
+                    }
 
                     function updateView() {
                         if (gridView) {
@@ -569,27 +606,27 @@
                             if (gridTableContainer) {
                                 gridTableContainer.classList.remove('d-none');
                             }
-                            if (viewToggleIcon) {
-                                viewToggleIcon.textContent = 'view_list';
-                            }
                         } else {
                             body.classList.remove('grid-view');
                             if (gridTableContainer) {
                                 gridTableContainer.classList.add('d-none');
                             }
-                            if (viewToggleIcon) {
-                                viewToggleIcon.textContent = 'grid_view';
-                            }
                         }
+
+                        updateViewToggleButtons();
+                        document.dispatchEvent(new CustomEvent('scheduleViewChanged', {
+                            detail: { view: gridView ? 'grid' : 'list' }
+                        }));
+                        setTimeout(refreshGridLayout, 60);
                     }
+
                     updateView();
-                    if (viewToggleBtn) {
-                        viewToggleBtn.addEventListener('click', function() {
-                            gridView = !gridView;
-                            localStorage.setItem('eventGridView', gridView);
-                            updateView();
+
+                    viewToggleBtns.forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            setScheduleView(btn.dataset.view);
                         });
-                    }
+                    });
                 });
         // Wait for all scripts to load
         window.addEventListener('load', function() {

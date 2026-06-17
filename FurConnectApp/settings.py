@@ -22,30 +22,11 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Version string for display in footer
-import subprocess
-from datetime import datetime
 try:
     from FurConnectApp import __version__
-    # Try to get git commit hash and date
-    git_hash = None
-    git_date = None
-    try:
-        git_hash = subprocess.check_output([
-            'git', 'rev-parse', 'HEAD'
-        ], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()[:6].upper()
-        git_date_raw = subprocess.check_output([
-            'git', 'show', '-s', '--format=%cd', '--date=format:%Y%m%d', 'HEAD'
-        ], cwd=BASE_DIR, stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        git_date = git_date_raw
-    except Exception:
-        pass
-    if git_hash and git_date:
-        # Format: Version: ABCDEF (2026-03-09)
-        # git_date is YYYYMMDD, convert to YYYY-MM-DD
-        formatted_date = f"{git_date[:4]}-{git_date[4:6]}-{git_date[6:]}"
-        FURCONNECT_VERSION = f"Version: {git_hash} ({formatted_date})"
-    else:
-        FURCONNECT_VERSION = f"Version: {__version__}"
+    from FurConnectApp.version_info import resolve_version_string
+
+    FURCONNECT_VERSION = resolve_version_string(BASE_DIR, __version__)
 except ImportError:
     FURCONNECT_VERSION = "dev"
 
@@ -58,17 +39,32 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = [os.environ.get('ALLOWED_HOSTS'), "127.0.0.1", "localhost"]
+_hosts = os.environ.get('ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = [host.strip() for host in _hosts.split(',') if host.strip()]
+ALLOWED_HOSTS += ['127.0.0.1', 'localhost']
 
 # CSRF Settings
-CSRF_TRUSTED_ORIGINS = ['https://*']
-CSRF_COOKIE_SECURE = True
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        'http://127.0.0.1:8000',
+        'http://localhost:8000',
+    ]
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    CSRF_USE_SESSIONS = False
+    SESSION_SAVE_EVERY_REQUEST = True
+    USE_X_FORWARDED_HOST = False
+    USE_X_FORWARDED_PORT = False
+else:
+    CSRF_TRUSTED_ORIGINS = ['https://*']
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 CSRF_COOKIE_HTTPONLY = True
 CSRF_USE_SESSIONS = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Session Settings
-SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
@@ -92,6 +88,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'events.middleware.ConcatOAuthCallbackMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -114,6 +111,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'FurConnectApp.settings.furconnect_version',
+                'events.context_processors.user_exists_processor',
+                'events.context_processors.concat_processor',
             ],
         },
     },
@@ -196,6 +195,48 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'events:login'
 LOGIN_REDIRECT_URL = 'schedule'
 LOGOUT_REDIRECT_URL = 'events:login'
+
+# ConCat integration (panel RSVP)
+def _parse_concat_role_list(env_value, default=''):
+    raw = env_value if env_value is not None else default
+    return [role.strip() for role in raw.split(',') if role.strip()]
+
+
+def _parse_concat_product_ids(env_value):
+    if not env_value:
+        return []
+    return [int(value.strip()) for value in env_value.split(',') if value.strip()]
+
+
+CONCAT_ENABLED = os.environ.get('CONCAT_ENABLED', 'False') == 'True'
+CONCAT_API_BASE = os.environ.get('CONCAT_API_BASE', '').rstrip('/')
+CONCAT_CLIENT_ID = os.environ.get('CONCAT_CLIENT_ID', '')
+CONCAT_CLIENT_SECRET = os.environ.get('CONCAT_CLIENT_SECRET', '')
+CONCAT_REDIRECT_URI = os.environ.get('CONCAT_REDIRECT_URI', '')
+CONCAT_TOKEN_ENDPOINT = os.environ.get(
+    'CONCAT_TOKEN_ENDPOINT',
+    f'{CONCAT_API_BASE}/api/oauth/token' if CONCAT_API_BASE else '',
+)
+CONCAT_API_V0_BASE = f'{CONCAT_API_BASE}/api/v0' if CONCAT_API_BASE else ''
+CONCAT_SERVICE_SCOPES = os.environ.get('CONCAT_SERVICE_SCOPES', 'user:read registration:read')
+
+# ConCat roles that may manage conventions (edit schedule, add panels, etc.).
+CONCAT_EVENTS_ROLE = os.environ.get('CONCAT_EVENTS_ROLE', 'events').strip()
+CONCAT_MANAGE_ROLES = _parse_concat_role_list(os.environ.get('CONCAT_MANAGE_ROLES'))
+if not CONCAT_MANAGE_ROLES and CONCAT_EVENTS_ROLE:
+    CONCAT_MANAGE_ROLES = [CONCAT_EVENTS_ROLE]
+# ConCat roles that skip panel RSVP (organizers/events staff).
+CONCAT_SKIP_RSVP_ROLES = _parse_concat_role_list(
+    os.environ.get('CONCAT_SKIP_RSVP_ROLES'),
+    'admin',
+)
+if CONCAT_EVENTS_ROLE and CONCAT_EVENTS_ROLE not in CONCAT_SKIP_RSVP_ROLES:
+    CONCAT_SKIP_RSVP_ROLES.append(CONCAT_EVENTS_ROLE)
+# Optional: only users with one of these ConCat roles may RSVP (empty = any signed-in user).
+CONCAT_RSVP_REQUIRED_ROLES = _parse_concat_role_list(os.environ.get('CONCAT_RSVP_REQUIRED_ROLES'))
+# Optional: require paid registration and/or specific badge product IDs (like Discord badge sync).
+CONCAT_REQUIRE_PAID_REGISTRATION = os.environ.get('CONCAT_REQUIRE_PAID_REGISTRATION', 'False') == 'True'
+CONCAT_RSVP_PRODUCT_IDS = _parse_concat_product_ids(os.environ.get('CONCAT_RSVP_PRODUCT_IDS'))
 
 def furconnect_version(request):
     from django.conf import settings

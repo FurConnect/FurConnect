@@ -1,0 +1,48 @@
+{% if panel.ordered_tags %}
+<div class="tag-dots-container">
+    {% for tag in panel.ordered_tags %}
+    <span class="tag-dot" style="background-color: {{ tag.color }}"></span>
+    {% endfor %}
+</div>
+{% endif %}
+<div class="card-body p-2">
+    <h5 class="card-title mb-1 {% if panel.is_featured %}featured-panel-title{% endif %}" style="display: flex; align-items: center;">
+        {% if panel.cancelled %}
+        <span class="badge bg-secondary me-2">Cancelled</span>
+        {% elif panel.is_featured %}
+        <span class="material-icons-round me-2" style="color: currentColor;">star</span>
+        {% endif %}
+        {{ panel.title }}
+    </h5>
+    <p class="card-text small mb-1">{{ panel.description|linebreaksbr|truncatechars:130 }}</p>
+    <div class="panel-details mt-2">
+        {% if panel.host.all %}
+        <div class="d-flex gap-2 mb-2">
+            {% for host in panel.ordered_hosts %}
+            <div class="host-avatar-container" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}"
+                {% if can_manage_events %}
+                data-host-edit-url="{% url 'events:host_edit' host.id %}"
+                {% endif %}>
+                {% if host.avatar_url %}
+                <img src="{{ host.avatar_url }}" alt="{{ host.name }}" class="host-avatar"
+                     style="border-radius: 50%; object-fit: cover;">
+                {% else %}
+                <div class="host-avatar-initials"
+                     style="border-radius: 50%; background-color: {{ host.get_avatar_color }}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                    {{ host.get_initials }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <h6 class="card-info mb-1">
+            <i class="material-icons fs-6">schedule</i>
+            {{ panel.start_time|time:"g:i A" }} - {{ panel.end_time|time:"g:i A" }}
+        </h6>
+        <h6 class="card-info mb-1">
+            <i class="material-icons fs-6">room</i>
+            {{ panel.room }}
+        </h6>
+    </div>
+</div>

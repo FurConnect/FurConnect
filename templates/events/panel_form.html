@@ -363,6 +363,17 @@
                         <label for="id_name" class="form-label">Name</label>
                         <input type="text" name="name" id="id_name" class="form-control" required>
                     </div>
+                    {% if concat_enabled %}
+                    <div class="mb-3">
+                        <label for="id_concat_user_id" class="form-label">ConCat User ID</label>
+                        <input type="text" name="concat_user_id" id="id_concat_user_id" class="form-control" inputmode="numeric" placeholder="e.g. 1234">
+                        <div class="form-text">Enter the panelist's ConCat user ID to use their ConCat profile picture.</div>
+                    </div>
+                    <div id="currentProfilePic" class="mb-2" style="display: none;">
+                        <img src="" alt="Current profile picture" style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%;">
+                        <p class="text-muted mt-1">Current profile picture</p>
+                    </div>
+                    {% else %}
                     <div class="mb-3">
                         <label for="id_profile_picture" class="form-label">Profile Picture</label>
                         <div id="currentProfilePic" class="mb-2" style="display: none;">
@@ -372,6 +383,7 @@
                         <input type="file" name="image" id="id_profile_picture" class="form-control" accept="image/*">
                         <div class="form-text">Upload a profile picture for the host (optional)</div>
                     </div>
+                    {% endif %}
                 </form>
             </div>
             <div class="modal-footer">
@@ -1131,10 +1143,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const formData = new FormData(addHostForm);
             const hostIdInput = addHostForm.querySelector('#id_host_id');
             const profilePictureInput = addHostForm.querySelector('#id_profile_picture');
+            const concatUserIdInput = addHostForm.querySelector('#id_concat_user_id');
+            const concatEnabled = {{ concat_enabled|yesno:"true,false" }};
 
-            // Append host_id if editing
             if (hostIdInput && hostIdInput.value) {
                 formData.append('host_id', hostIdInput.value);
+            }
+
+            if (concatEnabled) {
+                if (concatUserIdInput) {
+                    formData.set('concat_user_id', concatUserIdInput.value.trim());
+                }
+                sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
+                return;
             }
 
             // Convert image file to base64 if a new one is selected
@@ -1264,7 +1285,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const hostSelectControl = document.querySelector('#id_host').tomselect?.control;
 
         // Function to open modal with host data
-        function openHostEditModal(hostId, hostName, profilePictureUrl) {
+        function openHostEditModal(hostId, hostName, profilePictureUrl, concatUserId) {
             // Update modal title
             const modalTitle = document.getElementById('addHostModalLabel');
             if (modalTitle) modalTitle.textContent = hostId ? 'Edit Event Host' : 'Add New Event Host';
@@ -1272,12 +1293,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // Populate form fields
             const hostNameInput = document.getElementById('id_name');
             const hostIdInput = document.getElementById('id_host_id');
+            const concatUserIdInput = document.getElementById('id_concat_user_id');
             const profilePictureInput = document.getElementById('id_profile_picture');
             const currentProfilePicDiv = document.getElementById('currentProfilePic');
             const deleteHostBtn = document.getElementById('deleteHostBtn');
             
             if (hostNameInput) hostNameInput.value = hostName || '';
             if (hostIdInput) hostIdInput.value = hostId || '';
+            if (concatUserIdInput) concatUserIdInput.value = concatUserId || '';
 
             // Display current profile picture if it exists
             if (profilePictureUrl) {
@@ -1326,7 +1349,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             })
                             .then(data => {
                                 // Populate and open modal with data from the AJAX response
-                                openHostEditModal(data.id, data.name, data.profile_picture);
+                                openHostEditModal(data.id, data.name, data.profile_picture, data.concat_user_id);
                             })
                             .catch(error => {
                                 console.error('Error fetching host details for editing:', error);

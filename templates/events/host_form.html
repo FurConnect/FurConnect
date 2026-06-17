@@ -11,7 +11,7 @@
 
 <div class="card">
     <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post"{% if not concat_enabled %} enctype="multipart/form-data"{% endif %}>
             {% csrf_token %}
             {{ form.non_field_errors }}
 
@@ -21,9 +21,25 @@
                 {{ form.name.errors }}
             </div>
 
+            {% if concat_enabled %}
+            <div class="mb-3">
+                {{ form.concat_user_id.label_tag }}
+                {{ form.concat_user_id }}
+                {{ form.concat_user_id.errors }}
+                <div class="form-text">Enter the panelist's ConCat user ID to use their ConCat profile picture.</div>
+            </div>
+            {% if host.concat_user_id or host.image %}
+            <div class="mb-3">
+                <label class="form-label">Current profile picture</label>
+                <div>
+                    <img src="{{ host.get_profile_picture }}" alt="{{ host.name }}" style="width: 120px; height: 120px; object-fit: cover; border-radius: 50%;">
+                </div>
+            </div>
+            {% endif %}
+            {% else %}
             <div class="mb-3">
                 <label class="form-label">Image:</label>
-                {% if form.instance.image_data %}
+                {% if form.instance.image %}
                     <div class="d-flex align-items-center mb-2">
                         <img src="{{ form.instance.image }}" alt="Current Image" style="max-width: 120px; max-height: 120px; border-radius: 8px; margin-right: 15px;">
                         <div class="form-check">
@@ -42,6 +58,7 @@
                 {{ form.image }}
                 {{ form.image.errors }}
             </div>
+            {% endif %}
 
             <button type="submit" class="btn btn-primary">
                 <i class="material-icons">save</i> Save Host
@@ -60,4 +77,4 @@
         </form>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

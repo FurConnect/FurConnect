@@ -98,6 +98,11 @@ class Panel(models.Model):
 class PanelHost(models.Model):
     name = models.CharField(max_length=100)
     image = models.TextField(blank=True, null=True)
+    concat_user_id = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text='ConCat user ID used to load the panelist profile picture when ConCat is enabled.',
+    )
 
     def __str__(self):
         return self.name
@@ -176,6 +181,19 @@ class PanelHost(models.Model):
             # Fallback to a simple colored div approach
             return None
 
+    def get_profile_picture(self):
+        from django.conf import settings
+
+        if settings.CONCAT_ENABLED and self.concat_user_id:
+            from .concat import get_concat_profile_picture_url
+
+            avatar = get_concat_profile_picture_url(str(self.concat_user_id).strip())
+            if avatar:
+                return avatar
+        if self.image:
+            return self.image
+        return self.get_initials_avatar()
+
     class Meta:
         ordering = ['name']
 
@@ -188,3 +206,18 @@ class Room(models.Model):
 
     class Meta:
         unique_together = ['name', 'convention']
+
+
+class PanelRSVP(models.Model):
+    panel = models.ForeignKey(Panel, on_delete=models.CASCADE, related_name='rsvps')
+    attendee_id = models.CharField(max_length=255)
+    display_name = models.CharField(max_length=200, blank=True)
+    avatar_url = models.URLField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['panel', 'attendee_id']
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.display_name or self.attendee_id} -> {self.panel.title}'

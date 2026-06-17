@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from datetime import timedelta, datetime
 from .models import Convention, ConventionDay, Panel, PanelHost, Tag, Room, PanelHostOrder
 
@@ -249,11 +250,23 @@ class PanelForm(forms.ModelForm):
 class PanelHostForm(forms.ModelForm):
     class Meta:
         model = PanelHost
-        fields = ['name', 'image']
+        fields = ['name', 'concat_user_id', 'image']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'concat_user_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'placeholder': 'ConCat user ID',
+            }),
             'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if settings.CONCAT_ENABLED:
+            self.fields.pop('image', None)
+        else:
+            self.fields.pop('concat_user_id', None)
 
 class TagForm(forms.ModelForm):
     class Meta:

@@ -4,10 +4,11 @@ services:
     restart: unless-stopped
     user: "${DOCKER_UID}:${DOCKER_GID}"
     command: >
-      sh -c "python manage.py makemigrations events &&
+      sh -c "python -c \"from FurConnectApp.version_info import write_version_file; write_version_file('/app')\" || true &&
+             python manage.py makemigrations events &&
              python manage.py migrate &&
              python manage.py collectstatic --noinput &&
-             gunicorn --bind 0.0.0.0:8000 FurConnectApp.wsgi:application"
+             gunicorn --reload --bind 0.0.0.0:8000 FurConnectApp.wsgi:application"
     volumes:
       - .:/app
     ports:
