@@ -61,7 +61,7 @@ When registering your ConCat OAuth application, request these **service scopes**
 - `order:view`
 - `user:read`
 
-Set `CONCAT_SERVICE_SCOPES` in `.env` to match (space-separated), e.g. `registration:read order:view user:read`. User login still uses the `pii:basic` scope for the authorization flow.
+Set `CONCAT_SERVICE_SCOPES` in `.env` to match (space-separated), e.g. `registration:read order:view user:read`. User login still uses the `pii:basic` scope for the authorization flow as this is a ConCat limitation to my knowledge.
 
 Relevant settings:
 
