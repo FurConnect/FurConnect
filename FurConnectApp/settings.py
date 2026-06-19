@@ -45,10 +45,7 @@ ALLOWED_HOSTS += ['127.0.0.1', 'localhost']
 
 # CSRF Settings
 if DEBUG:
-    CSRF_TRUSTED_ORIGINS = [
-        'http://127.0.0.1:8000',
-        'http://localhost:8000',
-    ]
+    CSRF_TRUSTED_ORIGINS = ['https://*']
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     CSRF_USE_SESSIONS = False

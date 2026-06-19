@@ -29,7 +29,6 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DEBUG: "True"
       DB_NAME: furconnect
       DB_USER: furconnect
       DB_PASSWORD: furconnect
