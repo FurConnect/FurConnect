@@ -76,12 +76,7 @@ def attach_host_avatar_urls(hosts):
     unique_hosts = {host.pk: host for host in hosts}
     concat_avatars = _build_concat_avatar_map(unique_hosts.values())
     for host in unique_hosts.values():
-        if settings.CONCAT_ENABLED and host.concat_user_id:
-            host.avatar_url = concat_avatars.get(str(host.concat_user_id)) or None
-        elif host.image:
-            host.avatar_url = host.image
-        else:
-            host.avatar_url = None
+        host.avatar_url = _resolve_host_profile_picture(host, concat_avatars)
     return hosts
 
 

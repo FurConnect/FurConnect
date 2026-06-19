@@ -285,6 +285,26 @@ window.addEventListener('load', function() {
         }
 
 
+        function ensureHostAvatarImg(hostContainer) {
+            let imgElement = hostContainer.querySelector('img.host-avatar');
+            if (imgElement) {
+                return imgElement;
+            }
+
+            const initialsDiv = hostContainer.querySelector('.host-avatar-initials');
+            imgElement = document.createElement('img');
+            imgElement.className = 'host-avatar';
+            imgElement.style.borderRadius = '50%';
+            imgElement.style.objectFit = 'cover';
+            imgElement.alt = hostContainer.getAttribute('data-title') || '';
+            if (initialsDiv) {
+                initialsDiv.replaceWith(imgElement);
+            } else {
+                hostContainer.insertBefore(imgElement, hostContainer.firstChild);
+            }
+            return imgElement;
+        }
+
         // Function to load and update host images using bulk endpoint (single request)
         function loadHostImages(containerElement) {
             requestAnimationFrame(() => {
@@ -331,8 +351,7 @@ window.addEventListener('load', function() {
                         hostContainers.forEach(hostContainer => {
                             const hostId = String(hostContainer.dataset.hostId);
                             const hostData = hostsById[hostId];
-                            const imgElement = hostContainer.querySelector('img.host-avatar');
-                            if (!imgElement) return;
+                            const imgElement = ensureHostAvatarImg(hostContainer);
 
                             if (hostData && hostData.profile_picture) {
                                 let imageUrl = hostData.profile_picture;
@@ -359,8 +378,7 @@ window.addEventListener('load', function() {
                     .catch(error => {
                         console.error('Bulk host image load failed:', error);
                         hostContainers.forEach(hostContainer => {
-                            const imgElement = hostContainer.querySelector('img.host-avatar');
-                            if (!imgElement) return;
+                            const imgElement = ensureHostAvatarImg(hostContainer);
                             const hostName = hostContainer.getAttribute('data-title') || '?';
                             const initials = generateInitials(hostName);
                             const color = generateAvatarColor(hostName);
