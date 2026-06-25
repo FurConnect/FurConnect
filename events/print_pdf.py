@@ -7,10 +7,12 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from .models import Convention, Room
+from .rsvp import filter_panels_for_user_rsvp
 
 def printable_schedule_pdf(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     days = convention.days.all().order_by('date')
+    rsvp_param = request.GET.get('rsvp')
     from io import BytesIO
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -42,7 +44,10 @@ def printable_schedule_pdf(request, pk):
         day_style.textColor = colors.HexColor('#222')
         day_style.alignment = TA_CENTER
         elements.append(Paragraph(day.date.strftime('%A, %B %d, %Y'), day_style))
-        panels = list(day.panels.all().order_by('start_time'))
+        panels_qs = day.panels.all().order_by('start_time')
+        if rsvp_param:
+            panels_qs = filter_panels_for_user_rsvp(panels_qs, request, rsvp_param).order_by('start_time')
+        panels = list(panels_qs)
         if not panels:
             elements.append(Paragraph("<i>No panels scheduled.</i>", styles['Normal']))
             elements.append(Spacer(1, 12))

@@ -206,6 +206,13 @@ window.addEventListener('load', function() {
                 if (iconEl) iconEl.textContent = rsvped ? 'bookmark' : 'bookmark_border';
                 updateRsvpCounts(count);
                 if (attendees) renderRsvpAttendees(attendees);
+
+                document.querySelectorAll(`[data-panel-id="${panelId}"]`).forEach(card => {
+                    card.dataset.rsvped = rsvped ? 'true' : 'false';
+                });
+                if (typeof applyFilters === 'function') {
+                    applyFilters();
+                }
             }
 
             button.disabled = true;
@@ -707,6 +714,7 @@ window.addEventListener('load', function() {
         // Filter logic (programming-style dropdown controls)
         let activeTagFilters = ['all'];
         let activeRoomFilters = ['all'];
+        let showMyRsvpsOnly = false;
 
         function updateFilterSummary(filterType) {
             const display = document.getElementById(`${filterType}FilterText`);
@@ -749,6 +757,8 @@ window.addEventListener('load', function() {
         function applyFilters() {
             const tagFilters = activeTagFilters.includes('all') ? [] : activeTagFilters;
             const roomFilters = activeRoomFilters.includes('all') ? [] : activeRoomFilters;
+            const rsvpToggle = document.getElementById('showMyRsvpsToggle');
+            showMyRsvpsOnly = !!(rsvpToggle && rsvpToggle.checked);
 
             const panels = document.querySelectorAll('.panel-card, .panel-card-mobile, .grid-cell-card');
             panels.forEach(panel => {
@@ -757,7 +767,8 @@ window.addEventListener('load', function() {
 
                 const tagMatch = tagFilters.length === 0 || tagFilters.some(filter => panelTags.includes(filter));
                 const roomMatch = roomFilters.length === 0 || roomFilters.includes(panelRoomSlug);
-                const shouldShow = tagMatch && roomMatch;
+                const rsvpMatch = !showMyRsvpsOnly || panel.dataset.rsvped === 'true';
+                const shouldShow = tagMatch && roomMatch && rsvpMatch;
 
                 panel.classList.toggle('hidden', !shouldShow);
                 if (shouldShow) {
@@ -784,6 +795,10 @@ window.addEventListener('load', function() {
             });
 
             updateTimeSlotsVisibility();
+
+            if (typeof window.updateExportLinks === 'function') {
+                window.updateExportLinks();
+            }
         }
 
         function setFilterState(filterType, value) {
@@ -868,6 +883,13 @@ window.addEventListener('load', function() {
             refreshFilterUI('tag');
             refreshFilterUI('room');
             applyFilters();
+
+            const rsvpToggle = document.getElementById('showMyRsvpsToggle');
+            if (rsvpToggle) {
+                rsvpToggle.addEventListener('change', function() {
+                    applyFilters();
+                });
+            }
         }
 
         initFilters();
@@ -1508,7 +1530,7 @@ window.addEventListener('load', function() {
                     </a>
                 </li>
                 <li>
-                    <a class="dropdown-item d-flex align-items-center" href="{% url 'events:export_panels_csv' convention_pk=convention.pk %}">
+                    <a id="exportCsvBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:export_panels_csv' convention_pk=convention.pk %}">
                         <i class="material-icons me-2">download</i> Export CSV
                     </a>
                 </li>
@@ -1575,10 +1597,24 @@ window.addEventListener('load', function() {
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 var feedPath = '{% url "events:convention_ical_feed" pk=convention.pk %}';
+                var rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
+
+                function getRsvpQueryString() {
+                    var toggle = document.getElementById('showMyRsvpsToggle');
+                    if (!toggle || !toggle.checked || !rsvpFeedToken) {
+                        return '';
+                    }
+                    return 'rsvp=' + encodeURIComponent(rsvpFeedToken);
+                }
 
                 function getFeedUrl() {
                     var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
-                    return origin + feedPath;
+                    var url = origin + feedPath;
+                    var rsvpQuery = getRsvpQueryString();
+                    if (rsvpQuery) {
+                        url += '?' + rsvpQuery;
+                    }
+                    return url;
                 }
 
                 function refreshCalendarFeedUrl() {
@@ -1587,6 +1623,8 @@ window.addEventListener('load', function() {
                         urlInput.value = getFeedUrl();
                     }
                 }
+
+                window.refreshCalendarFeedUrl = refreshCalendarFeedUrl;
 
                 document.body.addEventListener('click', function (e) {
                     var trigger = e.target.closest('#calendarFeedModalTrigger');
@@ -1643,18 +1681,57 @@ window.addEventListener('load', function() {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const exportPdfBtn = document.getElementById('exportPdfBtn');
-    if (!exportPdfBtn) return;
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+    const rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
 
-    function updateExportPdfLink(view) {
-        const currentView = view || localStorage.getItem('scheduleView') || 'list';
-        const baseUrl = exportPdfBtn.href.split('?')[0];
-        exportPdfBtn.href = baseUrl + '?view=' + currentView;
+    function getRsvpQueryString() {
+        const toggle = document.getElementById('showMyRsvpsToggle');
+        if (!toggle || !toggle.checked || !rsvpFeedToken) {
+            return '';
+        }
+        return 'rsvp=' + encodeURIComponent(rsvpFeedToken);
     }
 
-    updateExportPdfLink();
-    document.addEventListener('scheduleViewChanged', function (e) {
-        updateExportPdfLink(e.detail.view);
-    });
+    function appendQueryParams(baseUrl, params) {
+        const entries = Object.entries(params).filter(([, value]) => value);
+        if (!entries.length) {
+            return baseUrl;
+        }
+        const query = entries.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&');
+        return baseUrl.split('?')[0] + '?' + query;
+    }
+
+    function updateExportLinks(view) {
+        const currentView = view || localStorage.getItem('scheduleView') || 'list';
+        const toggle = document.getElementById('showMyRsvpsToggle');
+        const rsvpValue = (toggle && toggle.checked && rsvpFeedToken) ? rsvpFeedToken : '';
+
+        if (exportPdfBtn) {
+            exportPdfBtn.href = appendQueryParams(exportPdfBtn.href.split('?')[0], {
+                view: currentView,
+                rsvp: rsvpValue,
+            });
+        }
+
+        if (exportCsvBtn) {
+            exportCsvBtn.href = appendQueryParams(exportCsvBtn.href.split('?')[0], {
+                rsvp: rsvpValue,
+            });
+        }
+
+        if (typeof window.refreshCalendarFeedUrl === 'function') {
+            window.refreshCalendarFeedUrl();
+        }
+    }
+
+    window.updateExportLinks = updateExportLinks;
+
+    if (exportPdfBtn || exportCsvBtn) {
+        updateExportLinks();
+        document.addEventListener('scheduleViewChanged', function (e) {
+            updateExportLinks(e.detail.view);
+        });
+    }
 });
 </script>
 
@@ -1766,6 +1843,18 @@ document.addEventListener('DOMContentLoaded', function () {
                             </ul>
                         </div>
                     </div>
+
+                    {% if concat_enabled and concat_authenticated %}
+                    <div class="filter-rsvps mb-3">
+                        <div class="form-check form-switch filter-rsvps-toggle">
+                            <input class="form-check-input" type="checkbox" id="showMyRsvpsToggle" role="switch">
+                            <label class="form-check-label" for="showMyRsvpsToggle">
+                                <i class="material-icons" aria-hidden="true">bookmark</i>
+                                Show my RSVPs
+                            </label>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -1824,6 +1913,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                              data-panel-id="{{ panel.pk }}"
                                                              data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
                                                              data-room="{% if panel.room %}{{ panel.room.name|lower|slugify }}{% endif %}"
+                                                             data-rsvped="{% if panel.pk in user_rsvp_panel_ids %}true{% else %}false{% endif %}"
                                                              {% if panel.cancelled %}data-cancelled="true"{% endif %}
                                                              style="--panel-accent: {{ panel_color }};">
                                                             {% include 'events/panel_schedule_card.html' with panel=panel %}
@@ -1861,6 +1951,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                              data-panel-id="{{ panel.pk }}"
                                              data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
                                              data-room="{% if panel.room %}{{ panel.room.name|lower|slugify }}{% endif %}"
+                                             data-rsvped="{% if panel.pk in user_rsvp_panel_ids %}true{% else %}false{% endif %}"
                                              {% if panel.cancelled %}data-cancelled="true"{% endif %}
                                              style="--panel-accent: {{ panel.ordered_tags.0.color|default:'#ffc107' }};">
                                             {% include 'events/panel_schedule_card.html' with panel=panel %}
@@ -2302,6 +2393,55 @@ html[data-bs-theme="dark"] #panelDetailModal .panel-detail-going-card {
     box-sizing: border-box;
     min-height: clamp(92px, 7vw, 132px);
     max-height: clamp(112px, 9vw, 140px);
+}
+
+.filter-rsvps {
+    flex: 1 1 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0;
+    padding: 0.25rem 0.6rem 0.6rem;
+}
+
+.filter-rsvps-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.filter-rsvps-toggle .form-check-input {
+    margin: 0;
+    cursor: pointer;
+}
+
+.filter-rsvps-toggle .form-check-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 500;
+}
+
+.filter-rsvps-toggle .material-icons {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+html[data-bs-theme="light"] .filter-rsvps-toggle {
+    border-color: rgba(75, 41, 145, 0.18);
+    background: rgba(75, 41, 145, 0.04);
+}
+
+html[data-bs-theme="light"] .filter-rsvps-toggle .form-check-label {
+    color: #333;
 }
 
 .filter-tags h5,

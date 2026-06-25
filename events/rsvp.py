@@ -1,6 +1,10 @@
 from django.conf import settings
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 
 from .models import PanelRSVP
+
+_rsvp_feed_signer = TimestampSigner(salt='furconnect-rsvp-feed')
+RSVP_FEED_TOKEN_MAX_AGE = 60 * 60 * 24 * 365
 
 
 def can_rsvp_with_concat(request):
@@ -17,6 +21,51 @@ def _attendee_id_lookup(user_id):
     if not user_id:
         return []
     return [user_id, f'concat:{user_id}']
+
+
+def make_rsvp_feed_token(user_id):
+    return _rsvp_feed_signer.sign(str(user_id))
+
+
+def user_id_from_rsvp_feed_token(token):
+    try:
+        return _rsvp_feed_signer.unsign(token, max_age=RSVP_FEED_TOKEN_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+
+
+def get_rsvp_attendee_ids_for_request(request, rsvp_param=None):
+    user_id = None
+    if rsvp_param and rsvp_param != '1':
+        user_id = user_id_from_rsvp_feed_token(rsvp_param)
+    if not user_id:
+        user_id = request.session.get('concat_user_id')
+    if not user_id:
+        return None
+    return _attendee_id_lookup(user_id)
+
+
+def filter_panels_for_user_rsvp(panels_qs, request, rsvp_param=None):
+    attendee_ids = get_rsvp_attendee_ids_for_request(request, rsvp_param)
+    if not attendee_ids:
+        return panels_qs.none()
+    panel_ids = PanelRSVP.objects.filter(
+        attendee_id__in=attendee_ids,
+        panel__in=panels_qs,
+    ).values_list('panel_id', flat=True).distinct()
+    return panels_qs.filter(pk__in=panel_ids)
+
+
+def get_user_rsvp_panel_ids(request, convention):
+    user_id = request.session.get('concat_user_id')
+    if not user_id:
+        return set()
+    return set(
+        PanelRSVP.objects.filter(
+            attendee_id__in=_attendee_id_lookup(user_id),
+            panel__convention_day__convention=convention,
+        ).values_list('panel_id', flat=True)
+    )
 
 
 def get_concat_attendee_identity(request):

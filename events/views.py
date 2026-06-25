@@ -22,7 +22,16 @@ from .concat import (
     resolve_concat_access,
 )
 from .auth import can_manage_events, concat_organizer_required
-from .rsvp import _attendee_id_lookup, can_rsvp_with_concat, get_concat_attendee_identity, get_rsvp_attendees, get_rsvp_context
+from .rsvp import (
+    _attendee_id_lookup,
+    can_rsvp_with_concat,
+    filter_panels_for_user_rsvp,
+    get_concat_attendee_identity,
+    get_rsvp_attendees,
+    get_rsvp_context,
+    get_user_rsvp_panel_ids,
+    make_rsvp_feed_token,
+)
 import icalendar
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -320,6 +329,10 @@ def convention_detail(request, pk):
 
         days_matrix.append({'day': display_day['original_day_obj'], 'rows': matrix_rows, 'rooms': rooms_used})
 
+    concat_user_id = request.session.get('concat_user_id')
+    user_rsvp_panel_ids = get_user_rsvp_panel_ids(request, convention) if concat_user_id else set()
+    rsvp_feed_token = make_rsvp_feed_token(concat_user_id) if concat_user_id else ''
+
     return render(request, 'events/convention_detail.html', {
         'convention': convention,
         'days': display_days_with_panels,
@@ -331,8 +344,10 @@ def convention_detail(request, pk):
         'is_staff': can_manage_events(request),
         'can_manage_events': can_manage_events(request),
         'concat_enabled': settings.CONCAT_ENABLED,
-        'concat_authenticated': bool(request.session.get('concat_user_id')),
+        'concat_authenticated': bool(concat_user_id),
         'concat_user_name': request.session.get('concat_user_name', ''),
+        'user_rsvp_panel_ids': user_rsvp_panel_ids,
+        'rsvp_feed_token': rsvp_feed_token,
     })
 
 @concat_organizer_required
@@ -1394,7 +1409,6 @@ def export_panels_csv(request, convention_pk):
         'Hosts'
     ])
     
-    # Get all panels for the convention
     panels = Panel.objects.filter(
         convention_day__convention=convention
     ).select_related(
@@ -1404,6 +1418,10 @@ def export_panels_csv(request, convention_pk):
         'tags',
         'host'
     ).order_by('convention_day__date', 'start_time')
+
+    rsvp_param = request.GET.get('rsvp')
+    if rsvp_param:
+        panels = filter_panels_for_user_rsvp(panels, request, rsvp_param)
     
     # Write panel data
     for panel in panels:
@@ -1431,6 +1449,7 @@ def export_panels_csv(request, convention_pk):
 def convention_ical_feed(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     days = convention.days.all().order_by('date')
+    rsvp_param = request.GET.get('rsvp')
     cal = icalendar.Calendar()
     cal.add('prodid', '-//FurConnect//Convention Schedule//EN')
     cal.add('version', '2.0')
@@ -1452,6 +1471,8 @@ def convention_ical_feed(request, pk):
     tz = pytz.timezone(tz_name)
     for day in days:
         panels = day.panels.filter(cancelled=False).order_by('start_time')
+        if rsvp_param:
+            panels = filter_panels_for_user_rsvp(panels, request, rsvp_param).order_by('start_time')
         for panel in panels:
             event = icalendar.Event()
             event.add('summary', panel.title or "Untitled Event")
