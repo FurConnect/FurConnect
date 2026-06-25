@@ -1537,9 +1537,9 @@ window.addEventListener('load', function() {
             </ul>
         </div>
         {% if can_manage_events %}
-        <a href="{% url 'events:convention_edit' convention.pk %}" class="btn toolbar-btn">
-            <i class="material-icons">edit</i>
-            <span class="toolbar-btn-label">Edit</span>
+        <a href="{% url 'events:admin_panel' convention.pk %}" class="btn toolbar-btn">
+            <i class="material-icons">admin_panel_settings</i>
+            <span class="toolbar-btn-label">Admin</span>
         </a>
         <div class="dropdown">
             <button class="btn toolbar-btn dropdown-toggle" type="button" id="addEventDropdown" data-bs-toggle="dropdown" aria-expanded="false">

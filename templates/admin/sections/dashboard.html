@@ -1,0 +1,71 @@
+<div class="fc-stat-grid">
+    <div class="fc-stat-card">
+        <div class="stat-value">{{ panel_count }}</div>
+        <div class="stat-label">Panels</div>
+    </div>
+    <div class="fc-stat-card">
+        <div class="stat-value">{{ rooms|length }}</div>
+        <div class="stat-label">Rooms</div>
+    </div>
+    <div class="fc-stat-card">
+        <div class="stat-value">{{ hosts|length }}</div>
+        <div class="stat-label">Hosts</div>
+    </div>
+    <div class="fc-stat-card">
+        <div class="stat-value">{{ tags|length }}</div>
+        <div class="stat-label">Tags</div>
+    </div>
+    <div class="fc-stat-card">
+        <div class="stat-value">{{ day_count }}</div>
+        <div class="stat-label">Days</div>
+    </div>
+</div>
+
+<div class="card mb-4 fc-section-card">
+    <div class="card-header">
+        <i class="material-icons">bolt</i>
+        <span>Quick Actions</span>
+    </div>
+    <div class="card-body">
+        <div class="control-toolbar">
+            <a href="{% url 'events:admin_panel_section' convention.pk 'settings' %}" class="btn toolbar-btn">
+                <i class="material-icons">settings</i>
+                <span class="toolbar-btn-label">Edit Event</span>
+            </a>
+            <a href="{% url 'events:admin_panel_section' convention.pk 'rooms' %}" class="btn toolbar-btn">
+                <i class="material-icons">meeting_room</i>
+                <span class="toolbar-btn-label">Rooms</span>
+            </a>
+            <a href="{% url 'events:admin_panel_section' convention.pk 'hosts' %}" class="btn toolbar-btn">
+                <i class="material-icons">people</i>
+                <span class="toolbar-btn-label">Hosts</span>
+            </a>
+            <a href="{% url 'events:admin_panel_section' convention.pk 'tags' %}" class="btn toolbar-btn">
+                <i class="material-icons">label</i>
+                <span class="toolbar-btn-label">Tags</span>
+            </a>
+            <a href="{% url 'events:import_panels_csv' convention_pk=convention.pk %}" class="btn toolbar-btn">
+                <i class="material-icons">upload_file</i>
+                <span class="toolbar-btn-label">Import Panels</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if convention.start_date and convention.end_date %}
+<div class="card mb-4 fc-section-card">
+    <div class="card-header">
+        <i class="material-icons">info</i>
+        <span>Event Summary</span>
+    </div>
+    <div class="card-body">
+        <p class="mb-2"><strong>Dates:</strong> {{ convention.start_date|date:"F j, Y" }} — {{ convention.end_date|date:"F j, Y" }}</p>
+        {% if convention.location %}
+        <p class="mb-2"><strong>Location:</strong> {{ convention.location }}</p>
+        {% endif %}
+        {% if convention.description %}
+        <p class="mb-0"><strong>About:</strong> {{ convention.description|truncatewords:50 }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

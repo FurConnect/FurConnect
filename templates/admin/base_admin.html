@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}{% block admin_title %}Admin{% endblock %} — {{ convention.name }}{% endblock %}
+
+{% block extra_css %}
+{% block admin_extra_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="display-4">{{ convention.name }}</h1>
+        {% if convention.description %}
+        <p class="lead">{{ convention.description }}</p>
+        {% endif %}
+        {% if convention.location %}
+        <p class="lead mb-1">
+            <i class="material-icons" style="vertical-align: middle;">location_on</i>
+            {{ convention.location }}
+        </p>
+        {% endif %}
+        {% if convention.start_date %}
+        <p class="lead mb-0">
+            <i class="material-icons" style="vertical-align: middle;">calendar_today</i>
+            {% if convention.start_date == convention.end_date %}
+                {{ convention.start_date|date:"M d, Y" }}
+            {% else %}
+                {{ convention.start_date|date:"M d, Y" }} — {{ convention.end_date|date:"M d, Y" }}
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="convention-actions mb-3">
+    <div class="control-toolbar">
+        <a href="{% url 'events:convention_detail' convention.pk %}" class="btn toolbar-btn">
+            <i class="material-icons">calendar_month</i>
+            <span class="toolbar-btn-label">View Schedule</span>
+        </a>
+        <a href="{% url 'events:import_panels_csv' convention_pk=convention.pk %}" class="btn toolbar-btn">
+            <i class="material-icons">upload_file</i>
+            <span class="toolbar-btn-label">Import Panels</span>
+        </a>
+        <a href="{% url 'events:export_panels_csv' convention_pk=convention.pk %}" class="btn toolbar-btn">
+            <i class="material-icons">download</i>
+            <span class="toolbar-btn-label">Export Panels</span>
+        </a>
+        <span class="btn toolbar-btn active" aria-current="page">
+            <i class="material-icons">admin_panel_settings</i>
+            <span class="toolbar-btn-label">Admin</span>
+        </span>
+        <button id="page-theme-btn" class="btn toolbar-btn toolbar-btn-icon btn-theme-switch ms-auto" type="button" aria-label="Toggle theme">
+            <span class="theme-btn-icon">☀</span>
+        </button>
+        <input type="hidden" id="page-theme-toggle" />
+    </div>
+</div>
+
+{% if convention.banner_image %}
+<div class="card mb-4 fc-section-card">
+    <div class="card-body p-0">
+        <img src="{{ convention.banner_image }}" alt="{{ convention.name }} banner" class="img-fluid w-100" style="object-fit: cover; max-height: 300px;">
+    </div>
+</div>
+{% endif %}
+
+<ul class="nav nav-tabs improved-nav-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if section == 'dashboard' %}active{% endif %}"
+           href="{% url 'events:admin_panel_section' convention.pk 'dashboard' %}">
+            <i class="material-icons">dashboard</i> Dashboard
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if section == 'settings' %}active{% endif %}"
+           href="{% url 'events:admin_panel_section' convention.pk 'settings' %}">
+            <i class="material-icons">settings</i> Settings
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if section == 'rooms' %}active{% endif %}"
+           href="{% url 'events:admin_panel_section' convention.pk 'rooms' %}">
+            <i class="material-icons">meeting_room</i> Rooms
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if section == 'hosts' %}active{% endif %}"
+           href="{% url 'events:admin_panel_section' convention.pk 'hosts' %}">
+            <i class="material-icons">people</i> Hosts
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if section == 'tags' %}active{% endif %}"
+           href="{% url 'events:admin_panel_section' convention.pk 'tags' %}">
+            <i class="material-icons">label</i> Tags
+        </a>
+    </li>
+</ul>
+
+{% block admin_content %}{% endblock %}
+{% endblock %}
+
+{% block extra_js %}
+{% block admin_extra_js %}{% endblock %}
+{% endblock %}

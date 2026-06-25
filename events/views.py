@@ -21,7 +21,7 @@ from .concat import (
     parse_concat_user,
     resolve_concat_access,
 )
-from .auth import can_manage_events, concat_organizer_required
+from .auth import can_manage_events, organizer_required
 from .rsvp import (
     _attendee_id_lookup,
     can_rsvp_with_concat,
@@ -35,9 +35,14 @@ from .rsvp import (
 import icalendar
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Count, Prefetch, Q
+import colorsys
 import csv
 import math
+import random
+
+ADMIN_PANEL_SECTIONS = frozenset({'dashboard', 'settings', 'rooms', 'hosts', 'tags'})
 
 _concat_oauth_signer = TimestampSigner(salt='furconnect-concat-oauth')
 
@@ -350,7 +355,7 @@ def convention_detail(request, pk):
         'rsvp_feed_token': rsvp_feed_token,
     })
 
-@concat_organizer_required
+@organizer_required
 def convention_create(request):
     if request.method == 'POST':
         form = ConventionForm(request.POST)
@@ -372,31 +377,66 @@ def convention_create(request):
         # 'states_by_country': STATES_BY_COUNTRY  # Commented out as states are handled by text input now
     })
 
-@concat_organizer_required
+@organizer_required
 def convention_edit(request, pk):
+    return redirect('events:admin_panel_section', pk=pk, section='settings')
+
+def _get_admin_panel_data(convention):
+    rooms = Room.objects.filter(convention=convention).order_by('name')
+    hosts = (
+        PanelHost.objects.filter(panels__convention_day__convention=convention)
+        .distinct()
+        .order_by('name')
+    )
+    tags = (
+        Tag.objects.filter(panels__convention_day__convention=convention)
+        .distinct()
+        .order_by('name')
+    )
+    panel_count = Panel.objects.filter(convention_day__convention=convention).count()
+    day_count = convention.days.count()
+    return {
+        'rooms': rooms,
+        'hosts': hosts,
+        'tags': tags,
+        'panel_count': panel_count,
+        'day_count': day_count,
+    }
+
+
+@organizer_required
+def admin_panel(request, pk, section='dashboard'):
     convention = get_object_or_404(Convention, pk=pk)
-    # Fetch the current convention name
-    current_convention = convention.name
+    if section not in ADMIN_PANEL_SECTIONS:
+        section = 'dashboard'
 
-    if request.method == 'POST':
-        form = ConventionForm(request.POST, request.FILES, instance=convention)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Convention updated successfully!')
-            # Use the pk from the URL arguments for the redirect
-            return redirect('events:convention_detail', pk=pk)
-    else:
-        form = ConventionForm(instance=convention)
-    # Use the current convention's name for the title
-    current_convention_name = current_convention
+    context = {
+        'convention': convention,
+        'section': section,
+        'current_convention_name': convention.name,
+        'concat_user_name': request.session.get('concat_user_name', ''),
+    }
+    context.update(_get_admin_panel_data(convention))
 
-    return render(request, 'events/convention_form.html', {
-        'form': form,
-        'action': 'Edit',
-        'current_convention_name': current_convention_name
-    })
+    if section == 'settings':
+        if request.method == 'POST':
+            form = ConventionForm(request.POST, request.FILES, instance=convention)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Event settings saved successfully!')
+                return redirect('events:admin_panel_section', pk=pk, section='settings')
+        else:
+            form = ConventionForm(instance=convention)
+        context['form'] = form
 
-@concat_organizer_required
+    return render(request, 'admin/convention_admin.html', context)
+
+
+@organizer_required
+def manage_convention_items(request, pk):
+    return redirect('events:admin_panel_section', pk=pk, section='rooms')
+
+@organizer_required
 def panel_create(request, day_pk):
     # Get the ConventionDay using the provided day_pk from the URL
     convention_day_from_url = get_object_or_404(ConventionDay, pk=day_pk)
@@ -453,7 +493,7 @@ def panel_create(request, day_pk):
         'convention_pk': current_convention.pk # Pass convention pk for redirect if needed
     })
 
-@concat_organizer_required
+@organizer_required
 def panel_edit(request, pk):
     panel = get_object_or_404(Panel.objects.select_related('convention_day__convention').prefetch_related('tags', 'host'), pk=pk)
     # Store the convention_pk before saving, in case the object state changes
@@ -487,7 +527,7 @@ def panel_edit(request, pk):
         'tag_form': tag_form
     })
 
-@concat_organizer_required
+@organizer_required
 def panel_delete(request, pk):
     panel = get_object_or_404(Panel, pk=pk)
     convention_pk = panel.convention_day.convention.pk
@@ -502,7 +542,7 @@ def panel_delete(request, pk):
         'current_convention_name': panel.convention_day.convention.name
     })
 
-@concat_organizer_required
+@organizer_required
 def convention_delete(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     if request.method == 'POST':
@@ -663,6 +703,9 @@ def register_view(request):
 def login_view(request):
     if settings.CONCAT_ENABLED:
         messages.info(request, 'Sign in with ConCat using an organizer role to manage events.')
+        next_path = request.GET.get('next', '')
+        if next_path:
+            return redirect(f"{reverse('events:concat_login')}?next={quote(next_path)}")
         return redirect('events:concat_login')
 
     if request.method == 'POST':
@@ -673,19 +716,19 @@ def login_view(request):
         if user is not None:
             login(request, user)
             messages.success(request, 'Welcome back! You have been successfully logged in.')
-            # Redirect to the schedule page on successful login
+            next_path = request.POST.get('next') or request.GET.get('next')
+            if next_path and next_path.startswith('/') and not next_path.startswith('//'):
+                return redirect(next_path)
             return redirect('events:schedule')
         else:
-            # Add an error message using Django's messages framework
             messages.error(request, 'Invalid username or password.')
 
-    # Handle GET request or failed POST request by rendering the login template
-    # If it was a failed POST, the messages framework will include the error.
     return render(request, 'events/login.html', {
         'current_convention_name': 'FurConnect',
+        'next': request.GET.get('next', ''),
     })
 
-@concat_organizer_required
+@organizer_required
 def add_panel_host_ajax(request):
     print("add_panel_host_ajax called")
     if request.method == 'POST':
@@ -749,7 +792,7 @@ def add_panel_host_ajax(request):
     print("Invalid request method.")
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def add_tag_ajax(request):
     if request.method == 'POST':
         tag_id = request.POST.get('tag_id')
@@ -806,7 +849,7 @@ def panel_calendar(request, pk):
     
     return response
 
-@concat_organizer_required
+@organizer_required
 def tag_edit(request, name):
     try:
         tag = Tag.objects.get(name__iexact=name)
@@ -833,7 +876,7 @@ def tag_edit(request, name):
         messages.error(request, 'Tag not found.')
         return redirect('events:schedule')
 
-@concat_organizer_required
+@organizer_required
 def host_edit(request, pk):
     host = get_object_or_404(PanelHost, pk=pk)
     if request.method == 'POST':
@@ -862,7 +905,7 @@ def host_edit(request, pk):
         'current_convention_name': 'FurConnect'
     })
 
-@concat_organizer_required
+@organizer_required
 def delete_room_ajax(request, pk):
     """
     AJAX view to delete a single Room.
@@ -878,7 +921,7 @@ def delete_room_ajax(request, pk):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def delete_host_ajax(request, pk):
     """
     AJAX view to delete a single PanelHost.
@@ -894,7 +937,7 @@ def delete_host_ajax(request, pk):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def get_tag_details_ajax(request, pk):
     """
     AJAX view to get details of a single Tag.
@@ -911,7 +954,7 @@ def get_tag_details_ajax(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def save_room_ajax(request):
     """
     AJAX view to save a new or existing Room.
@@ -959,7 +1002,7 @@ def save_room_ajax(request):
         'error': 'Invalid request method.'
     }, status=400)
 
-@concat_organizer_required
+@organizer_required
 def toggle_cancelled(request, pk):
     """Toggle the cancelled status of a panel."""
     if not can_manage_events(request):
@@ -987,7 +1030,7 @@ def toggle_cancelled(request, pk):
         messages.error(request, f'Error toggling panel status: {str(e)}')
         return redirect('events:convention_detail', pk=panel.convention_day.convention.pk)
 
-@concat_organizer_required
+@organizer_required
 def delete_tag_ajax(request, pk):
     """
     AJAX view to delete a single Tag.
@@ -1080,7 +1123,7 @@ def get_room_details_ajax(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def get_all_hosts_ajax(request):
     """
     AJAX view to get all PanelHosts for a given convention.
@@ -1121,7 +1164,7 @@ def get_all_hosts_ajax(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def get_all_rooms_ajax(request):
     """
     AJAX view to get all Rooms for a given convention.
@@ -1144,7 +1187,7 @@ def get_all_rooms_ajax(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def get_all_tags_ajax(request):
     """
     AJAX view to get all Tags for a given convention.
@@ -1172,7 +1215,7 @@ def get_all_tags_ajax(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def reorder_tags_ajax(request, panel_id):
     """
     AJAX view to reorder tags for a panel.
@@ -1194,7 +1237,7 @@ def reorder_tags_ajax(request, panel_id):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def reorder_hosts_ajax(request, panel_id):
     """
     AJAX view to reorder hosts for a panel.
@@ -1216,7 +1259,7 @@ def reorder_hosts_ajax(request, panel_id):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
-@concat_organizer_required
+@organizer_required
 def import_panels_csv(request, convention_pk):
     convention = get_object_or_404(Convention, pk=convention_pk)
     if request.method == 'POST':
@@ -1531,3 +1574,152 @@ def get_hosts_batch_ajax(request):
         return JsonResponse({'hosts': hosts_data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+def _admin_panel_redirect(convention_pk, section='dashboard'):
+    return redirect('events:admin_panel_section', pk=convention_pk, section=section)
+
+
+@organizer_required
+def randomize_tag_colors(request):
+    if request.method == 'POST':
+        tags = Tag.objects.all()
+        count = 0
+        for tag in tags:
+            hue = random.randint(0, 360)
+            saturation = random.randint(60, 90)
+            lightness = random.randint(40, 60)
+            r, g, b = colorsys.hls_to_rgb(hue / 360.0, lightness / 100.0, saturation / 100.0)
+            tag.color = f'#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}'
+            tag.save()
+            count += 1
+        messages.success(request, f'Successfully randomized colors for {count} tags.')
+
+    convention_pk = request.POST.get('convention_pk')
+    if convention_pk:
+        return _admin_panel_redirect(convention_pk, 'tags')
+    return redirect(request.META.get('HTTP_REFERER', reverse('events:schedule')))
+
+
+@organizer_required
+def download_rooms_template(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="rooms_import_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['name'])
+    writer.writerow(['Main Hall'])
+    writer.writerow(['Panel Room 1'])
+    writer.writerow(['Grand Ballroom'])
+    return response
+
+
+@organizer_required
+def download_hosts_template(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="hosts_import_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['name'])
+    writer.writerow(['John Doe'])
+    writer.writerow(['Jane Smith'])
+    writer.writerow(['DJ FurMix'])
+    return response
+
+
+@organizer_required
+def download_tags_template(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="tags_import_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['name', 'color'])
+    writer.writerow(['Art', '#FF6B6B'])
+    writer.writerow(['Workshop', '#4ECDC4'])
+    writer.writerow(['Performance', '#FFE66D'])
+    writer.writerow(['Gaming', '#95E1D3'])
+    return response
+
+
+@organizer_required
+def import_rooms_csv(request, convention_pk):
+    convention = get_object_or_404(Convention, pk=convention_pk)
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        try:
+            decoded_file = request.FILES['csv_file'].read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            created_count = 0
+            updated_count = 0
+            with transaction.atomic():
+                for row in reader:
+                    name = row.get('name', '').strip()
+                    if not name:
+                        continue
+                    _, created = Room.objects.get_or_create(name=name, convention=convention)
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
+            messages.success(
+                request,
+                f'Successfully imported rooms: {created_count} created, {updated_count} already existed.',
+            )
+        except Exception as e:
+            messages.error(request, f'Error importing rooms: {str(e)}')
+    return _admin_panel_redirect(convention_pk, 'rooms')
+
+
+@organizer_required
+def import_hosts_csv(request, convention_pk):
+    get_object_or_404(Convention, pk=convention_pk)
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        try:
+            decoded_file = request.FILES['csv_file'].read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            created_count = 0
+            updated_count = 0
+            with transaction.atomic():
+                for row in reader:
+                    name = row.get('name', '').strip()
+                    if not name:
+                        continue
+                    _, created = PanelHost.objects.get_or_create(name=name)
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
+            messages.success(
+                request,
+                f'Successfully imported hosts: {created_count} created, {updated_count} already existed.',
+            )
+        except Exception as e:
+            messages.error(request, f'Error importing hosts: {str(e)}')
+    return _admin_panel_redirect(convention_pk, 'hosts')
+
+
+@organizer_required
+def import_tags_csv(request, convention_pk):
+    get_object_or_404(Convention, pk=convention_pk)
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        try:
+            decoded_file = request.FILES['csv_file'].read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            created_count = 0
+            updated_count = 0
+            with transaction.atomic():
+                for row in reader:
+                    name = row.get('name', '').strip()
+                    color = row.get('color', '').strip() or '#6c757d'
+                    if not name:
+                        continue
+                    tag, created = Tag.objects.get_or_create(name=name, defaults={'color': color})
+                    if not created and color:
+                        tag.color = color
+                        tag.save()
+                        updated_count += 1
+                    elif created:
+                        created_count += 1
+            messages.success(
+                request,
+                f'Successfully imported tags: {created_count} created, {updated_count} updated.',
+            )
+        except Exception as e:
+            messages.error(request, f'Error importing tags: {str(e)}')
+    return _admin_panel_redirect(convention_pk, 'tags')
