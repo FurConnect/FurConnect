@@ -218,17 +218,18 @@ CONCAT_API_V0_BASE = f'{CONCAT_API_BASE}/api/v0' if CONCAT_API_BASE else ''
 CONCAT_SERVICE_SCOPES = os.environ.get('CONCAT_SERVICE_SCOPES', 'user:read registration:read')
 
 # ConCat roles that may manage conventions (edit schedule, add panels, etc.).
-CONCAT_EVENTS_ROLE = os.environ.get('CONCAT_EVENTS_ROLE', 'events').strip()
+CONCAT_EVENTS_ROLE = _parse_concat_role_list(os.environ.get('CONCAT_EVENTS_ROLE'), 'events')
 CONCAT_MANAGE_ROLES = _parse_concat_role_list(os.environ.get('CONCAT_MANAGE_ROLES'))
 if not CONCAT_MANAGE_ROLES and CONCAT_EVENTS_ROLE:
-    CONCAT_MANAGE_ROLES = [CONCAT_EVENTS_ROLE]
+    CONCAT_MANAGE_ROLES = list(CONCAT_EVENTS_ROLE)
 # ConCat roles that skip panel RSVP (organizers/events staff).
 CONCAT_SKIP_RSVP_ROLES = _parse_concat_role_list(
     os.environ.get('CONCAT_SKIP_RSVP_ROLES'),
     'admin',
 )
-if CONCAT_EVENTS_ROLE and CONCAT_EVENTS_ROLE not in CONCAT_SKIP_RSVP_ROLES:
-    CONCAT_SKIP_RSVP_ROLES.append(CONCAT_EVENTS_ROLE)
+for role in CONCAT_EVENTS_ROLE:
+    if role not in CONCAT_SKIP_RSVP_ROLES:
+        CONCAT_SKIP_RSVP_ROLES.append(role)
 # Optional: only users with one of these ConCat roles may RSVP (empty = any signed-in user).
 CONCAT_RSVP_REQUIRED_ROLES = _parse_concat_role_list(os.environ.get('CONCAT_RSVP_REQUIRED_ROLES'))
 # Optional: require paid registration and/or specific badge product IDs (like Discord badge sync).
