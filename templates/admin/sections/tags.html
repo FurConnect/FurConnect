@@ -1,0 +1,110 @@
+<div class="card mb-4 fc-section-card">
+    <div class="card-header">
+        <i class="material-icons">label</i>
+        <span>Tags</span>
+    </div>
+    <div class="card-body">
+        {% if tags %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Color</th>
+                        <th>Panels</th>
+                        <th style="width: 200px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tag in tags %}
+                    <tr>
+                        <td>{{ tag.name }}</td>
+                        <td>
+                            <span class="badge" style="background-color: {{ tag.color }}; color: #fff;">
+                                {{ tag.color }}
+                            </span>
+                        </td>
+                        <td><span class="badge bg-secondary">{{ tag.panels.count }}</span></td>
+                        <td>
+                            <div class="control-toolbar" style="gap: 0.35rem;">
+                                <a href="{% url 'events:tag_edit' tag.name %}" class="btn toolbar-btn btn-sm">
+                                    <i class="material-icons">edit</i>
+                                    <span class="toolbar-btn-label">Edit</span>
+                                </a>
+                                <button class="btn toolbar-btn btn-sm delete-tag-btn" data-tag-id="{{ tag.pk }}">
+                                    <i class="material-icons">delete</i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No tags created yet.</p>
+        {% endif %}
+
+        <div class="control-toolbar mt-3">
+            <button class="btn toolbar-btn" data-bs-toggle="modal" data-bs-target="#addTagModal">
+                <i class="material-icons">add</i>
+                <span class="toolbar-btn-label">Add Tag</span>
+            </button>
+            <form method="post" action="{% url 'events:randomize_tag_colors' %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="convention_pk" value="{{ convention.pk }}">
+                <button type="submit" class="btn toolbar-btn"
+                        onclick="return confirm('Randomize colors for all tags?');">
+                    <i class="material-icons">palette</i>
+                    <span class="toolbar-btn-label">Randomize Colors</span>
+                </button>
+            </form>
+        </div>
+
+        <div class="fc-import-box">
+            <h6 class="mb-2 d-flex align-items-center gap-1">
+                <i class="material-icons" style="font-size:1rem;">upload_file</i> Bulk Import
+            </h6>
+            <div class="control-toolbar">
+                <a href="{% url 'events:download_tags_template' %}" class="btn toolbar-btn btn-sm">
+                    <i class="material-icons">download</i>
+                    <span class="toolbar-btn-label">Template</span>
+                </a>
+                <form method="post" action="{% url 'events:import_tags_csv' convention.pk %}" enctype="multipart/form-data"
+                      class="d-flex flex-wrap gap-2 align-items-center">
+                    {% csrf_token %}
+                    <input type="file" name="csv_file" accept=".csv" class="form-control form-control-sm" style="width: auto;" required>
+                    <button type="submit" class="btn toolbar-btn btn-sm">
+                        <i class="material-icons">upload</i>
+                        <span class="toolbar-btn-label">Import CSV</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addTagModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Tag</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="tagName" class="form-label">Tag Name</label>
+                    <input type="text" class="form-control" id="tagName" placeholder="e.g., Workshop">
+                </div>
+                <div class="mb-3">
+                    <label for="tagColor" class="form-label">Color</label>
+                    <input type="color" class="form-control form-control-color" id="tagColor" value="#6200ea">
+                </div>
+            </div>
+            <div class="modal-footer control-toolbar justify-content-end">
+                <button type="button" class="btn toolbar-btn" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn toolbar-btn active" id="saveTagBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>

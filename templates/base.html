@@ -40,14 +40,6 @@
             display: flex;
             flex-direction: column;
             transition: background-color var(--transition-speed), color var(--transition-speed);
-            visibility: hidden;
-            opacity: 0;
-        }
-
-        body.visible {
-            visibility: visible;
-            opacity: 1;
-            transition: opacity 0.2s ease-in, visibility 0s ease 0s;
         }
 
         .navbar {
@@ -338,13 +330,6 @@
             border-radius: 0;
         }
 
-        :root {
-            --ui-scale: 1;
-        }
-
-        html {
-            font-size: calc(100% * var(--ui-scale));
-        }
 
         #sticky-footer.footer {
             position: fixed;
@@ -458,6 +443,8 @@
         .modal {
             z-index: 100000010 !important;
         }
+
+        {% include 'events/includes/convention_ui_styles.html' %}
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -768,8 +755,6 @@
                 loginSubmit.disabled = false;
             });
 
-            // show content after all core JS has initialized
-            document.body.classList.add('visible');
         });
     </script>
     <script>
@@ -788,22 +773,6 @@
             }
             return cookieValue;
         }
-    </script>
-    <script>
-        function updateUiScaleByPpi() {
-            const dpr = window.devicePixelRatio || 1;
-            // Estimate screen diagonal size in inches (inferred from CSS pixels + PPI assumption)
-            const widthPx = window.screen.width * dpr;
-            const heightPx = window.screen.height * dpr;
-            const diagonalPx = Math.sqrt(widthPx * widthPx + heightPx * heightPx);
-
-            // Use dpr to tune scale, with a comfortable minimum/maximum
-            const scale = Math.max(0.85, Math.min(1.25, 1 + (dpr - 1) * 0.35));
-            document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
-        }
-
-        window.addEventListener('load', updateUiScaleByPpi);
-        window.addEventListener('resize', updateUiScaleByPpi);
     </script>
     <style>
       #sticky-footer {

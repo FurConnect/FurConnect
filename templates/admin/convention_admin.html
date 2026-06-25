@@ -1,0 +1,170 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block admin_title %}
+{% if section == 'dashboard' %}Dashboard
+{% elif section == 'settings' %}Event Settings
+{% elif section == 'rooms' %}Rooms
+{% elif section == 'hosts' %}Panel Hosts
+{% elif section == 'tags' %}Tags
+{% else %}Admin{% endif %}
+{% endblock %}
+
+{% block admin_extra_css %}
+{% if section == 'settings' %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endif %}
+{% endblock %}
+
+{% block admin_content %}
+{% if section == 'dashboard' %}
+    {% include 'admin/sections/dashboard.html' %}
+{% elif section == 'settings' %}
+    {% include 'admin/sections/settings.html' %}
+{% elif section == 'rooms' %}
+    {% include 'admin/sections/rooms.html' %}
+{% elif section == 'hosts' %}
+    {% include 'admin/sections/hosts.html' %}
+{% elif section == 'tags' %}
+    {% include 'admin/sections/tags.html' %}
+{% endif %}
+{% endblock %}
+
+{% block admin_extra_js %}
+{% if section == 'settings' %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const initialStartDate = "{{ form.start_date.value|date:'Y-m-d' }}";
+    const initialEndDate = "{{ form.end_date.value|date:'Y-m-d' }}";
+
+    flatpickr('input[name="start_date"]', {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "F j, Y",
+        defaultDate: initialStartDate || null,
+        allowInput: true,
+    });
+
+    flatpickr('input[name="end_date"]', {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "F j, Y",
+        defaultDate: initialEndDate || null,
+        allowInput: true,
+    });
+
+    const bannerInput = document.getElementById('banner_image_input');
+    const bannerPreview = document.getElementById('banner_preview');
+    const bannerHidden = document.getElementById('id_banner_image');
+    const clearBannerBtn = document.getElementById('clear_banner');
+
+    if (bannerInput) {
+        bannerInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    bannerHidden.value = ev.target.result;
+                    bannerPreview.src = ev.target.result;
+                    bannerPreview.style.display = '';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (clearBannerBtn) {
+        clearBannerBtn.addEventListener('click', function() {
+            bannerInput.value = '';
+            bannerHidden.value = '';
+            bannerPreview.src = '';
+            bannerPreview.style.display = 'none';
+        });
+    }
+});
+</script>
+{% endif %}
+
+{% if section == 'rooms' or section == 'hosts' or section == 'tags' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const conventionPk = '{{ convention.pk }}';
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1];
+
+    {% if section == 'rooms' %}
+    document.getElementById('saveRoomBtn')?.addEventListener('click', function() {
+        const roomName = document.getElementById('roomName').value;
+        if (!roomName.trim()) { alert('Please enter a room name'); return; }
+        fetch('{% url "events:save_room_ajax" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'name=' + encodeURIComponent(roomName) + '&convention_id=' + conventionPk
+        })
+        .then(res => res.json())
+        .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
+    });
+    document.querySelectorAll('.delete-room-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Delete this room?')) return;
+            fetch('/ajax/rooms/delete/' + this.dataset.roomId + '/', {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+            })
+            .then(res => res.json())
+            .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
+        });
+    });
+    {% endif %}
+
+    {% if section == 'hosts' %}
+    document.getElementById('saveHostBtn')?.addEventListener('click', function() {
+        const hostName = document.getElementById('hostName').value;
+        if (!hostName.trim()) { alert('Please enter a host name'); return; }
+        fetch('{% url "events:add_panel_host_ajax" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'name=' + encodeURIComponent(hostName)
+        })
+        .then(res => res.json())
+        .then(data => { if (data.success) location.reload(); else alert('Error: ' + (data.error || 'Unknown error')); });
+    });
+    document.querySelectorAll('.delete-host-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Delete this host?')) return;
+            fetch('/ajax/hosts/delete/' + this.dataset.hostId + '/', {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+            })
+            .then(res => res.json())
+            .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
+        });
+    });
+    {% endif %}
+
+    {% if section == 'tags' %}
+    document.getElementById('saveTagBtn')?.addEventListener('click', function() {
+        const tagName = document.getElementById('tagName').value;
+        const tagColor = document.getElementById('tagColor').value;
+        if (!tagName.trim()) { alert('Please enter a tag name'); return; }
+        fetch('{% url "events:add_tag_ajax" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'name=' + encodeURIComponent(tagName) + '&color=' + encodeURIComponent(tagColor)
+        })
+        .then(res => res.json())
+        .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
+    });
+    document.querySelectorAll('.delete-tag-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Delete this tag?')) return;
+            fetch('/ajax/tags/delete/' + this.dataset.tagId + '/', {
+                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+            })
+            .then(res => res.json())
+            .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
+        });
+    });
+    {% endif %}
+});
+</script>
+{% endif %}
+{% endblock %}
