@@ -877,6 +877,31 @@ def tag_edit(request, name):
         return redirect('events:schedule')
 
 @organizer_required
+def tag_delete(request, name):
+    try:
+        tag = Tag.objects.get(name__iexact=name)
+    except Tag.DoesNotExist:
+        messages.error(request, 'Tag not found.')
+        return redirect('events:schedule')
+
+    convention_pk = None
+    first_panel = tag.panels.select_related('convention_day').first()
+    if first_panel:
+        convention_pk = first_panel.convention_day.convention_id
+
+    if request.method == 'POST':
+        tag.delete()
+        messages.success(request, 'Tag deleted successfully!')
+        if convention_pk:
+            return redirect('events:admin_panel_section', pk=convention_pk, section='tags')
+        return redirect('events:schedule')
+
+    return render(request, 'events/tag_confirm_delete.html', {
+        'tag': tag,
+        'current_convention_name': 'FurConnect',
+    })
+
+@organizer_required
 def host_edit(request, pk):
     host = get_object_or_404(PanelHost, pk=pk)
     if request.method == 'POST':

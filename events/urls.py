@@ -32,6 +32,7 @@ urlpatterns = [
     path('add_tag_ajax/', views.add_tag_ajax, name='add_tag_ajax'),
     path('panel/<int:pk>/details/', views.panel_detail_modal_view, name='panel_detail_modal_view'),
     path('tag/<str:name>/edit/', views.tag_edit, name='tag_edit'),
+    path('tag/<str:name>/delete/', views.tag_delete, name='tag_delete'),
     path('host/<int:pk>/edit/', views.host_edit, name='host_edit'),
     path('ajax/hosts/delete/<int:pk>/', views.delete_host_ajax, name='delete_host_ajax'),
     path('ajax/tags/<int:pk>/details/', views.get_tag_details_ajax, name='get_tag_details_ajax'),
