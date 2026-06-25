@@ -124,7 +124,7 @@ window.addEventListener('load', function() {
                 const avatar = attendee.avatar_url
                     ? `<img src="${escapeHtml(attendee.avatar_url)}" alt="${name}" class="panel-detail-going-avatar">`
                     : `<div class="panel-detail-going-avatar panel-detail-going-initials">${initial}</div>`;
-                return `<div class="panel-detail-going-person">${avatar}<span class="panel-detail-going-name">${name}</span></div>`;
+                return `<div class="panel-detail-going-avatar-item" data-title="${name}" title="${name}">${avatar}</div>`;
             }).join('');
         }
 
@@ -2174,6 +2174,46 @@ html[data-bs-theme="dark"] #panelDetailModal .panel-detail-going-card {
 #panelDetailModal .panel-detail-going-name {
     font-size: 0.95rem;
     font-weight: 500;
+}
+
+#panelDetailModal .panel-detail-going-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+#panelDetailModal .panel-detail-going-avatar-item {
+    position: relative;
+    flex-shrink: 0;
+}
+
+#panelDetailModal .panel-detail-going-avatar-item:hover::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+}
+
+#panelDetailModal .panel-detail-going-avatar-item:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: rgba(0, 0, 0, 0.85) transparent transparent transparent;
+    z-index: 10;
 }
 
 #panelDetailFooter.panel-detail-footer,

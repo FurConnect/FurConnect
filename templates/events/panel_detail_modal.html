@@ -112,9 +112,9 @@
                 <i class="material-icons">people</i>
                 <span id="panelRsvpGoingLabel">Going ({{ rsvp_count }})</span>
             </div>
-            <div class="panel-detail-going-list" id="panelRsvpAttendees">
+            <div class="panel-detail-going-grid" id="panelRsvpAttendees">
                 {% for rsvp in rsvp_attendees %}
-                <div class="panel-detail-going-person">
+                <div class="panel-detail-going-avatar-item" data-title="{{ rsvp.display_name }}" title="{{ rsvp.display_name }}">
                     {% if rsvp.avatar_url %}
                     <img src="{{ rsvp.avatar_url }}" alt="{{ rsvp.display_name }}" class="panel-detail-going-avatar">
                     {% else %}
@@ -122,7 +122,6 @@
                         {{ rsvp.display_name|default:"?"|slice:":1"|upper }}
                     </div>
                     {% endif %}
-                    <span class="panel-detail-going-name">{{ rsvp.display_name }}</span>
                 </div>
                 {% empty %}
                 <p class="text-muted small mb-0" id="panelRsvpEmptyMessage">No one has RSVP'd yet.</p>
