@@ -367,13 +367,9 @@
                     <div class="mb-3">
                         <label for="id_concat_user_id" class="form-label">ConCat User ID</label>
                         <input type="text" name="concat_user_id" id="id_concat_user_id" class="form-control" inputmode="numeric" placeholder="e.g. 1234">
-                        <div class="form-text">Enter the panelist's ConCat user ID to use their ConCat profile picture.</div>
+                        <div class="form-text">Optional. Enter the panelist's ConCat user ID to use their ConCat profile picture.</div>
                     </div>
-                    <div id="currentProfilePic" class="mb-2" style="display: none;">
-                        <img src="" alt="Current profile picture" style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%;">
-                        <p class="text-muted mt-1">Current profile picture</p>
-                    </div>
-                    {% else %}
+                    {% endif %}
                     <div class="mb-3">
                         <label for="id_profile_picture" class="form-label">Profile Picture</label>
                         <div id="currentProfilePic" class="mb-2" style="display: none;">
@@ -383,7 +379,6 @@
                         <input type="file" name="image" id="id_profile_picture" class="form-control" accept="image/*">
                         <div class="form-text">Upload a profile picture for the host (optional)</div>
                     </div>
-                    {% endif %}
                 </form>
             </div>
             <div class="modal-footer">
@@ -1146,37 +1141,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const concatUserIdInput = addHostForm.querySelector('#id_concat_user_id');
             const concatEnabled = {{ concat_enabled|yesno:"true,false" }};
 
+            const currentProfilePicDiv = document.getElementById('currentProfilePic');
+
             if (hostIdInput && hostIdInput.value) {
                 formData.append('host_id', hostIdInput.value);
             }
 
-            if (concatEnabled) {
-                if (concatUserIdInput) {
-                    formData.set('concat_user_id', concatUserIdInput.value.trim());
-                }
+            if (concatEnabled && concatUserIdInput) {
+                formData.set('concat_user_id', concatUserIdInput.value.trim());
+            }
+
+            function submitHostSave() {
                 sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
-                return;
             }
 
             // Convert image file to base64 if a new one is selected
             if (profilePictureInput && profilePictureInput.files && profilePictureInput.files[0]) {
                 const reader = new FileReader();
                 reader.onloadend = function() {
-                    // Ensure the base64 string is correctly formatted (e.g., remove data URL prefix if needed)
-                    // Django's Base64ImageField might expect the prefix, let's keep it for now.
                     formData.append('image_base64', reader.result);
-                    sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
+                    submitHostSave();
                 };
                 reader.readAsDataURL(profilePictureInput.files[0]);
             } else {
-                // If no new image is selected, check if we are clearing an existing one
-                 const currentProfilePicDiv = document.getElementById('currentProfilePic');
-                 // If there was a current picture displayed and no new file, and we are editing (hostId exists), 
-                 // explicitly send an empty string for the image to signal clearing.
-                 if (currentProfilePicDiv && currentProfilePicDiv.style.display !== 'none' && hostIdInput && hostIdInput.value && (!profilePictureInput || !profilePictureInput.files || profilePictureInput.files.length === 0)) {
-                      formData.append('image_base64', '');
-                 }
-                sendHostSaveRequest(formData, hostModal, addHostForm, hostIdInput, profilePictureInput);
+                // If there was a current picture displayed and no new file, and we are editing (hostId exists),
+                // explicitly send an empty string for the image to signal clearing.
+                if (currentProfilePicDiv && currentProfilePicDiv.style.display !== 'none' && hostIdInput && hostIdInput.value && (!profilePictureInput || !profilePictureInput.files || profilePictureInput.files.length === 0)) {
+                    formData.append('image_base64', '');
+                }
+                submitHostSave();
             }
         });
     }

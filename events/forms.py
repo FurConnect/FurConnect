@@ -248,9 +248,14 @@ class PanelForm(forms.ModelForm):
         return panel
 
 class PanelHostForm(forms.ModelForm):
+    image = forms.ImageField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control'}),
+    )
+
     class Meta:
         model = PanelHost
-        fields = ['name', 'concat_user_id', 'image']
+        fields = ['name', 'concat_user_id']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'concat_user_id': forms.TextInput(attrs={
@@ -258,14 +263,11 @@ class PanelHostForm(forms.ModelForm):
                 'inputmode': 'numeric',
                 'placeholder': 'ConCat user ID',
             }),
-            'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if settings.CONCAT_ENABLED:
-            self.fields.pop('image', None)
-        else:
+        if not settings.CONCAT_ENABLED:
             self.fields.pop('concat_user_id', None)
 
 class TagForm(forms.ModelForm):

@@ -117,27 +117,144 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     {% if section == 'hosts' %}
+    const hostsLoading = document.getElementById('hostsLoading');
+    const hostsEmpty = document.getElementById('hostsEmpty');
+    const hostsTableWrap = document.getElementById('hostsTableWrap');
+    const hostsTableBody = document.getElementById('hostsTableBody');
+    const hostEditUrlTemplate = '{% url "events:host_edit" 0 %}';
+    const adminHostsUrl = '{% url "events:get_admin_hosts_ajax" convention.pk %}';
+    const deleteHostUrlTemplate = '{% url "events:delete_host_ajax" 0 %}';
+    const addHostModalEl = document.getElementById('addHostModal');
+    let addHostModal = addHostModalEl ? bootstrap.Modal.getOrCreateInstance(addHostModalEl) : null;
+
+    function hostEditUrl(hostId) {
+        return hostEditUrlTemplate.replace('/0/', '/' + hostId + '/');
+    }
+
+    function deleteHostUrl(hostId) {
+        return deleteHostUrlTemplate.replace('/0/', '/' + hostId + '/');
+    }
+
+    function updateHostsView(hosts) {
+        if (!hostsTableBody) return;
+        hostsTableBody.innerHTML = '';
+        if (!hosts.length) {
+            hostsLoading?.classList.add('d-none');
+            hostsTableWrap?.classList.add('d-none');
+            hostsEmpty?.classList.remove('d-none');
+            return;
+        }
+        hostsEmpty?.classList.add('d-none');
+        hostsLoading?.classList.add('d-none');
+        hostsTableWrap?.classList.remove('d-none');
+        hosts.forEach(host => {
+            hostsTableBody.appendChild(buildHostRow(host));
+        });
+    }
+
+    function buildHostRow(host) {
+        const row = document.createElement('tr');
+        row.dataset.hostId = host.id;
+        row.innerHTML = `
+            <td>${escapeHtml(host.name)}</td>
+            <td><span class="badge bg-secondary">${host.panels_count || 0}</span></td>
+            <td>
+                <div class="control-toolbar" style="gap: 0.35rem;">
+                    <a href="${hostEditUrl(host.id)}" class="btn toolbar-btn btn-sm">
+                        <i class="material-icons">edit</i>
+                        <span class="toolbar-btn-label">Edit</span>
+                    </a>
+                    <button type="button" class="btn toolbar-btn btn-sm delete-host-btn" data-host-id="${host.id}">
+                        <i class="material-icons">delete</i>
+                    </button>
+                </div>
+            </td>
+        `;
+        row.querySelector('.delete-host-btn')?.addEventListener('click', handleDeleteHost);
+        return row;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function loadAdminHosts() {
+        if (!hostsTableBody) return;
+        hostsLoading?.classList.remove('d-none');
+        hostsEmpty?.classList.add('d-none');
+        hostsTableWrap?.classList.add('d-none');
+        fetch(adminHostsUrl)
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to load hosts');
+                return res.json();
+            })
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Failed to load hosts');
+                updateHostsView(data.hosts || []);
+            })
+            .catch(err => {
+                hostsLoading.textContent = 'Error loading hosts.';
+                console.error(err);
+            });
+    }
+
+    function handleDeleteHost(event) {
+        const btn = event.currentTarget;
+        const hostId = btn.dataset.hostId;
+        if (!hostId || !confirm('Delete this host?')) return;
+        fetch(deleteHostUrl(hostId), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                alert('Error: ' + (data.error || 'Unknown error'));
+                return;
+            }
+            document.querySelector(`tr[data-host-id="${hostId}"]`)?.remove();
+            if (!hostsTableBody?.children.length) {
+                hostsTableWrap?.classList.add('d-none');
+                hostsEmpty?.classList.remove('d-none');
+            }
+        })
+        .catch(err => alert('Error deleting host: ' + err.message));
+    }
+
     document.getElementById('saveHostBtn')?.addEventListener('click', function() {
-        const hostName = document.getElementById('hostName').value;
-        if (!hostName.trim()) { alert('Please enter a host name'); return; }
+        const hostNameInput = document.getElementById('hostName');
+        const hostName = hostNameInput?.value || '';
+        if (!hostName.trim()) {
+            alert('Please enter a host name');
+            return;
+        }
+        const saveBtn = this;
+        saveBtn.disabled = true;
         fetch('{% url "events:add_panel_host_ajax" %}', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'name=' + encodeURIComponent(hostName)
+            body: 'name=' + encodeURIComponent(hostName.trim())
         })
         .then(res => res.json())
-        .then(data => { if (data.success) location.reload(); else alert('Error: ' + (data.error || 'Unknown error')); });
+        .then(data => {
+            if (!data.success) {
+                alert('Error: ' + (data.error || data.errors || 'Unknown error'));
+                return;
+            }
+            if (hostNameInput) hostNameInput.value = '';
+            addHostModal?.hide();
+            loadAdminHosts();
+        })
+        .catch(err => alert('Error saving host: ' + err.message))
+        .finally(() => { saveBtn.disabled = false; });
     });
-    document.querySelectorAll('.delete-host-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Delete this host?')) return;
-            fetch('/ajax/hosts/delete/' + this.dataset.hostId + '/', {
-                method: 'POST', headers: { 'X-CSRFToken': csrfToken }
-            })
-            .then(res => res.json())
-            .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
-        });
-    });
+
+    loadAdminHosts();
     {% endif %}
 
     {% if section == 'tags' %}

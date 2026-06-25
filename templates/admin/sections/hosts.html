@@ -4,8 +4,9 @@
         <span>Panel Hosts</span>
     </div>
     <div class="card-body">
-        {% if hosts %}
-        <div class="table-responsive">
+        <div id="hostsLoading" class="text-muted mb-0">Loading hosts...</div>
+        <div id="hostsEmpty" class="text-muted mb-0 d-none">No hosts created yet.</div>
+        <div id="hostsTableWrap" class="table-responsive d-none">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
@@ -14,30 +15,9 @@
                         <th style="width: 200px;">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for host in hosts %}
-                    <tr>
-                        <td>{{ host.name }}</td>
-                        <td><span class="badge bg-secondary">{{ host.panels.count }}</span></td>
-                        <td>
-                            <div class="control-toolbar" style="gap: 0.35rem;">
-                                <a href="{% url 'events:host_edit' host.pk %}" class="btn toolbar-btn btn-sm">
-                                    <i class="material-icons">edit</i>
-                                    <span class="toolbar-btn-label">Edit</span>
-                                </a>
-                                <button class="btn toolbar-btn btn-sm delete-host-btn" data-host-id="{{ host.pk }}">
-                                    <i class="material-icons">delete</i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="hostsTableBody"></tbody>
             </table>
         </div>
-        {% else %}
-        <p class="text-muted mb-0">No hosts created yet.</p>
-        {% endif %}
 
         <div class="control-toolbar mt-3">
             <button class="btn toolbar-btn" data-bs-toggle="modal" data-bs-target="#addHostModal">

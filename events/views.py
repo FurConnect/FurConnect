@@ -33,6 +33,7 @@ from .rsvp import (
     make_rsvp_feed_token,
 )
 import icalendar
+import base64
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -57,6 +58,13 @@ def _build_concat_avatar_map(hosts):
     if not concat_ids:
         return {}
     return get_concat_profile_pictures(concat_ids)
+
+
+def _apply_host_profile_image(host, image_base64):
+    if image_base64:
+        host.image = image_base64
+    elif image_base64 == '' and host.image:
+        host.image = None
 
 
 def _resolve_host_profile_picture(host, concat_avatars=None):
@@ -383,11 +391,6 @@ def convention_edit(request, pk):
 
 def _get_admin_panel_data(convention):
     rooms = Room.objects.filter(convention=convention).order_by('name')
-    hosts = (
-        PanelHost.objects.filter(panels__convention_day__convention=convention)
-        .distinct()
-        .order_by('name')
-    )
     tags = (
         Tag.objects.filter(panels__convention_day__convention=convention)
         .distinct()
@@ -397,7 +400,7 @@ def _get_admin_panel_data(convention):
     day_count = convention.days.count()
     return {
         'rooms': rooms,
-        'hosts': hosts,
+        'hosts_count': PanelHost.objects.count(),
         'tags': tags,
         'panel_count': panel_count,
         'day_count': day_count,
@@ -748,15 +751,13 @@ def add_panel_host_ajax(request):
                 print(f"Updating host name to: {host.name}")
                 if settings.CONCAT_ENABLED:
                     host.concat_user_id = concat_user_id
-                    host.image = None
                 else:
                     host.concat_user_id = ''
-                    if image_base64:
-                        print("Updating host image with new base64 data.")
-                        host.image = image_base64
-                    elif image_base64 == '' and host.image:
-                        print("Clearing existing host image.")
-                        host.image = None
+                if image_base64:
+                    print("Updating host image with new base64 data.")
+                elif image_base64 == '' and host.image:
+                    print("Clearing existing host image.")
+                _apply_host_profile_image(host, image_base64)
                 host.save()
                 print("Host updated successfully.")
                 return JsonResponse({
@@ -771,10 +772,11 @@ def add_panel_host_ajax(request):
                 return JsonResponse({'success': False, 'error': str(e)}, status=400)
         else:
             print("Attempting to create new host.")
-            if settings.CONCAT_ENABLED:
-                host = PanelHost(name=name, concat_user_id=concat_user_id)
-            else:
-                host = PanelHost(name=name, image=image_base64 if image_base64 else None)
+            host = PanelHost(
+                name=name,
+                concat_user_id=concat_user_id if settings.CONCAT_ENABLED else '',
+                image=image_base64 if image_base64 else None,
+            )
             try:
                 host.full_clean()
                 host.save()
@@ -905,13 +907,14 @@ def tag_delete(request, name):
 def host_edit(request, pk):
     host = get_object_or_404(PanelHost, pk=pk)
     if request.method == 'POST':
-        if settings.CONCAT_ENABLED:
-            form = PanelHostForm(request.POST, instance=host)
-        else:
-            form = PanelHostForm(request.POST, request.FILES, instance=host)
+        form = PanelHostForm(request.POST, request.FILES, instance=host)
         if form.is_valid():
             host = form.save(commit=False)
-            if settings.CONCAT_ENABLED:
+            uploaded_image = form.cleaned_data.get('image')
+            if uploaded_image:
+                mime = uploaded_image.content_type or 'image/jpeg'
+                host.image = f'data:{mime};base64,{base64.b64encode(uploaded_image.read()).decode("ascii")}'
+            elif request.POST.get('remove_image'):
                 host.image = None
             host.save()
             messages.success(request, 'Host updated successfully!')
@@ -1162,8 +1165,7 @@ def get_all_hosts_ajax(request):
         return JsonResponse({'error': 'convention_id is required.'}, status=400)
 
     try:
-        # Filter hosts by convention and order by name
-        hosts = PanelHost.objects.filter(panels__convention_day__convention__id=convention_id).distinct().order_by('name')
+        hosts = PanelHost.objects.all().order_by('name')
 
         # Determine selected hosts if panel_id is provided
         selected_host_ids = []
@@ -1188,6 +1190,35 @@ def get_all_hosts_ajax(request):
         return JsonResponse({'hosts': hosts_data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+@organizer_required
+@require_GET
+def get_admin_hosts_ajax(request, convention_pk):
+    """Return all panel hosts with panel counts scoped to the convention."""
+    convention = get_object_or_404(Convention, pk=convention_pk)
+    hosts = (
+        PanelHost.objects.annotate(
+            panels_count=Count(
+                'panels',
+                filter=Q(panels__convention_day__convention=convention),
+                distinct=True,
+            )
+        )
+        .order_by('name')
+    )
+    return JsonResponse({
+        'success': True,
+        'hosts': [
+            {
+                'id': host.pk,
+                'name': host.name,
+                'panels_count': host.panels_count,
+            }
+            for host in hosts
+        ],
+    })
+
 
 @organizer_required
 def get_all_rooms_ajax(request):
