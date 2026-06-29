@@ -8,10 +8,14 @@ from urllib.parse import quote
 
 
 def can_manage_events(request):
-    """ConCat organizers when integrated; Django staff users otherwise."""
+    """ConCat or Eventzilla organizers when integrated; Django staff users otherwise."""
+    if settings.CONCAT_ENABLED and request.session.get('concat_can_manage'):
+        return True
+    if settings.EVENTZILLA_ENABLED and request.session.get('eventzilla_can_manage'):
+        return True
+    if settings.CONCAT_ENABLED or settings.EVENTZILLA_ENABLED:
+        return False
     user = getattr(request, 'user', None)
-    if settings.CONCAT_ENABLED:
-        return bool(request.session.get('concat_can_manage'))
     return bool(
         user
         and user.is_authenticated
@@ -22,6 +26,8 @@ def can_manage_events(request):
 def organizer_login_url(next_path):
     if settings.CONCAT_ENABLED:
         return f"{reverse('events:concat_login')}?next={quote(next_path)}"
+    if settings.EVENTZILLA_ENABLED:
+        return f"{reverse('events:eventzilla_login')}?next={quote(next_path)}"
     return f"{reverse('events:login')}?next={quote(next_path)}"
 
 
@@ -34,6 +40,8 @@ def organizer_required(view_func):
 
         if settings.CONCAT_ENABLED:
             messages.error(request, 'ConCat organizer sign-in is required.')
+        elif settings.EVENTZILLA_ENABLED:
+            messages.error(request, 'Eventzilla organizer sign-in is required.')
         else:
             messages.error(request, 'Staff login is required to manage events.')
 

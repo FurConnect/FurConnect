@@ -1,7 +1,10 @@
 from django.urls import path
 
 from . import views
+from .concat import views as concat_views
+from .eventzilla import views as eventzilla_views
 from .print_pdf import printable_schedule_pdf
+from .rsvp import views as rsvp_views
 
 app_name = 'events'
 
@@ -23,10 +26,15 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('login/', views.login_view, name='login'),
     path('register/', views.register_view, name='register'),
-    path('concat/login/', views.concat_login, name='concat_login'),
-    path('concat/callback/', views.concat_callback, name='concat_callback'),
-    path('concat/logout/', views.concat_logout, name='concat_logout'),
-    path('panel/<int:pk>/rsvp/', views.panel_rsvp_toggle, name='panel_rsvp_toggle'),
+    path('concat/login/', concat_views.concat_login, name='concat_login'),
+    path('concat/callback/', concat_views.concat_callback, name='concat_callback'),
+    path('concat/logout/', concat_views.concat_logout, name='concat_logout'),
+    path('eventzilla/login/', eventzilla_views.eventzilla_login, name='eventzilla_login'),
+    path('eventzilla/verify/', eventzilla_views.eventzilla_verify_email, name='eventzilla_verify_email'),
+    path('eventzilla/profile/', eventzilla_views.eventzilla_profile, name='eventzilla_profile'),
+    path('eventzilla/profile/update/', eventzilla_views.eventzilla_update_profile, name='eventzilla_update_profile'),
+    path('eventzilla/logout/', eventzilla_views.eventzilla_logout, name='eventzilla_logout'),
+    path('panel/<int:pk>/rsvp/', rsvp_views.panel_rsvp_toggle, name='panel_rsvp_toggle'),
     path('convention/<int:pk>/delete/', views.convention_delete, name='convention_delete'),
     path('add_panel_host_ajax/', views.add_panel_host_ajax, name='add_panel_host_ajax'),
     path('add_tag_ajax/', views.add_tag_ajax, name='add_tag_ajax'),
@@ -58,4 +66,4 @@ urlpatterns = [
     path('download-hosts-template/', views.download_hosts_template, name='download_hosts_template'),
     path('download-tags-template/', views.download_tags_template, name='download_tags_template'),
     path('privacy/', views.privacy_policy, name='privacy_policy'),
-] 
+]

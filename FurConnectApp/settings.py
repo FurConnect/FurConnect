@@ -43,9 +43,40 @@ _hosts = os.environ.get('ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = [host.strip() for host in _hosts.split(',') if host.strip()]
 ALLOWED_HOSTS += ['127.0.0.1', 'localhost']
 
+
+def _csrf_trusted_origins(hosts, *, allow_http=False):
+    """Build exact CSRF trusted origins from hostnames (Django does not support wildcards)."""
+    origins = []
+    for host in hosts:
+        if host.startswith('http://') or host.startswith('https://'):
+            origins.append(host.rstrip('/'))
+            continue
+        if allow_http or host in {'127.0.0.1', 'localhost'}:
+            origins.extend([
+                f'http://{host}',
+                f'http://{host}:8000',
+            ])
+        origins.append(f'https://{host}')
+    return list(dict.fromkeys(origins))
+
+
 # CSRF Settings
-if DEBUG:
-    CSRF_TRUSTED_ORIGINS = ['https://*']
+_allow_insecure_cookies = os.environ.get('ALLOW_INSECURE_COOKIES', 'False') == 'True'
+_csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+
+if _csrf_origins:
+    CSRF_TRUSTED_ORIGINS = [
+        origin.strip().rstrip('/')
+        for origin in _csrf_origins.split(',')
+        if origin.strip()
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = _csrf_trusted_origins(
+        ALLOWED_HOSTS,
+        allow_http=DEBUG or _allow_insecure_cookies,
+    )
+
+if DEBUG or _allow_insecure_cookies:
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     CSRF_USE_SESSIONS = False
@@ -53,12 +84,11 @@ if DEBUG:
     USE_X_FORWARDED_HOST = False
     USE_X_FORWARDED_PORT = False
 else:
-    CSRF_TRUSTED_ORIGINS = ['https://*']
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    CSRF_USE_SESSIONS = True
 
 CSRF_COOKIE_HTTPONLY = True
-CSRF_USE_SESSIONS = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Session Settings
@@ -107,6 +137,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.csrf',
                 'FurConnectApp.settings.furconnect_version',
                 'events.context_processors.user_exists_processor',
                 'events.context_processors.concat_processor',
@@ -235,6 +266,23 @@ CONCAT_RSVP_REQUIRED_ROLES = _parse_concat_role_list(os.environ.get('CONCAT_RSVP
 # Optional: require paid registration and/or specific badge product IDs (like Discord badge sync).
 CONCAT_REQUIRE_PAID_REGISTRATION = os.environ.get('CONCAT_REQUIRE_PAID_REGISTRATION', 'False') == 'True'
 CONCAT_RSVP_PRODUCT_IDS = _parse_concat_product_ids(os.environ.get('CONCAT_RSVP_PRODUCT_IDS'))
+
+# Eventzilla integration (panel RSVP via registered attendee email)
+EVENTZILLA_ENABLED = os.environ.get('EVENTZILLA_ENABLED', 'False') == 'True'
+EVENTZILLA_API_BASE = os.environ.get(
+    'EVENTZILLA_API_BASE',
+    'https://www.eventzillaapi.net/api/v2',
+).rstrip('/')
+EVENTZILLA_API_KEY = os.environ.get('EVENTZILLA_API_KEY', '')
+EVENTZILLA_EVENT_ID = os.environ.get('EVENTZILLA_EVENT_ID', '')
+EVENTZILLA_REQUIRE_PAID_REGISTRATION = (
+    os.environ.get('EVENTZILLA_REQUIRE_PAID_REGISTRATION', 'True') == 'True'
+)
+EVENTZILLA_ALLOWED_TICKET_TYPES = [
+    ticket.strip()
+    for ticket in os.environ.get('EVENTZILLA_ALLOWED_TICKET_TYPES', '').split(',')
+    if ticket.strip()
+]
 
 def furconnect_version(request):
     from django.conf import settings

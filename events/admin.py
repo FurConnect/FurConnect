@@ -2,7 +2,15 @@ from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.contrib import messages
-from .models import Convention, ConventionDay, Panel, PanelHost, Tag, PanelHostOrder, PanelTag, PanelRSVP
+from .models import Convention, ConventionDay, Panel, PanelHost, Tag, PanelHostOrder, PanelTag, PanelRSVP, EventzillaAttendee
+
+
+@admin.register(EventzillaAttendee)
+class EventzillaAttendeeAdmin(admin.ModelAdmin):
+    list_display = ('display_name', 'email', 'barcode', 'is_site_admin', 'updated_at')
+    list_filter = ('is_site_admin',)
+    search_fields = ('display_name', 'email', 'barcode')
+    fields = ('email', 'barcode', 'display_name', 'avatar', 'eventzilla_attendee_id', 'is_site_admin')
 
 
 @admin.register(PanelRSVP)

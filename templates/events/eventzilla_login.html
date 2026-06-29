@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Eventzilla Sign In{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-center">Sign in with Eventzilla</h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted text-center">
+                        Enter the email and ticket barcode from your Eventzilla registration for {{ current_convention_name|default:"the event" }}.
+                    </p>
+                    <form id="eventzillaLoginForm" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        {% if next %}<input type="hidden" name="next" id="eventzillaNext" value="{{ next }}">{% endif %}
+                        <div class="mb-3">
+                            <label for="eventzillaEmail" class="form-label">Registration email</label>
+                            <input type="email" class="form-control text-lowercase" id="eventzillaEmail" name="email" required autocomplete="email">
+                        </div>
+                        <div class="mb-3">
+                            <label for="eventzillaBarcode" class="form-label">Ticket barcode</label>
+                            <input type="text" class="form-control" id="eventzillaBarcode" name="barcode" required autocomplete="off" inputmode="numeric">
+                            <div class="form-text">The barcode printed on your Eventzilla ticket or confirmation email.</div>
+                        </div>
+                        <div class="alert alert-danger d-none" id="eventzillaLoginError"></div>
+                        <button type="submit" class="btn btn-success w-100" id="eventzillaLoginSubmit">
+                            Verify registration
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('eventzillaLoginForm');
+    const submitBtn = document.getElementById('eventzillaLoginSubmit');
+    const errorEl = document.getElementById('eventzillaLoginError');
+    const nextInput = document.getElementById('eventzillaNext');
+    const emailInput = document.getElementById('eventzillaEmail');
+
+    emailInput.addEventListener('input', function() {
+        emailInput.value = emailInput.value.toLowerCase();
+    });
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        errorEl.classList.add('d-none');
+
+        const formData = new FormData(form);
+        formData.set('email', emailInput.value.trim().toLowerCase());
+        const csrfToken = getCsrfToken(form);
+        formData.set('csrfmiddlewaretoken', csrfToken);
+        fetch('{% url "events:eventzilla_verify_email" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin',
+        })
+        .then(async response => {
+            const data = await parseJsonResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Verification failed.');
+            }
+            if (data.created && data.profile_url) {
+                window.location.href = data.profile_url;
+                return;
+            }
+            window.location.href = nextInput ? nextInput.value : window.location.pathname;
+        })
+        .catch(error => {
+            errorEl.textContent = error.message;
+            errorEl.classList.remove('d-none');
+            submitBtn.disabled = false;
+        });
+    });
+});
+</script>
+{% endblock %}
