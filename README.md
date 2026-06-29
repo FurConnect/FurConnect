@@ -76,6 +76,22 @@ Relevant settings:
 
 Leave `CONCAT_ENABLED=False` to use the built-in username/password auth only.
 
+## Eventzilla (optional)
+
+Use Eventzilla instead of ConCat for panel RSVPs when attendees register through Eventzilla. Attendees sign in with the email address they used to register; FurConnect verifies it against the Eventzilla attendees API.
+
+| Variable | Purpose |
+|----------|---------|
+| `EVENTZILLA_ENABLED` | Turn on Eventzilla RSVP sign-in |
+| `EVENTZILLA_API_KEY` | API key from Eventzilla Settings → App Management |
+| `EVENTZILLA_EVENT_ID` | Eventzilla event ID to check registrations against |
+| `EVENTZILLA_REQUIRE_PAID_REGISTRATION` | Only accept attendees with confirmed transactions (default `True`) |
+| `EVENTZILLA_ALLOWED_TICKET_TYPES` | Optional comma-separated ticket type names to allow |
+
+Generate an API key in your Eventzilla account under **Settings → App Management**. The integration calls `GET /events/{event_id}/attendees` and matches the sign-in email against registered attendees.
+
+Attendees can verify their email via AJAX at `POST /eventzilla/verify/` (no page reload), or use the dedicated sign-in page at `/eventzilla/login/`. ConCat OAuth remains a separate integration and is not used for Eventzilla sign-in.
+
 ## Contributing
 
 Bug reports and PRs are welcome. Open an issue first if you're planning a larger change so we don't duplicate work.

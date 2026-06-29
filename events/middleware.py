@@ -14,6 +14,6 @@ class ConcatOAuthCallbackMiddleware:
             and request.GET.get('code')
             and not request.path.rstrip('/').endswith('/concat/callback')
         ):
-            from .views import concat_callback
+            from .concat.views import concat_callback
             return concat_callback(request)
         return self.get_response(request)

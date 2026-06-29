@@ -43,7 +43,7 @@
                         <div class="panel-detail-field-value">{{ panel.start_time|time:"g:i A" }} – {{ panel.end_time|time:"g:i A" }}</div>
                     </div>
                 </div>
-                {% if concat_enabled %}
+                {% if rsvp_enabled %}
                 <div class="col-sm-6">
                     <div class="panel-detail-field">
                         <div class="panel-detail-field-label">
@@ -106,7 +106,7 @@
         </div>
         {% endif %}
 
-        {% if concat_enabled %}
+        {% if rsvp_enabled %}
         <div class="panel-detail-going-card" id="panelRsvpAttendeesSection">
             <div class="panel-detail-going-header">
                 <i class="material-icons">people</i>
@@ -136,19 +136,25 @@
 </div>
 
 <div class="modal-footer">
-    {% if concat_enabled %}
+    {% if rsvp_enabled %}
     <div id="panelRsvpControls" class="w-100 mb-2" data-panel-id="{{ panel.pk }}" data-rsvped="{{ user_has_rsvped|yesno:'true,false' }}">
-        {% if concat_authenticated and concat_can_rsvp %}
+        {% if rsvp_authenticated and rsvp_can_rsvp %}
         <button type="button" class="btn w-100 {% if user_has_rsvped %}btn-danger{% else %}btn-success{% endif %}" id="panelRsvpButton">
             <i class="material-icons">{% if user_has_rsvped %}bookmark{% else %}bookmark_border{% endif %}</i>
             <span id="panelRsvpButtonText">{% if user_has_rsvped %}Remove from Schedule{% else %}Add to Schedule{% endif %}</span>
         </button>
-        {% elif concat_authenticated %}
-        <p class="text-muted small text-center mb-0">Your ConCat account is not eligible to RSVP.</p>
+        {% elif rsvp_authenticated %}
+        <p class="text-muted small text-center mb-0">Your account is not eligible to RSVP.</p>
         {% else %}
-        <a href="{% url 'events:concat_login' %}?next={{ request.META.HTTP_REFERER|default:request.path|urlencode }}" class="btn btn-success w-100">
-            <i class="material-icons">login</i> Sign in with ConCat to RSVP
+        {% if rsvp_provider == 'eventzilla' %}
+        <button type="button" class="btn btn-success w-100" onclick="showEventzillaSignInModal({ onSuccess: function() { window.location.reload(); } })">
+            <i class="material-icons">login</i> Sign in to RSVP
+        </button>
+        {% else %}
+        <a href="{{ rsvp_login_url }}" class="btn btn-success w-100">
+            <i class="material-icons">login</i> Sign in to RSVP
         </a>
+        {% endif %}
         {% endif %}
     </div>
     {% endif %}

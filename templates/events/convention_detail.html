@@ -225,13 +225,45 @@ window.addEventListener('load', function() {
             })
             .then(async response => {
                 const data = await response.json();
-                if (!response.ok) {
+                    if (!response.ok) {
+                    if (data.requires_eventzilla && typeof showEventzillaSignInModal === 'function') {
+                        showEventzillaSignInModal({
+                            onSuccess: function() {
+                                button.disabled = true;
+                                fetch(`/panel/${panelId}/rsvp/`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-CSRFToken': getCsrfToken(),
+                                        'Accept': 'application/json',
+                                    },
+                                })
+                                .then(async retryResponse => {
+                                    const retryData = await retryResponse.json();
+                                    if (!retryResponse.ok) {
+                                        throw new Error(retryData.error || 'RSVP failed');
+                                    }
+                                    setRsvpState(retryData.rsvped, retryData.rsvp_count, retryData.rsvp_attendees);
+                                })
+                                .catch(retryError => {
+                                    alert(retryError.message);
+                                })
+                                .finally(() => {
+                                    button.disabled = false;
+                                });
+                            },
+                        });
+                        return;
+                    }
+                    if (data.requires_login && data.login_url) {
+                        window.location.href = data.login_url;
+                        return;
+                    }
                     if (data.requires_concat && data.concat_login_url) {
                         window.location.href = data.concat_login_url;
                         return;
                     }
                     if (data.requires_role) {
-                        throw new Error(data.error || 'Your ConCat account is not eligible to RSVP.');
+                        throw new Error(data.error || 'Your account is not eligible to RSVP.');
                     }
                     throw new Error(data.error || 'RSVP failed');
                 }
@@ -1844,7 +1876,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                     </div>
 
-                    {% if concat_enabled and concat_authenticated %}
+                    {% if rsvp_enabled and rsvp_authenticated %}
                     <div class="filter-rsvps mb-3">
                         <div class="form-check form-switch filter-rsvps-toggle">
                             <input class="form-check-input" type="checkbox" id="showMyRsvpsToggle" role="switch">

@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Your Profile{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-center mb-0">Your {{ current_convention_name }} Profile</h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted text-center">
+                        Set how your name and photo appear when you RSVP to panels.
+                    </p>
+                    <form id="eventzillaProfileForm">
+                        {% csrf_token %}
+                        <div class="text-center mb-4">
+                            <div id="profileAvatarPreview" class="mx-auto rounded-circle overflow-hidden mb-2" style="width: 120px; height: 120px; background: #6c757d;">
+                                {% if account.avatar %}
+                                <img src="{{ account.avatar }}" alt="" class="w-100 h-100" style="object-fit: cover;">
+                                {% else %}
+                                <div class="d-flex align-items-center justify-content-center h-100 text-white fs-2 fw-bold">
+                                    {{ account.display_name|slice:":1"|upper }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <input type="file" class="form-control" id="profileAvatarInput" accept="image/*">
+                            <div class="form-text">Upload a profile picture (optional).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="profileDisplayName" class="form-label">Display name</label>
+                            <input type="text" class="form-control" id="profileDisplayName" name="display_name" value="{{ account.display_name }}" required maxlength="200">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Registration email</label>
+                            <input type="email" class="form-control" value="{{ account.email }}" readonly disabled>
+                        </div>
+                        <div class="alert alert-danger d-none" id="profileError"></div>
+                        <div class="alert alert-success d-none" id="profileSuccess">Profile saved.</div>
+                        <button type="submit" class="btn btn-primary w-100" id="profileSaveBtn">Save profile</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('eventzillaProfileForm');
+    const saveBtn = document.getElementById('profileSaveBtn');
+    const errorEl = document.getElementById('profileError');
+    const successEl = document.getElementById('profileSuccess');
+    const avatarInput = document.getElementById('profileAvatarInput');
+    const avatarPreview = document.getElementById('profileAvatarPreview');
+    let avatarData = null;
+
+    avatarInput.addEventListener('change', function() {
+        const file = avatarInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            avatarData = event.target.result;
+            avatarPreview.innerHTML = `<img src="${avatarData}" alt="" class="w-100 h-100" style="object-fit: cover;">`;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+
+        saveBtn.disabled = true;
+        errorEl.classList.add('d-none');
+        successEl.classList.add('d-none');
+
+        const formData = new FormData();
+        formData.append('display_name', document.getElementById('profileDisplayName').value.trim());
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        if (avatarData !== null) {
+            formData.append('avatar', avatarData);
+        }
+
+        fetch('{% url "events:eventzilla_update_profile" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin',
+        })
+        .then(async response => {
+            const data = await parseJsonResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Could not save profile.');
+            }
+            successEl.classList.remove('d-none');
+            if (data.avatar_url) {
+                avatarPreview.innerHTML = `<img src="${data.avatar_url}" alt="" class="w-100 h-100" style="object-fit: cover;">`;
+            }
+        })
+        .catch(error => {
+            errorEl.textContent = error.message;
+            errorEl.classList.remove('d-none');
+        })
+        .finally(() => {
+            saveBtn.disabled = false;
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -449,6 +449,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% csrf_token %}
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg mb-4">
         <div class="container">
@@ -478,6 +479,24 @@
                             <i class="material-icons">login</i>
                             Login with ConCat
                         </a>
+                        {% endif %}
+                    {% elif eventzilla_enabled %}
+                        {% if eventzilla_authenticated %}
+                        <div class="d-flex align-items-center gap-2">
+                            {% if eventzilla_user_avatar %}
+                            <img src="{{ eventzilla_user_avatar }}" alt="" class="rounded-circle" width="28" height="28" style="object-fit: cover;">
+                            {% endif %}
+                            <a href="{% url 'events:eventzilla_profile' %}" class="navbar-user-name small text-decoration-none">{{ eventzilla_user_name }}</a>
+                        </div>
+                        <a href="{% url 'events:eventzilla_logout' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="material-icons">logout</i>
+                            Sign out
+                        </a>
+                        {% else %}
+                        <button type="button" class="btn btn-success btn-sm" onclick="showEventzillaSignInModal()">
+                            <i class="material-icons">login</i>
+                            Sign in with Eventzilla
+                        </button>
                         {% endif %}
                     {% endif %}
                 </div>
@@ -547,7 +566,87 @@
         </div>
     </div>
 
+    {% if eventzilla_enabled and not concat_enabled %}
+    <!-- Eventzilla Sign-In Modal -->
+    <div class="modal fade" id="eventzillaSignInModal" tabindex="-1" aria-labelledby="eventzillaSignInModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="eventzillaSignInModalLabel">
+                        <i class="material-icons">login</i>
+                        Sign in with Eventzilla
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Enter the email address you used to register for {{ current_convention_name|default:"the event" }}.
+                    </p>
+                    <form id="eventzillaSignInForm" class="needs-validation" novalidate onsubmit="return false;">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="eventzillaSignInEmail" class="form-label">Registration email</label>
+                            <input type="email" class="form-control text-lowercase" id="eventzillaSignInEmail" name="email" required autocomplete="email">
+                        </div>
+                        <div class="mb-3">
+                            <label for="eventzillaSignInBarcode" class="form-label">Ticket barcode</label>
+                            <input type="text" class="form-control" id="eventzillaSignInBarcode" name="barcode" required autocomplete="off" inputmode="numeric">
+                        </div>
+                        <div class="alert alert-danger d-none" id="eventzillaSignInError"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" id="eventzillaSignInSubmit">
+                        <i class="material-icons">verified_user</i>
+                        Verify registration
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% block extra_js %}{% endblock %}
+
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function getCsrfToken() {
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || getCookie('csrftoken')
+                || '';
+        }
+
+        async function parseJsonResponse(response) {
+            const contentType = response.headers.get('content-type') || '';
+            const text = await response.text();
+            if (contentType.includes('application/json') || text.trim().startsWith('{')) {
+                try {
+                    return JSON.parse(text);
+                } catch (error) {
+                    throw new Error('Invalid server response. Please try again.');
+                }
+            }
+            if (response.status === 403) {
+                throw new Error('Session expired or invalid security token. Refresh the page and try again.');
+            }
+            throw new Error('Unexpected server response. Please try again.');
+        }
+    </script>
 
     <!-- Theme Switcher JS -->
     <script>
@@ -713,11 +812,11 @@
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRFToken': getCookie('csrftoken')
+                        'X-CSRFToken': getCsrfToken()
                     },
                     credentials: 'same-origin'
                 })
-                .then(response => response.json())
+                .then(response => parseJsonResponse(response))
                 .then(data => {
                     if (data.success) {
                         const nextPage = new URLSearchParams(window.location.search).get('next') || localStorage.getItem('nextPath') || window.location.pathname;
@@ -755,24 +854,133 @@
                 loginSubmit.disabled = false;
             });
 
-        });
-    </script>
-    <script>
-        // Helper function to get CSRF cookie
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
+            {% if eventzilla_enabled and not concat_enabled %}
+            const eventzillaModalEl = document.getElementById('eventzillaSignInModal');
+            const eventzillaForm = document.getElementById('eventzillaSignInForm');
+            const eventzillaError = document.getElementById('eventzillaSignInError');
+            const eventzillaSubmit = document.getElementById('eventzillaSignInSubmit');
+            let eventzillaSignInSuccessCallback = null;
+
+            const eventzillaModal = eventzillaModalEl
+                ? new bootstrap.Modal(eventzillaModalEl)
+                : null;
+
+            function updateEventzillaNavbar(displayName, avatarUrl) {
+                const nav = document.querySelector('#navbarNav .d-flex');
+                if (!nav) return;
+                const avatarHtml = avatarUrl
+                    ? `<img src="${avatarUrl}" alt="" class="rounded-circle" width="28" height="28" style="object-fit: cover;">`
+                    : '';
+                nav.innerHTML = `
+                    <div class="d-flex align-items-center gap-2">
+                        ${avatarHtml}
+                        <a href="{% url 'events:eventzilla_profile' %}" class="navbar-user-name small text-decoration-none">${displayName}</a>
+                    </div>
+                    <a href="{% url 'events:eventzilla_logout' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="material-icons">logout</i>
+                        Sign out
+                    </a>
+                `;
+            }
+
+            function verifyEventzillaEmail(email, barcode) {
+                const formData = new FormData(eventzillaForm);
+                formData.set('email', email);
+                formData.set('barcode', barcode);
+                const csrfToken = getCsrfToken();
+
+                return fetch('{% url "events:eventzilla_verify_email" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                }).then(async response => {
+                    const data = await parseJsonResponse(response);
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.error || 'Verification failed.');
                     }
+                    return data;
+                });
+            }
+
+            window.showEventzillaSignInModal = function(options) {
+                if (!eventzillaModal) return;
+                eventzillaSignInSuccessCallback = options && options.onSuccess ? options.onSuccess : null;
+                eventzillaForm.reset();
+                eventzillaForm.classList.remove('was-validated');
+                eventzillaError.classList.add('d-none');
+                eventzillaSubmit.disabled = false;
+                eventzillaModal.show();
+            };
+
+            if (eventzillaForm) {
+                const emailInput = document.getElementById('eventzillaSignInEmail');
+                if (emailInput) {
+                    emailInput.addEventListener('input', function() {
+                        emailInput.value = emailInput.value.toLowerCase();
+                    });
                 }
             }
-            return cookieValue;
-        }
+
+            function handleEventzillaSignIn() {
+                if (!eventzillaForm.checkValidity()) {
+                    eventzillaForm.classList.add('was-validated');
+                    return;
+                }
+
+                const email = document.getElementById('eventzillaSignInEmail').value.trim().toLowerCase();
+                const barcode = document.getElementById('eventzillaSignInBarcode').value.trim();
+                eventzillaSubmit.disabled = true;
+                eventzillaError.classList.add('d-none');
+
+                verifyEventzillaEmail(email, barcode)
+                    .then(data => {
+                        updateEventzillaNavbar(data.display_name, data.avatar_url);
+                        eventzillaModal.hide();
+                        if (data.created && data.profile_url) {
+                            window.location.href = data.profile_url;
+                            return;
+                        }
+                        if (typeof eventzillaSignInSuccessCallback === 'function') {
+                            eventzillaSignInSuccessCallback(data);
+                            eventzillaSignInSuccessCallback = null;
+                        }
+                    })
+                    .catch(error => {
+                        eventzillaError.textContent = error.message;
+                        eventzillaError.classList.remove('d-none');
+                        eventzillaSubmit.disabled = false;
+                    });
+            }
+
+            if (eventzillaSubmit) {
+                eventzillaSubmit.addEventListener('click', handleEventzillaSignIn);
+            }
+
+            if (eventzillaForm) {
+                eventzillaForm.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleEventzillaSignIn();
+                    }
+                });
+            }
+
+            if (eventzillaModalEl) {
+                eventzillaModalEl.addEventListener('hidden.bs.modal', function() {
+                    eventzillaForm.reset();
+                    eventzillaForm.classList.remove('was-validated');
+                    eventzillaError.classList.add('d-none');
+                    eventzillaSubmit.disabled = false;
+                    eventzillaSignInSuccessCallback = null;
+                });
+            }
+            {% endif %}
+
+        });
     </script>
     <style>
       #sticky-footer {

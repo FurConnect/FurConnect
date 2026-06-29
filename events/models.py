@@ -208,11 +208,38 @@ class Room(models.Model):
         unique_together = ['name', 'convention']
 
 
+class EventzillaAttendee(models.Model):
+    email = models.EmailField(unique=True)
+    barcode = models.CharField(max_length=64)
+    display_name = models.CharField(max_length=200)
+    avatar = models.TextField(blank=True)
+    eventzilla_attendee_id = models.CharField(max_length=64, blank=True)
+    is_site_admin = models.BooleanField(
+        default=False,
+        help_text='When enabled, this attendee can manage events after Eventzilla sign-in.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.email = self.email.strip().lower()
+        super().save(*args, **kwargs)
+
+    def get_avatar_display(self):
+        return self.avatar or ''
+
+    def __str__(self):
+        return self.display_name or self.email
+
+    class Meta:
+        ordering = ['display_name', 'email']
+
+
 class PanelRSVP(models.Model):
     panel = models.ForeignKey(Panel, on_delete=models.CASCADE, related_name='rsvps')
     attendee_id = models.CharField(max_length=255)
     display_name = models.CharField(max_length=200, blank=True)
-    avatar_url = models.URLField(max_length=500, blank=True)
+    avatar_url = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
