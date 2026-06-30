@@ -8,7 +8,5 @@ def normalize_barcode(barcode):
 
 def attendee_barcode(attendee):
     return normalize_barcode(
-        attendee.get('bar_code')
-        or attendee.get('barcode')
-        or attendee.get('bar_code_value')
+        attendee.get('refno')
     )

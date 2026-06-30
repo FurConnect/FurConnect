@@ -29,7 +29,7 @@ class EventzillaApiTests(SimpleTestCase):
             'attendees': [{
                 'id': 99,
                 'email': 'Attendee@Example.com',
-                'bar_code': '15986598635445',
+                'refno': '15986598635445',
                 'first_name': 'Ada',
                 'last_name': 'Lovelace',
                 'transaction_status': 'Confirmed',
@@ -58,7 +58,7 @@ class EventzillaApiTests(SimpleTestCase):
             'attendees': [{
                 'id': 1,
                 'email': 'guest@example.com',
-                'bar_code': '111',
+                'refno': '111',
                 'transaction_status': 'Confirmed',
                 'ticket_type': 'Weekend',
             }],
@@ -70,7 +70,7 @@ class EventzillaApiTests(SimpleTestCase):
         profile = parse_attendee_profile({
             'id': 42,
             'email': 'Ada@Example.com',
-            'bar_code': '12345',
+            'refno': '12345',
             'first_name': 'Ada',
             'last_name': 'Lovelace',
         })
@@ -100,7 +100,7 @@ class EventzillaAccountTests(TransactionTestCase):
         lookup.return_value = {
             'id': 42,
             'email': 'guest@example.com',
-            'bar_code': 'ABC123',
+            'refno': 'ABC123',
             'first_name': 'Guest',
             'last_name': 'User',
             'transaction_status': 'Confirmed',
@@ -133,7 +133,7 @@ class EventzillaAccountTests(TransactionTestCase):
         lookup.return_value = {
             'id': 7,
             'email': 'organizer@example.com',
-            'bar_code': 'ORG123',
+            'refno': 'ORG123',
             'first_name': 'Organizer',
             'last_name': 'User',
             'transaction_status': 'Confirmed',
@@ -165,7 +165,7 @@ class EventzillaAccountTests(TransactionTestCase):
         lookup.return_value = {
             'id': 42,
             'email': 'guest@example.com',
-            'bar_code': 'ABC123',
+            'refno': 'ABC123',
             'first_name': 'Guest',
             'last_name': 'User',
             'transaction_status': 'Confirmed',
