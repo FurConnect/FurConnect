@@ -64,9 +64,12 @@ def authenticate_eventzilla_credentials(request, email, barcode):
         },
     )
     if not created:
-        if account.barcode != profile['barcode']:
+        if account.barcode and account.barcode != profile['barcode']:
             return None, 'That ticket barcode does not match this registration.', False
         update_fields = []
+        if not account.barcode:
+            account.barcode = profile['barcode']
+            update_fields.append('barcode')
         if profile['attendee_id'] and account.eventzilla_attendee_id != profile['attendee_id']:
             account.eventzilla_attendee_id = profile['attendee_id']
             update_fields.append('eventzilla_attendee_id')

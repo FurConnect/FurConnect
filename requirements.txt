@@ -10,3 +10,4 @@ requests
 reportlab
 timezonefinder
 weasyprint
+pytz
