@@ -480,18 +480,6 @@ window.addEventListener('load', function() {
             return canvas.toDataURL('image/png');
         }
 
-        function gridRowIsSpanned(rows, rowIndex) {
-            for (let i = 0; i < rowIndex; i++) {
-                for (const cell of rows[i].cells) {
-                    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10);
-                    if (rowspan > 1 && rowIndex < i + rowspan) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
         // Function to update time slots visibility
         function updateTimeSlotsVisibility() {
             const isElementVisible = (el) => {
@@ -538,27 +526,13 @@ window.addEventListener('load', function() {
                 }
             });
 
-            // Grid table view time rows (if using grid schedule mode)
+            // Keep every half-hour grid row visible. Hiding empty xx:00 / xx:30 rows
+            // collapses the timeline and breaks rowspan alignment so panels appear to
+            // skip the first half of each hour.
             document.querySelectorAll('.table-grid-schedule tbody').forEach(tbody => {
-                const rows = Array.from(tbody.rows);
-                rows.forEach((tableRow, rowIndex) => {
-                    const panelCells = tableRow.querySelectorAll('.grid-cell-card');
-                    const isSpanned = gridRowIsSpanned(rows, rowIndex);
-
-                    if (!panelCells.length && !isSpanned) {
-                        tableRow.style.setProperty('display', 'none', 'important');
-                        return;
-                    }
-
-                    const hasVisiblePanel = panelCells.length === 0 ||
-                        Array.from(panelCells).some(panel => isElementVisible(panel));
-
-                    if (hasVisiblePanel || isSpanned) {
-                        tableRow.style.setProperty('display', 'table-row', 'important');
-                        tableRow.classList.remove('d-none');
-                    } else {
-                        tableRow.style.setProperty('display', 'none', 'important');
-                    }
+                Array.from(tbody.rows).forEach(tableRow => {
+                    tableRow.style.setProperty('display', 'table-row', 'important');
+                    tableRow.classList.remove('d-none');
                 });
             });
 
@@ -1220,19 +1194,19 @@ window.addEventListener('load', function() {
 
         const GRID_SLOT_HEIGHT = 52;
 
-        // Size rows to 30-minute slots so row-spanned panels fill their full duration.
+        // Size rows to fixed 30-minute slots. Card top/height come from
+        // --grid-top / --grid-height so times like 12:15 sit 1/4 into the hour.
         function normalizeHourRowHeights() {
             document.querySelectorAll('.day-grid').forEach(dayGrid => {
                 const table = dayGrid.querySelector('.table-grid-schedule');
                 if (!table || !table.tBodies.length) return;
 
                 const allRows = Array.from(table.tBodies[0].rows);
-                const visibleRows = allRows.filter(row => window.getComputedStyle(row).display !== 'none');
-                if (!visibleRows.length) return;
+                if (!allRows.length) return;
 
                 allRows.forEach(row => {
-                    row.style.height = `${GRID_SLOT_HEIGHT}px`;
-                    row.style.minHeight = `${GRID_SLOT_HEIGHT}px`;
+                    row.style.setProperty('height', `${GRID_SLOT_HEIGHT}px`, 'important');
+                    row.style.setProperty('min-height', `${GRID_SLOT_HEIGHT}px`, 'important');
                 });
 
                 allRows.forEach((row, rowIndex) => {
@@ -1240,47 +1214,24 @@ window.addEventListener('load', function() {
 
                     Array.from(row.cells).forEach(cell => {
                         const rowSpan = parseInt(cell.getAttribute('rowspan') || '1', 10);
-                        let cellHeight = GRID_SLOT_HEIGHT * rowSpan;
+                        const cellHeight = GRID_SLOT_HEIGHT * rowSpan;
+                        const isTimeLabel = cell.classList.contains('grid-time-label');
 
                         if (rowSpan > 1) {
                             for (let k = 0; k < rowSpan && (rowIndex + k) < allRows.length; k++) {
-                                allRows[rowIndex + k].style.height = `${GRID_SLOT_HEIGHT}px`;
-                                allRows[rowIndex + k].style.minHeight = `${GRID_SLOT_HEIGHT}px`;
+                                allRows[rowIndex + k].style.setProperty('height', `${GRID_SLOT_HEIGHT}px`, 'important');
+                                allRows[rowIndex + k].style.setProperty('min-height', `${GRID_SLOT_HEIGHT}px`, 'important');
                             }
                         }
 
-                        const card = cell.querySelector('.grid-cell-card');
-                        if (card) {
-                            card.style.height = 'auto';
-                            card.style.position = 'static';
-                            card.style.inset = 'auto';
-                            const contentHeight = card.scrollHeight + 8;
-                            cellHeight = Math.max(cellHeight, contentHeight);
-                            card.style.position = 'absolute';
-                            card.style.inset = '0';
+                        if (!isTimeLabel) {
+                            cell.style.setProperty('height', `${cellHeight}px`, 'important');
+                            cell.style.setProperty('min-height', `${cellHeight}px`, 'important');
+                        } else {
+                            cell.style.removeProperty('height');
+                            cell.style.setProperty('min-height', `${GRID_SLOT_HEIGHT * rowSpan}px`, 'important');
                         }
-
-                        if (rowSpan > 1 && cellHeight > GRID_SLOT_HEIGHT * rowSpan) {
-                            const perRow = Math.ceil(cellHeight / rowSpan);
-                            for (let k = 0; k < rowSpan && (rowIndex + k) < allRows.length; k++) {
-                                allRows[rowIndex + k].style.height = `${perRow}px`;
-                                allRows[rowIndex + k].style.minHeight = `${perRow}px`;
-                            }
-                            cellHeight = perRow * rowSpan;
-                        }
-
-                        cell.style.height = `${cellHeight}px`;
-                        cell.style.minHeight = `${cellHeight}px`;
                         cell.style.position = 'relative';
-
-                        if (card) {
-                            card.style.height = '100%';
-                            card.style.minHeight = `${GRID_SLOT_HEIGHT * rowSpan}px`;
-                            card.style.removeProperty('max-height');
-                            card.style.display = 'flex';
-                            card.style.flexDirection = 'column';
-                            card.style.justifyContent = 'flex-start';
-                        }
                     });
                 });
             });
@@ -1929,11 +1880,16 @@ document.addEventListener('DOMContentLoaded', function () {
                                     <tbody>
                                         {% for time_row in day_matrix.rows %}
                                         <tr class="{% if time_row.time.minute == 0 %}time-slot-hour{% else %}time-slot-half{% endif %}">
-                                            <th class="grid-time-label" scope="row">
-                                                {% if time_row.time.minute == 0 %}
-                                                    <span class="grid-time-text">{{ time_row.time|time:"g:i A" }}</span>
-                                                {% endif %}
+                                            {% if time_row.time.minute == 0 %}
+                                            <th class="grid-time-label" scope="row" rowspan="{% if forloop.last %}1{% else %}2{% endif %}">
+                                                <span class="grid-time-text">{{ time_row.time|time:"g:i A" }}</span>
                                             </th>
+                                            {% elif forloop.first %}
+                                            {# Grid started mid-hour — still show this hour's label #}
+                                            <th class="grid-time-label" scope="row" rowspan="1">
+                                                <span class="grid-time-text">{{ time_row.time|time:"g:i A" }}</span>
+                                            </th>
+                                            {% endif %}
                                             {% for cell in time_row.cells %}
                                                 {% if cell.type == 'skip' %}
                                                     {# skip output for rowspanned occupied cell #}
@@ -1943,11 +1899,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     <td class="grid-cell grid-cell-filled" rowspan="{{ cell.rowspan }}">
                                                         <div class="card mb-0 panel-card grid-cell-card{% if panel.cancelled %} cancelled-panel{% endif %}"
                                                              data-panel-id="{{ panel.pk }}"
+                                                             data-start-offset="{{ cell.start_offset_minutes }}"
+                                                             data-duration-minutes="{{ cell.duration_minutes }}"
+                                                             data-slot-minutes="{{ cell.slot_minutes }}"
                                                              data-tags="{% for tag in panel.ordered_tags %}{{ tag.name|lower }}{% if not forloop.last %},{% endif %}{% endfor %}"
                                                              data-room="{% if panel.room %}{{ panel.room.name|lower|slugify }}{% endif %}"
                                                              data-rsvped="{% if panel.pk in user_rsvp_panel_ids %}true{% else %}false{% endif %}"
                                                              {% if panel.cancelled %}data-cancelled="true"{% endif %}
-                                                             style="--panel-accent: {{ panel_color }};">
+                                                             style="--panel-accent: {{ panel_color }}; --grid-top: {{ cell.top_pct }}%; --grid-height: {{ cell.height_pct }}%;">
                                                             {% include 'events/panel_schedule_card.html' with panel=panel %}
                                                         </div>
                                                     </td>
@@ -3123,13 +3082,20 @@ html[data-bs-theme="dark"] .grid-table-scroll {
     width: auto !important;
     min-width: max-content !important;
     max-width: max-content !important;
+    min-height: 52px !important;
+    height: auto !important;
     padding: 0.45rem 0.6rem !important;
     text-align: left;
+    vertical-align: top !important;
     white-space: nowrap;
     background: var(--grid-time-bg) !important;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-right: 1px solid var(--grid-line) !important;
+}
+
+.grid-time-label[rowspan="2"] {
+    min-height: 104px !important;
 }
 
 .grid-time-text {
@@ -3149,16 +3115,11 @@ html[data-bs-theme="dark"] .grid-table-scroll {
     min-width: 200px !important;
     width: 200px;
     min-height: 52px !important;
-    height: auto !important;
+    height: 52px;
     overflow: hidden;
     box-sizing: border-box;
-    border-radius: 8px;
-    background: var(--grid-empty-bg);
-}
-
-.time-slot-hour .grid-cell,
-.time-slot-hour .grid-time-label {
-    background-color: var(--grid-hour-bg);
+    border-radius: 0;
+    background: transparent;
 }
 
 .time-slot-hour .grid-time-label {
@@ -3167,13 +3128,20 @@ html[data-bs-theme="dark"] .grid-table-scroll {
 
 .grid-cell-filled {
     background: transparent !important;
+    border-radius: 8px;
 }
 
 .grid-cell-card {
     --panel-accent: #ffc107;
+    --grid-top: 0%;
+    --grid-height: 100%;
     position: absolute !important;
-    inset: 0 !important;
-    min-height: 72px;
+    left: 0 !important;
+    right: 0 !important;
+    top: var(--grid-top) !important;
+    height: var(--grid-height) !important;
+    bottom: auto !important;
+    min-height: 0;
     width: 100%;
     box-sizing: border-box;
     display: flex !important;
@@ -3950,11 +3918,24 @@ html[data-bs-theme="light"] .cancelled-panel .modal-panel-room {
 
 .table-grid-schedule tbody tr {
     min-height: 52px !important;
-    height: 52px;
+    height: 52px !important;
 }
 
 .table-grid-schedule tbody tr.time-slot-hour .grid-time-text {
     font-weight: 700;
+}
+
+.grid-time-label .grid-time-text,
+.grid-time-label .grid-time-spacer {
+    display: inline-block;
+    line-height: 1.1;
+    min-height: 1.1em;
+}
+
+.grid-time-label .grid-time-spacer {
+    visibility: hidden;
+    width: 0;
+    overflow: hidden;
 }
 
 .day-navigation {
