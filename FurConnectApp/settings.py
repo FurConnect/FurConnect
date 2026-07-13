@@ -43,11 +43,47 @@ _hosts = os.environ.get('ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = [host.strip() for host in _hosts.split(',') if host.strip()]
 ALLOWED_HOSTS += ['127.0.0.1', 'localhost']
 
+
+def _csrf_trusted_origins(hosts, *, allow_http=False):
+    """Build exact CSRF trusted origins from hostnames (Django does not support wildcards)."""
+    origins = []
+    for host in hosts:
+        if host.startswith('http://') or host.startswith('https://'):
+            origins.append(host.rstrip('/'))
+            continue
+        if allow_http or host in {'127.0.0.1', 'localhost'}:
+            origins.extend([
+                f'http://{host}',
+                f'http://{host}:8000',
+            ])
+        origins.append(f'https://{host}')
+    return list(dict.fromkeys(origins))
+
+
+def _parse_csrf_origins(raw_value):
+    """Parse CSRF_TRUSTED_ORIGINS env value, ignoring invalid wildcard entries."""
+    origins = []
+    for origin in raw_value.split(','):
+        origin = origin.strip().rstrip('/')
+        if not origin or '*' in origin:
+            continue
+        if not origin.startswith('http://') and not origin.startswith('https://'):
+            origin = f'https://{origin}'
+        origins.append(origin)
+    return origins
+
+
 # CSRF Settings
 _allow_insecure_cookies = os.environ.get('ALLOW_INSECURE_COOKIES', 'False') == 'True'
+_csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+_auto_csrf_origins = _csrf_trusted_origins(
+    ALLOWED_HOSTS,
+    allow_http=DEBUG or _allow_insecure_cookies,
+)
+_explicit_csrf_origins = _parse_csrf_origins(_csrf_origins) if _csrf_origins else []
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(_explicit_csrf_origins + _auto_csrf_origins))
 
 if DEBUG or _allow_insecure_cookies:
-    CSRF_TRUSTED_ORIGINS = ['https://*', 'http://*']
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     CSRF_USE_SESSIONS = False
@@ -55,10 +91,10 @@ if DEBUG or _allow_insecure_cookies:
     USE_X_FORWARDED_HOST = False
     USE_X_FORWARDED_PORT = False
 else:
-    CSRF_TRUSTED_ORIGINS = ['https://*']
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     CSRF_USE_SESSIONS = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'

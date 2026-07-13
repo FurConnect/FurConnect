@@ -4,6 +4,7 @@ from django.db import OperationalError
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from urllib.parse import quote
 
@@ -24,6 +25,7 @@ def _convention_name():
     return convention.name if convention else 'FurConnect'
 
 
+@ensure_csrf_cookie
 def eventzilla_login(request):
     if not settings.EVENTZILLA_ENABLED:
         messages.error(request, 'Eventzilla sign-in is not enabled.')

@@ -607,6 +607,47 @@
     </div>
     {% endif %}
 
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function getCsrfToken(root) {
+            const scope = root && root.querySelector ? root : document;
+            return scope.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                || getCookie('csrftoken')
+                || '';
+        }
+
+        async function parseJsonResponse(response) {
+            const contentType = response.headers.get('content-type') || '';
+            const text = await response.text();
+            if (contentType.includes('application/json') || text.trim().startsWith('{')) {
+                try {
+                    return JSON.parse(text);
+                } catch (error) {
+                    throw new Error('Invalid server response. Please try again.');
+                }
+            }
+            if (response.status === 403) {
+                throw new Error('Session expired or invalid security token. Refresh the page and try again.');
+            }
+            throw new Error('Unexpected server response. Please try again.');
+        }
+    </script>
+
     {% block extra_js %}{% endblock %}
 
     <script>
@@ -887,7 +928,8 @@
                 const formData = new FormData(eventzillaForm);
                 formData.set('email', email);
                 formData.set('barcode', barcode);
-                const csrfToken = getCsrfToken();
+                const csrfToken = getCsrfToken(eventzillaForm);
+                formData.set('csrfmiddlewaretoken', csrfToken);
 
                 return fetch('{% url "events:eventzilla_verify_email" %}', {
                     method: 'POST',

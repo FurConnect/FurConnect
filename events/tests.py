@@ -1,7 +1,9 @@
 from unittest.mock import patch
+import io
 import json
 
-from django.test import RequestFactory, SimpleTestCase, TransactionTestCase, override_settings
+from django.core.management import call_command
+from django.test import Client, RequestFactory, SimpleTestCase, TransactionTestCase, override_settings
 
 from events.auth import can_manage_events
 from events.eventzilla import (
@@ -182,7 +184,35 @@ class EventzillaAccountTests(TransactionTestCase):
         self.assertFalse(created)
         self.assertIsNone(error)
         self.assertEqual(EventzillaAttendee.objects.count(), 1)
-        self.assertTrue(can_rsvp(request))
+        self.assertTrue(can_manage_events(request))
+
+
+class GrantEventzillaAdminCommandTests(TransactionTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.db import connection
+
+        table_names = connection.introspection.table_names()
+        if EventzillaAttendee._meta.db_table not in table_names:
+            with connection.schema_editor() as schema_editor:
+                schema_editor.create_model(EventzillaAttendee)
+
+    def test_grants_admin_to_existing_account(self):
+        EventzillaAttendee.objects.create(
+            email='organizer@example.com',
+            barcode='ABC123',
+            display_name='Organizer',
+        )
+        call_command('grant_eventzilla_admin', 'organizer@example.com', stdout=io.StringIO())
+        account = EventzillaAttendee.objects.get(email='organizer@example.com')
+        self.assertTrue(account.is_site_admin)
+
+    def test_pre_provisions_new_admin_account(self):
+        call_command('grant_eventzilla_admin', 'newadmin@example.com', stdout=io.StringIO())
+        account = EventzillaAttendee.objects.get(email='newadmin@example.com')
+        self.assertTrue(account.is_site_admin)
+        self.assertEqual(account.barcode, '')
 
 
 class EventzillaVerifyEmailViewTests(SimpleTestCase):
@@ -219,3 +249,12 @@ class EventzillaVerifyEmailViewTests(SimpleTestCase):
         response = eventzilla_verify_email(request)
 
         self.assertEqual(response.status_code, 400)
+
+    @override_settings(EVENTZILLA_ENABLED=True)
+    def test_verify_email_requires_csrf_token(self):
+        client = Client(enforce_csrf_checks=True)
+        response = client.post('/eventzilla/verify/', {
+            'email': 'guest@example.com',
+            'barcode': 'ABC123',
+        })
+        self.assertEqual(response.status_code, 403)

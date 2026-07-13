@@ -84,7 +84,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const formData = new FormData();
         formData.append('display_name', document.getElementById('profileDisplayName').value.trim());
-        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        const csrfToken = getCsrfToken(form);
+        formData.append('csrfmiddlewaretoken', csrfToken);
         if (avatarData !== null) {
             formData.append('avatar', avatarData);
         }
@@ -93,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             body: formData,
             headers: {
-                'X-CSRFToken': getCsrfToken(),
+                'X-CSRFToken': csrfToken,
                 'Accept': 'application/json',
             },
             credentials: 'same-origin',

@@ -64,11 +64,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const formData = new FormData(form);
         formData.set('email', emailInput.value.trim().toLowerCase());
+        const csrfToken = getCsrfToken(form);
+        formData.set('csrfmiddlewaretoken', csrfToken);
         fetch('{% url "events:eventzilla_verify_email" %}', {
             method: 'POST',
             body: formData,
             headers: {
-                'X-CSRFToken': getCsrfToken(),
+                'X-CSRFToken': csrfToken,
                 'Accept': 'application/json',
             },
             credentials: 'same-origin',
