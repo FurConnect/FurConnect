@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta, time
-import math
+from datetime import datetime, time
+
+from django.utils.text import slugify
 
 
 def attach_panel_ordering(panel):
@@ -45,206 +46,168 @@ def collect_panel_hosts(display_days_with_panels):
     return hosts
 
 
-def _round_grid_bounds(day_date, panels_for_day):
-    if panels_for_day:
-        min_start_time = min(panel.start_time for panel in panels_for_day)
-        max_end_time = max(panel.end_time for panel in panels_for_day)
+def _panels_for_day(display_day):
+    panels = []
+    for time_group in display_day['panels_by_time']:
+        panels.extend(time_group['panels'])
+    return panels
 
-        # Always start at the top of the hour so an hour label (e.g. "12")
-        # still shows when the earliest panel is xx:30 or later.
-        start_dt = datetime.combine(day_date, min_start_time).replace(
-            minute=0, second=0, microsecond=0
-        )
 
-        end_dt = datetime.combine(day_date, max_end_time)
+def _rooms_for_panels(panels_for_day):
+    rooms_used = []
+    for panel in panels_for_day:
+        if panel.room_id and panel.room and panel.room not in rooms_used:
+            rooms_used.append(panel.room)
+
+    def room_sort_key(room):
+        room_panels = [panel for panel in panels_for_day if panel.room_id == room.id]
+        first_start = min((panel.start_time for panel in room_panels), default=time.max)
+        return (first_start, room.name or '')
+
+    return sorted(
+        (room for room in rooms_used if room and room.id),
+        key=room_sort_key,
+    )
+
+
+def _panel_event_bounds(day_date, panel):
+    start_dt = datetime.combine(day_date, panel.start_time)
+    end_dt = datetime.combine(day_date, panel.end_time)
+    if end_dt <= start_dt:
+        end_dt = start_dt.replace(hour=23, minute=59, second=0, microsecond=0)
         if end_dt <= start_dt:
-            end_dt += timedelta(days=1)
-
-        if not (end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0):
-            if end_dt.minute <= 30:
-                end_dt = end_dt.replace(minute=30, second=0, microsecond=0)
-            else:
-                end_dt = (end_dt + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-
-        if end_dt <= start_dt + timedelta(hours=1):
-            end_dt = start_dt + timedelta(hours=1)
-        return start_dt, end_dt
-
-    start_dt = datetime.combine(day_date, time(0, 0))
-    end_dt = datetime.combine(day_date, time(23, 30)) + timedelta(minutes=30)
+            end_dt = start_dt
     return start_dt, end_dt
 
 
-def _floor_to_half_hour(dt):
-    """Snap down to the preceding :00 or :30 boundary."""
-    midnight = datetime.combine(dt.date(), time(0, 0))
-    minutes = int((dt - midnight).total_seconds() // 60)
-    return midnight + timedelta(minutes=(minutes // 30) * 30)
+def _contrast_text_for_accent(accent):
+    """Pick dark or light text to match list-view panel cards."""
+    color = (accent or '').lstrip('#')
+    if len(color) != 6:
+        return '#1a1d21'
+    try:
+        r = int(color[0:2], 16)
+        g = int(color[2:4], 16)
+        b = int(color[4:6], 16)
+    except ValueError:
+        return '#1a1d21'
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return '#1a1d21' if luminance > 0.5 else '#f8f9fa'
 
 
-def _ceil_to_half_hour(dt):
-    """Snap up to the next :00 or :30 boundary (exact boundaries stay put)."""
-    midnight = datetime.combine(dt.date(), time(0, 0))
-    minutes = (dt - midnight).total_seconds() / 60.0
-    return midnight + timedelta(minutes=math.ceil(minutes / 30.0) * 30)
+def _truncate_text(value, limit=120):
+    text = ' '.join((value or '').split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + '…'
 
 
-def _panel_slot_entry(panel, day_date, start_dt):
-    room_id = panel.room_id
-    if not room_id:
+def _panel_to_fc_event(panel, day_date, user_rsvp_panel_ids):
+    if not panel.room_id:
         return None
 
-    panel_start = datetime.combine(day_date, panel.start_time)
-    panel_end = datetime.combine(day_date, panel.end_time)
-    if panel_end <= panel_start:
-        panel_end += timedelta(days=1)
+    start_dt, end_dt = _panel_event_bounds(day_date, panel)
+    accent = '#ffc107'
+    if panel.ordered_tags:
+        accent = panel.ordered_tags[0].color or accent
+    text_color = _contrast_text_for_accent(accent)
 
-    # Place on the half-hour grid using floored start / ceiled end so that
-    # anything between xx:00 and xx:30 still occupies the xx:00 slot and
-    # spans through every half-hour it covers (duration-from-real-start
-    # underspans after start is floored).
-    slot_start = _floor_to_half_hour(panel_start)
-    if slot_start < start_dt:
-        slot_start = start_dt
+    tags = [tag.name.lower() for tag in panel.ordered_tags]
+    room_name = panel.room.name if panel.room else ''
+    room_slug = slugify(room_name) if room_name else ''
 
-    slot_end = _ceil_to_half_hour(panel_end)
-    if slot_end <= slot_start:
-        slot_end = slot_start + timedelta(minutes=30)
+    def _fmt_time(value):
+        try:
+            return value.strftime('%-I:%M %p')
+        except ValueError:
+            return value.strftime('%I:%M %p').lstrip('0')
 
-    rowspan = max(1, int((slot_end - slot_start).total_seconds() // (30 * 60)))
-    slot_minutes = rowspan * 30
-    # Offset within the spanned block so e.g. 12:15 sits 1/4 into the hour.
-    start_offset_minutes = max(0, (panel_start - slot_start).total_seconds() / 60.0)
-    duration_minutes = max(1, (panel_end - panel_start).total_seconds() / 60.0)
-    # Keep the card inside the spanned cell if start/end fall on exact boundaries.
-    if start_offset_minutes + duration_minutes > slot_minutes:
-        duration_minutes = max(1, slot_minutes - start_offset_minutes)
+    time_label = f'{_fmt_time(panel.start_time)} - {_fmt_time(panel.end_time)}'
 
-    top_pct = (start_offset_minutes / slot_minutes) * 100.0
-    height_pct = (duration_minutes / slot_minutes) * 100.0
+    hosts = []
+    for host in panel.ordered_hosts[:4]:
+        hosts.append({
+            'id': host.id,
+            'name': host.name,
+            'avatarUrl': getattr(host, 'avatar_url', None) or host.get_profile_picture() or '',
+        })
 
-    return (room_id, slot_start), {
-        'panel': panel,
-        'rowspan': rowspan,
-        'end_dt': slot_start + timedelta(minutes=30 * rowspan),
-        'start_offset_minutes': start_offset_minutes,
-        'duration_minutes': duration_minutes,
-        'slot_minutes': slot_minutes,
-        'top_pct': top_pct,
-        'height_pct': height_pct,
+    return {
+        'id': str(panel.pk),
+        'resourceId': str(panel.room_id),
+        'title': panel.title,
+        'start': start_dt.isoformat(),
+        'end': end_dt.isoformat(),
+        'backgroundColor': accent,
+        'borderColor': accent,
+        'textColor': text_color,
+        'extendedProps': {
+            'accent': accent,
+            'description': _truncate_text(panel.description, 220),
+            'timeLabel': time_label,
+            'roomName': room_name,
+            'tags': tags,
+            'tagColors': [tag.color for tag in panel.ordered_tags if tag.color][:4],
+            'roomSlug': room_slug,
+            'rsvped': panel.pk in user_rsvp_panel_ids,
+            'cancelled': bool(panel.cancelled),
+            'featured': bool(getattr(panel, 'is_featured', False)),
+            'hosts': hosts,
+            'searchText': ' '.join(
+                [
+                    panel.title or '',
+                    panel.description or '',
+                    ' '.join(tags),
+                    ' '.join(host.name for host in panel.ordered_hosts),
+                ]
+            ).lower(),
+        },
     }
 
 
-def _rooms_for_day(display_day):
-    rooms_used = []
-    panels_for_day = []
-    for time_group in display_day['panels_by_time']:
-        for panel in time_group['panels']:
-            if panel.room_id and panel.room not in rooms_used:
-                rooms_used.append(panel.room)
-            panels_for_day.append(panel)
-
-    rooms_used = sorted(
-        (room for room in rooms_used if room and room.id),
-        key=lambda room: room.name,
-    )
-    return rooms_used, panels_for_day
-
-
-def _cap_rowspans_for_room(panel_map):
-    """Prevent a panel's rowspan from swallowing a later panel in the same room.
-
-    Without this, a panel whose start snapped back into the prior half-hour
-    can mark xx:00 as occupied and the real xx:00 (or xx:30) panel is skipped.
-    """
-    by_room = {}
-    for (room_id, slot_start), entry in panel_map.items():
-        by_room.setdefault(room_id, []).append((slot_start, entry))
-
-    for room_id, entries in by_room.items():
-        entries.sort(key=lambda item: item[0])
-        for index, (slot_start, entry) in enumerate(entries):
-            if index + 1 >= len(entries):
-                continue
-            next_start = entries[index + 1][0]
-            if entry['end_dt'] <= next_start:
-                continue
-            rowspan = max(1, int((next_start - slot_start).total_seconds() // (30 * 60)))
-            entry['rowspan'] = rowspan
-            entry['end_dt'] = slot_start + timedelta(minutes=30 * rowspan)
-            slot_minutes = rowspan * 30
-            entry['slot_minutes'] = slot_minutes
-            start_offset = min(entry.get('start_offset_minutes', 0), max(0, slot_minutes - 1))
-            duration = min(entry.get('duration_minutes', slot_minutes), slot_minutes - start_offset)
-            entry['start_offset_minutes'] = start_offset
-            entry['duration_minutes'] = max(1, duration)
-            entry['top_pct'] = (start_offset / slot_minutes) * 100.0
-            entry['height_pct'] = (entry['duration_minutes'] / slot_minutes) * 100.0
-
-
-def _matrix_rows_for_day(day_date, rooms_used, panels_for_day, start_dt, end_dt):
-    total_half_hours = int((end_dt - start_dt).total_seconds() // (30 * 60))
-    time_slots = [start_dt + timedelta(minutes=30 * i) for i in range(total_half_hours)]
-
-    panel_map = {}
-    for panel in panels_for_day:
-        entry = _panel_slot_entry(panel, day_date, start_dt)
-        if entry:
-            # Prefer the longer block if two panels snap to the same slot.
-            key, value = entry
-            existing = panel_map.get(key)
-            if existing is None or value['rowspan'] > existing['rowspan']:
-                panel_map[key] = value
-
-    _cap_rowspans_for_room(panel_map)
-
-    room_span_end = {room.id: start_dt for room in rooms_used}
-    matrix_rows = []
-    for slot in time_slots:
-        row = {'time': slot.time(), 'cells': []}
-        for room in rooms_used:
-            if slot < room_span_end.get(room.id, start_dt):
-                row['cells'].append({'type': 'skip'})
-                continue
-
-            panel_entry = panel_map.get((room.id, slot))
-            if panel_entry:
-                row['cells'].append({
-                    'type': 'panel',
-                    'panel': panel_entry['panel'],
-                    'rowspan': panel_entry['rowspan'],
-                    'start_offset_minutes': panel_entry.get('start_offset_minutes', 0),
-                    'duration_minutes': panel_entry.get('duration_minutes', panel_entry['rowspan'] * 30),
-                    'slot_minutes': panel_entry.get('slot_minutes', panel_entry['rowspan'] * 30),
-                    'top_pct': panel_entry.get('top_pct', 0),
-                    'height_pct': panel_entry.get('height_pct', 100),
-                })
-                room_span_end[room.id] = slot + timedelta(minutes=30 * panel_entry['rowspan'])
-            else:
-                row['cells'].append({'type': 'empty'})
-        matrix_rows.append(row)
-
-    return matrix_rows
-
-
-def build_days_matrix(display_days_with_panels):
-    """Build a 2D grid (time slots x rooms) with rowspan for multi-slot panels."""
-    days_matrix = []
+def build_schedule_grid_payload(display_days_with_panels, user_rsvp_panel_ids=None):
+    """JSON payload for FullCalendar resourceTimeGridDay (rooms as columns)."""
+    user_rsvp_panel_ids = user_rsvp_panel_ids or set()
+    days_payload = []
 
     for display_day in display_days_with_panels:
         day_obj = display_day['original_day_obj']
         if not day_obj:
             continue
 
-        rooms_used, panels_for_day = _rooms_for_day(display_day)
         day_date = day_obj.date
-        start_dt, end_dt = _round_grid_bounds(day_date, panels_for_day)
-        matrix_rows = _matrix_rows_for_day(day_date, rooms_used, panels_for_day, start_dt, end_dt)
+        panels_for_day = _panels_for_day(display_day)
+        rooms_used = _rooms_for_panels(panels_for_day)
 
-        days_matrix.append({
-            'day': day_obj,
-            'rows': matrix_rows,
-            'rooms': rooms_used,
+        slot_min = None
+        slot_max = None
+        if panels_for_day:
+            min_start = min(panel.start_time for panel in panels_for_day)
+            max_end = max(panel.end_time for panel in panels_for_day)
+            slot_min = min_start.replace(minute=0, second=0, microsecond=0).strftime('%H:%M:%S')
+            end_hour = max_end.hour + (1 if max_end.minute or max_end.second else 0)
+            if end_hour > 23:
+                slot_max = '24:00:00'
+            else:
+                slot_max = f'{end_hour:02d}:00:00'
+
+        events = []
+        for panel in panels_for_day:
+            event = _panel_to_fc_event(panel, day_date, user_rsvp_panel_ids)
+            if event:
+                events.append(event)
+
+        days_payload.append({
+            'dayId': day_obj.id,
+            'date': day_date.isoformat(),
+            'label': day_date.strftime('%A, %b %d, %Y'),
+            'slotMinTime': slot_min or '08:00:00',
+            'slotMaxTime': slot_max or '22:00:00',
+            'resources': [
+                {'id': str(room.id), 'title': room.name}
+                for room in rooms_used
+            ],
+            'events': events,
         })
 
-    return days_matrix
+    return {'days': days_payload}

@@ -21,7 +21,7 @@ from ..rsvp import (
     get_user_rsvp_panel_ids,
     make_rsvp_feed_token,
 )
-from .schedule_grid import build_days_matrix, build_display_days, collect_panel_hosts
+from .schedule_grid import build_display_days, build_schedule_grid_payload, collect_panel_hosts
 
 
 def convention_detail(request, pk):
@@ -46,16 +46,19 @@ def convention_detail(request, pk):
     display_days_with_panels = build_display_days(days)
     attach_host_avatar_urls(collect_panel_hosts(display_days_with_panels))
     attach_host_avatar_urls(convention_hosts)
-    days_matrix = build_days_matrix(display_days_with_panels)
 
     rsvp_user_id = get_rsvp_user_id(request)
     user_rsvp_panel_ids = get_user_rsvp_panel_ids(request, convention) if rsvp_user_id else set()
     rsvp_feed_token = make_rsvp_feed_token(rsvp_user_id) if rsvp_user_id else ''
+    schedule_grid_payload = build_schedule_grid_payload(
+        display_days_with_panels,
+        user_rsvp_panel_ids,
+    )
 
     return render(request, 'events/convention_detail.html', {
         'convention': convention,
         'days': display_days_with_panels,
-        'days_matrix': days_matrix,
+        'schedule_grid_payload': schedule_grid_payload,
         'unique_tags': unique_tags,
         'unique_rooms': unique_rooms,
         'convention_hosts': convention_hosts,

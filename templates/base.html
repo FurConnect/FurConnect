@@ -702,11 +702,8 @@
 
                     function refreshGridLayout() {
                         if (!gridView) return;
-                        if (typeof updateGridTableScale === 'function') {
-                            updateGridTableScale();
-                        }
-                        if (typeof normalizeHourRowHeights === 'function') {
-                            normalizeHourRowHeights();
+                        if (typeof window.refreshScheduleCalendars === 'function') {
+                            window.refreshScheduleCalendars();
                         }
                     }
 
