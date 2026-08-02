@@ -1391,13 +1391,14 @@ window.addEventListener('load', function() {
         return { events: visibleEvents, resources, hours };
     }
 
-    function buildEventCard(eventData) {
+    function buildEventCard(eventData, spanHours) {
         const props = eventData.extendedProps || {};
         const accent = props.accent || eventData.backgroundColor || '#ffc107';
         const textColor = eventData.textColor || '#f8f9fa';
         const classes = ['sg-event-card'];
         if (props.cancelled) classes.push('sg-event-cancelled');
         if (props.featured) classes.push('sg-event-featured');
+        if (spanHours > 1) classes.push('sg-event-card--span');
 
         const dots = (props.tagColors || []).map(color =>
             `<span class="sg-event-dot" style="background-color:${escapeHtml(color)}"></span>`
@@ -1413,7 +1414,7 @@ window.addEventListener('load', function() {
 
         return `
             <button type="button" class="${classes.join(' ')}" data-panel-id="${escapeHtml(eventData.id)}"
-                style="--panel-accent:${escapeHtml(accent)};--event-text:${escapeHtml(textColor)};background-color:${escapeHtml(accent)};color:${escapeHtml(textColor)};">
+                style="--panel-accent:${escapeHtml(accent)};--event-text:${escapeHtml(textColor)};--sg-span:${spanHours};background-color:${escapeHtml(accent)};color:${escapeHtml(textColor)};">
                 ${dots ? `<div class="sg-event-dots">${dots}</div>` : ''}
                 <div class="sg-event-title">${badge}<span class="sg-event-title-text">${escapeHtml(eventData.title || '')}</span></div>
                 ${props.description ? `<div class="sg-event-desc">${escapeHtml(props.description)}</div>` : ''}
@@ -1424,55 +1425,129 @@ window.addEventListener('load', function() {
         `;
     }
 
+    function eventRowSpan(eventData, hours) {
+        if (!hours.length) return { startIndex: 0, span: 1 };
+        const startMins = parseTimeToMinutes(eventData.start);
+        const endMins = parseTimeToMinutes(eventData.end);
+        let startHour = Math.floor(startMins / 60);
+        // Last hour the panel occupies (exclusive end on the hour stays in the previous row).
+        let endHour = endMins > startMins
+            ? Math.floor((endMins - 1) / 60)
+            : startHour;
+        if (endHour < startHour) endHour = startHour;
+
+        const firstHour = hours[0];
+        const lastHour = hours[hours.length - 1];
+        startHour = Math.min(Math.max(startHour, firstHour), lastHour);
+        endHour = Math.min(Math.max(endHour, startHour), lastHour);
+
+        const startIndex = hours.indexOf(startHour);
+        const endIndex = hours.indexOf(endHour);
+        if (startIndex < 0 || endIndex < 0) {
+            return { startIndex: Math.max(0, startIndex), span: 1 };
+        }
+        return { startIndex, span: Math.max(1, endIndex - startIndex + 1) };
+    }
+
     function renderDayGrid(hostEl, day) {
         const fitted = getVisibleDayData(day);
         const resourceIndex = new Map(
             fitted.resources.map((resource, index) => [String(resource.id), index])
         );
+        const hourCount = Math.max(fitted.hours.length, 1);
+        const roomCount = Math.max(fitted.resources.length, 1);
 
-        // Bucket events by start hour + room so that hour row grows with its cards.
-        const buckets = new Map();
+        // Track placed panels for multi-hour row spans.
+        const placedEvents = [];
         fitted.events.forEach(eventData => {
-            const startHour = Math.floor(parseTimeToMinutes(eventData.start) / 60);
             const roomId = String(eventData.resourceId);
-            if (!resourceIndex.has(roomId)) return;
-            if (!fitted.hours.includes(startHour)) return;
-            const key = `${startHour}::${roomId}`;
-            if (!buckets.has(key)) buckets.set(key, []);
-            buckets.get(key).push(eventData);
+            const roomIdx = resourceIndex.get(roomId);
+            if (roomIdx === undefined) return;
+            const { startIndex, span } = eventRowSpan(eventData, fitted.hours);
+            if (startIndex < 0 || startIndex >= fitted.hours.length) return;
+            placedEvents.push({ eventData, roomIdx, startIndex, span });
         });
 
-        buckets.forEach(list => {
-            list.sort((a, b) => parseTimeToMinutes(a.start) - parseTimeToMinutes(b.start));
+        placedEvents.sort((a, b) => {
+            const startDiff = parseTimeToMinutes(a.eventData.start) - parseTimeToMinutes(b.eventData.start);
+            if (startDiff !== 0) return startDiff;
+            return b.span - a.span;
         });
 
-        const colTemplate = `${TIME_AXIS_WIDTH}px repeat(${Math.max(fitted.resources.length, 1)}, minmax(${MIN_COL_WIDTH}px, 1fr))`;
+        // Side-by-side lanes when panels overlap in the same room.
+        for (let roomIdx = 0; roomIdx < roomCount; roomIdx += 1) {
+            const roomEvents = placedEvents.filter(item => item.roomIdx === roomIdx);
+            const laneEnds = [];
+            roomEvents.forEach(item => {
+                let lane = 0;
+                while (lane < laneEnds.length && laneEnds[lane] > item.startIndex) {
+                    lane += 1;
+                }
+                if (lane === laneEnds.length) laneEnds.push(0);
+                laneEnds[lane] = item.startIndex + item.span;
+                item.lane = lane;
+            });
+            roomEvents.forEach(item => {
+                const lanes = new Set([item.lane]);
+                roomEvents.forEach(other => {
+                    if (
+                        other.startIndex < item.startIndex + item.span
+                        && item.startIndex < other.startIndex + other.span
+                    ) {
+                        lanes.add(other.lane);
+                    }
+                });
+                item.laneCount = lanes.size;
+            });
+        }
+
+        const colTemplate = `${TIME_AXIS_WIDTH}px repeat(${roomCount}, minmax(${MIN_COL_WIDTH}px, 1fr))`;
         const headerCells = fitted.resources.map(resource =>
             `<div class="sg-col-header">${escapeHtml(resource.title || '')}</div>`
         ).join('');
 
-        const bodyRows = fitted.hours.map(hour => {
-            const timeCell = `<div class="sg-time-label">${formatHourLabel(hour)}</div>`;
-            let hourHasEvents = false;
-            const roomCells = fitted.resources.map(resource => {
-                const key = `${hour}::${resource.id}`;
-                const events = buckets.get(key) || [];
-                if (events.length) hourHasEvents = true;
-                const cards = events.map(buildEventCard).join('');
-                return `<div class="sg-hour-cell" data-hour="${hour}" data-room="${escapeHtml(String(resource.id))}">${cards}</div>`;
-            }).join('');
-            const rowClass = hourHasEvents ? 'sg-hour-row' : 'sg-hour-row sg-hour-row--empty';
-            return `<div class="${rowClass}" data-hour="${hour}">${timeCell}${roomCells}</div>`;
+        // Background grid: time labels + room cells for every hour.
+        const rowTracks = fitted.hours.map((_, hourIdx) => {
+            const covered = placedEvents.some(
+                item => hourIdx >= item.startIndex && hourIdx < item.startIndex + item.span
+            );
+            return covered ? 'minmax(var(--sg-row-min), auto)' : 'minmax(var(--sg-row-min-empty), auto)';
+        }).join(' ');
+
+        const bgCells = [];
+        fitted.hours.forEach((hour, hourIdx) => {
+            const row = hourIdx + 1;
+            const covered = placedEvents.some(
+                item => hourIdx >= item.startIndex && hourIdx < item.startIndex + item.span
+            );
+            const isEmpty = !covered;
+            bgCells.push(
+                `<div class="sg-time-label${isEmpty ? ' sg-time-label--empty' : ''}" style="grid-column:1;grid-row:${row};">${formatHourLabel(hour)}</div>`
+            );
+            fitted.resources.forEach((resource, roomIdx) => {
+                bgCells.push(
+                    `<div class="sg-hour-cell${isEmpty ? ' sg-hour-cell--empty' : ''}" data-hour="${hour}" data-room="${escapeHtml(String(resource.id))}" style="grid-column:${roomIdx + 2};grid-row:${row};"></div>`
+                );
+            });
+        });
+
+        // Panel cards overlay the background and span multiple hour rows when needed.
+        const eventCells = placedEvents.map(({ eventData, roomIdx, startIndex, span, lane = 0, laneCount = 1 }) => {
+            const rowStart = startIndex + 1;
+            const rowEnd = rowStart + span;
+            const width = `calc((100% - 0.7rem - ${(laneCount - 1) * 0.25}rem) / ${laneCount})`;
+            const left = `calc(0.35rem + ${lane} * ((100% - 0.7rem - ${(laneCount - 1) * 0.25}rem) / ${laneCount} + 0.25rem))`;
+            return `<div class="sg-event-slot" style="grid-column:${roomIdx + 2};grid-row:${rowStart} / ${rowEnd};width:${width};margin-left:${left};">${buildEventCard(eventData, span)}</div>`;
         }).join('');
 
         hostEl.innerHTML = `
-            <div class="sg-board" style="--sg-cols:${colTemplate};">
+            <div class="sg-board" style="--sg-cols:${colTemplate};--sg-hour-rows:${hourCount};">
                 <div class="sg-header-row">
                     <div class="sg-col-header sg-time-header">Time</div>
                     ${headerCells}
                 </div>
-                <div class="sg-body">
-                    ${bodyRows || '<div class="sg-empty text-muted">No events match the current filters.</div>'}
+                <div class="sg-body" style="grid-template-rows:${rowTracks || 'minmax(var(--sg-row-min), auto)'};">
+                    ${bgCells.join('')}${eventCells || '<div class="sg-empty text-muted" style="grid-column:1/-1;">No events match the current filters.</div>'}
                 </div>
             </div>
         `;
@@ -3310,22 +3385,29 @@ html[data-bs-theme="light"] .fc-schedule-host {
 
 .sg-board {
     min-width: 100%;
+    --sg-row-min: 88px;
+    --sg-row-min-empty: 40px;
 }
 
-.sg-header-row,
-.sg-hour-row {
+.sg-header-row {
     display: grid;
     grid-template-columns: var(--sg-cols);
     gap: 0;
     align-items: stretch;
-}
-
-.sg-header-row {
     position: sticky;
     top: 0;
     z-index: 3;
     background: var(--grid-header-bg);
     border-bottom: 1px solid var(--grid-line);
+}
+
+.sg-body {
+    display: grid;
+    grid-template-columns: var(--sg-cols);
+    grid-template-rows: repeat(var(--sg-hour-rows, 1), minmax(var(--sg-row-min), auto));
+    gap: 0;
+    align-items: stretch;
+    position: relative;
 }
 
 .sg-col-header {
@@ -3361,31 +3443,46 @@ html[data-bs-theme="light"] .fc-schedule-host {
     border-bottom: 1px solid var(--grid-line);
     display: flex;
     align-items: flex-start;
+    z-index: 1;
 }
 
-.sg-hour-row {
-    min-height: 88px;
-    border-bottom: 1px solid var(--grid-line);
-}
-
-.sg-hour-row--empty {
-    min-height: 40px;
-}
-
-.sg-hour-row--empty .sg-hour-cell {
-    padding-top: 0.2rem;
-    padding-bottom: 0.2rem;
+.sg-time-label--empty {
+    min-height: var(--sg-row-min-empty);
 }
 
 .sg-hour-cell {
     min-width: 0;
+    min-height: var(--sg-row-min);
     padding: 0.35rem;
     border-right: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--grid-line);
     background: var(--grid-surface);
+    z-index: 0;
+}
+
+.sg-hour-cell--empty {
+    min-height: var(--sg-row-min-empty);
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+}
+
+.sg-event-slot {
+    z-index: 2;
+    min-width: 0;
+    padding: 0.35rem 0;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
     align-items: stretch;
+    justify-self: start;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.sg-event-slot .sg-event-card {
+    pointer-events: auto;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
 }
 
 .sg-empty {
@@ -3411,6 +3508,10 @@ html[data-bs-theme="light"] .fc-schedule-host {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
     cursor: pointer;
     transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.sg-event-card--span {
+    justify-content: flex-start;
 }
 
 .sg-event-card:hover {
