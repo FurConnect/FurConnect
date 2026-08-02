@@ -43,7 +43,13 @@ from .panels import (
     reorder_tags_ajax,
     toggle_cancelled,
 )
-from .rooms import delete_room_ajax, get_all_rooms_ajax, get_room_details_ajax, save_room_ajax
+from .rooms import (
+    delete_room_ajax,
+    get_all_rooms_ajax,
+    get_room_details_ajax,
+    reorder_rooms_ajax,
+    save_room_ajax,
+)
 from .schedule import privacy_policy, schedule
 from .tags import (
     add_tag_ajax,
@@ -96,6 +102,7 @@ __all__ = [
     'randomize_tag_colors',
     'register_view',
     'reorder_hosts_ajax',
+    'reorder_rooms_ajax',
     'reorder_tags_ajax',
     'save_room_ajax',
     'schedule',

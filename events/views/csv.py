@@ -11,6 +11,7 @@ from ..forms import CSVImportForm
 from ..models import Convention, ConventionDay, Panel, PanelHost, PanelHostOrder, Room, Tag
 from ..rsvp import filter_panels_for_user_rsvp
 from .admin import _admin_panel_redirect
+from .rooms import _next_room_sort_order
 
 @organizer_required
 def import_panels_csv(request, convention_pk):
@@ -124,7 +125,8 @@ def import_panels_csv(request, convention_pk):
                     # Get or create room
                     room, _ = Room.objects.get_or_create(
                         name=mapped_row['room'].strip(),
-                        convention=convention
+                        convention=convention,
+                        defaults={'sort_order': _next_room_sort_order(convention)},
                     )
                     
                     # Create panel
@@ -294,7 +296,11 @@ def import_rooms_csv(request, convention_pk):
                     name = row.get('name', '').strip()
                     if not name:
                         continue
-                    _, created = Room.objects.get_or_create(name=name, convention=convention)
+                    _, created = Room.objects.get_or_create(
+                        name=name,
+                        convention=convention,
+                        defaults={'sort_order': _next_room_sort_order(convention)},
+                    )
                     if created:
                         created_count += 1
                     else:

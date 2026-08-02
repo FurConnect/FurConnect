@@ -200,12 +200,17 @@ class PanelHost(models.Model):
 class Room(models.Model):
     name = models.CharField(max_length=100)
     convention = models.ForeignKey(Convention, on_delete=models.CASCADE, related_name='rooms')
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text='Display order on the schedule grid (lower = earlier column)',
+    )
 
     def __str__(self):
         return self.name
 
     class Meta:
         unique_together = ['name', 'convention']
+        ordering = ['sort_order', 'name']
 
 
 class EventzillaAttendee(models.Model):

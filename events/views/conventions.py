@@ -29,7 +29,7 @@ def convention_detail(request, pk):
     days = convention.days.all().order_by('date')
 
     unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
-    unique_rooms = Room.objects.filter(convention=convention).order_by('name')
+    unique_rooms = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
     convention_hosts = (
         PanelHost.objects.filter(panels__convention_day__convention=convention)
         .distinct()

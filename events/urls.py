@@ -46,6 +46,7 @@ urlpatterns = [
     path('ajax/tags/<int:pk>/details/', views.get_tag_details_ajax, name='get_tag_details_ajax'),
     path('ajax/hosts/<int:pk>/details/', views.get_host_details_ajax, name='get_host_details_ajax'),
     path('ajax/rooms/save/', views.save_room_ajax, name='save_room_ajax'),
+    path('ajax/rooms/reorder/<int:convention_pk>/', views.reorder_rooms_ajax, name='reorder_rooms_ajax'),
     path('ajax/rooms/delete/<int:pk>/', views.delete_room_ajax, name='delete_room_ajax'),
     path('ajax/tags/delete/<int:pk>/', views.delete_tag_ajax, name='delete_tag_ajax'),
     path('ajax/rooms/<int:pk>/details/', views.get_room_details_ajax, name='get_room_details_ajax'),

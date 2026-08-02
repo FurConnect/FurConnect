@@ -14,7 +14,7 @@ ADMIN_PANEL_SECTIONS = frozenset({'dashboard', 'settings', 'rooms', 'hosts', 'ta
 
 
 def _get_admin_panel_data(convention):
-    rooms = Room.objects.filter(convention=convention).order_by('name')
+    rooms = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
     tags = (
         Tag.objects.filter(panels__convention_day__convention=convention)
         .distinct()

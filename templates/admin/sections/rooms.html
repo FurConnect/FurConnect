@@ -5,17 +5,22 @@
     </div>
     <div class="card-body">
         {% if rooms %}
+        <p class="text-muted small mb-3">Drag rooms to set their column order on the schedule grid.</p>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
+                        <th style="width: 48px;" aria-label="Reorder"></th>
                         <th>Name</th>
                         <th style="width: 140px;">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="roomsSortableBody">
                     {% for room in rooms %}
-                    <tr>
+                    <tr data-room-id="{{ room.pk }}">
+                        <td class="room-drag-handle text-muted" title="Drag to reorder" style="cursor: grab; user-select: none;">
+                            <i class="material-icons" style="vertical-align: middle;">drag_indicator</i>
+                        </td>
                         <td>{{ room.name }}</td>
                         <td>
                             <button class="btn toolbar-btn btn-sm delete-room-btn" data-room-id="{{ room.pk }}">

@@ -1364,14 +1364,28 @@ window.addEventListener('load', function() {
             resources = (day.resources || []).slice(0, 1);
         }
 
-        // Only hours that have at least one starting event — those rows grow with their cards.
-        const hourSet = new Set();
+        // Contiguous hours from earliest start through latest end (include empty gaps).
+        let minHour = Infinity;
+        let maxHour = -Infinity;
         visibleEvents.forEach(event => {
-            hourSet.add(Math.floor(parseTimeToMinutes(event.start) / 60));
+            const startMins = parseTimeToMinutes(event.start);
+            const endMins = parseTimeToMinutes(event.end);
+            minHour = Math.min(minHour, Math.floor(startMins / 60));
+            // Include the end hour so the day's closing time remains visible.
+            maxHour = Math.max(maxHour, Math.floor(endMins / 60));
         });
-        const hours = Array.from(hourSet).sort((a, b) => a - b);
-        if (!hours.length) {
-            hours.push(8);
+        if (!Number.isFinite(minHour) || !Number.isFinite(maxHour)) {
+            const slotMin = Math.floor(parseTimeToMinutes(day.slotMinTime || '08:00:00') / 60);
+            const slotMax = Math.floor(parseTimeToMinutes(day.slotMaxTime || '22:00:00') / 60);
+            minHour = slotMin;
+            maxHour = Math.max(slotMin, slotMax);
+        }
+        if (maxHour < minHour) {
+            maxHour = minHour;
+        }
+        const hours = [];
+        for (let hour = minHour; hour <= maxHour; hour += 1) {
+            hours.push(hour);
         }
 
         return { events: visibleEvents, resources, hours };
@@ -1439,13 +1453,16 @@ window.addEventListener('load', function() {
 
         const bodyRows = fitted.hours.map(hour => {
             const timeCell = `<div class="sg-time-label">${formatHourLabel(hour)}</div>`;
+            let hourHasEvents = false;
             const roomCells = fitted.resources.map(resource => {
                 const key = `${hour}::${resource.id}`;
                 const events = buckets.get(key) || [];
+                if (events.length) hourHasEvents = true;
                 const cards = events.map(buildEventCard).join('');
                 return `<div class="sg-hour-cell" data-hour="${hour}" data-room="${escapeHtml(String(resource.id))}">${cards}</div>`;
             }).join('');
-            return `<div class="sg-hour-row" data-hour="${hour}">${timeCell}${roomCells}</div>`;
+            const rowClass = hourHasEvents ? 'sg-hour-row' : 'sg-hour-row sg-hour-row--empty';
+            return `<div class="${rowClass}" data-hour="${hour}">${timeCell}${roomCells}</div>`;
         }).join('');
 
         hostEl.innerHTML = `
@@ -3349,6 +3366,15 @@ html[data-bs-theme="light"] .fc-schedule-host {
 .sg-hour-row {
     min-height: 88px;
     border-bottom: 1px solid var(--grid-line);
+}
+
+.sg-hour-row--empty {
+    min-height: 40px;
+}
+
+.sg-hour-row--empty .sg-hour-cell {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
 }
 
 .sg-hour-cell {

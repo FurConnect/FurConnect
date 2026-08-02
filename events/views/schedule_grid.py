@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime
 
 from django.utils.text import slugify
 
@@ -59,14 +59,9 @@ def _rooms_for_panels(panels_for_day):
         if panel.room_id and panel.room and panel.room not in rooms_used:
             rooms_used.append(panel.room)
 
-    def room_sort_key(room):
-        room_panels = [panel for panel in panels_for_day if panel.room_id == room.id]
-        first_start = min((panel.start_time for panel in room_panels), default=time.max)
-        return (first_start, room.name or '')
-
     return sorted(
         (room for room in rooms_used if room and room.id),
-        key=room_sort_key,
+        key=lambda room: (room.sort_order, room.name or '', room.id),
     )
 
 

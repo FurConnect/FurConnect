@@ -188,7 +188,7 @@ class PanelForm(forms.ModelForm):
             # Filter the queryset to only include days for the given convention
             self.fields['convention_day'].queryset = ConventionDay.objects.filter(convention=convention).order_by('date')
             # Filter rooms for the given convention
-            self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('name')
+            self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
 
             # Filter and order tags by priority for the current panel
             if self.instance.pk:
@@ -212,7 +212,7 @@ class PanelForm(forms.ModelForm):
             if self.instance and self.instance.pk and self.instance.convention_day:
                 convention = self.instance.convention_day.convention
                 self.fields['convention_day'].queryset = ConventionDay.objects.filter(convention=convention).order_by('date')
-                self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('name')
+                self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
                 # Explicitly set the initial value for selected tags, ordered by priority in this case too
                 self.fields['tags'].initial = self.instance.tags.all().order_by('paneltag__priority')
 

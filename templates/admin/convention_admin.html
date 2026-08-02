@@ -13,6 +13,19 @@
 {% if section == 'settings' %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 {% endif %}
+{% if section == 'rooms' %}
+<style>
+    #roomsSortableBody tr.sortable-ghost {
+        opacity: 0.45;
+    }
+    #roomsSortableBody tr.sortable-chosen {
+        background-color: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.04));
+    }
+    .room-drag-handle:active {
+        cursor: grabbing;
+    }
+</style>
+{% endif %}
 {% endblock %}
 
 {% block admin_content %}
@@ -30,6 +43,9 @@
 {% endblock %}
 
 {% block admin_extra_js %}
+{% if section == 'rooms' %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+{% endif %}
 {% if section == 'settings' %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
@@ -114,6 +130,41 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => { if (data.success) location.reload(); else alert('Error: ' + data.error); });
         });
     });
+
+    const roomsBody = document.getElementById('roomsSortableBody');
+    if (roomsBody && typeof Sortable !== 'undefined') {
+        const reorderUrl = '{% url "events:reorder_rooms_ajax" convention.pk %}';
+        Sortable.create(roomsBody, {
+            handle: '.room-drag-handle',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: function() {
+                const roomIds = Array.from(roomsBody.querySelectorAll('tr[data-room-id]'))
+                    .map(row => row.dataset.roomId);
+                const body = roomIds.map(id => 'room_ids[]=' + encodeURIComponent(id)).join('&');
+                fetch(reorderUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: body,
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert('Error saving room order: ' + (data.error || 'Unknown error'));
+                        location.reload();
+                    }
+                })
+                .catch(() => {
+                    alert('Error saving room order.');
+                    location.reload();
+                });
+            },
+        });
+    }
     {% endif %}
 
     {% if section == 'hosts' %}
