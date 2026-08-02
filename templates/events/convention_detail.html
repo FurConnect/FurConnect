@@ -1425,28 +1425,44 @@ window.addEventListener('load', function() {
         `;
     }
 
-    function eventRowSpan(eventData, hours) {
-        if (!hours.length) return { startIndex: 0, span: 1 };
-        const startMins = parseTimeToMinutes(eventData.start);
-        const endMins = parseTimeToMinutes(eventData.end);
-        let startHour = Math.floor(startMins / 60);
-        // Last hour the panel occupies (exclusive end on the hour stays in the previous row).
-        let endHour = endMins > startMins
-            ? Math.floor((endMins - 1) / 60)
-            : startHour;
-        if (endHour < startHour) endHour = startHour;
+    function eventPlacement(eventData, hours) {
+        if (!hours.length) {
+            return { startIndex: 0, span: 1, topPct: 0, heightPct: 100, startMins: 0, endMins: 60 };
+        }
+        let startMins = parseTimeToMinutes(eventData.start);
+        let endMins = parseTimeToMinutes(eventData.end);
+        if (endMins <= startMins) endMins = startMins + 30;
 
         const firstHour = hours[0];
         const lastHour = hours[hours.length - 1];
+        const gridStart = firstHour * 60;
+        const gridEnd = (lastHour + 1) * 60;
+        startMins = Math.min(Math.max(startMins, gridStart), gridEnd - 1);
+        endMins = Math.min(Math.max(endMins, startMins + 1), gridEnd);
+
+        let startHour = Math.floor(startMins / 60);
+        let endHour = Math.floor((endMins - 1) / 60);
         startHour = Math.min(Math.max(startHour, firstHour), lastHour);
         endHour = Math.min(Math.max(endHour, startHour), lastHour);
 
         const startIndex = hours.indexOf(startHour);
         const endIndex = hours.indexOf(endHour);
         if (startIndex < 0 || endIndex < 0) {
-            return { startIndex: Math.max(0, startIndex), span: 1 };
+            return { startIndex: 0, span: 1, topPct: 0, heightPct: 100, startMins, endMins };
         }
-        return { startIndex, span: Math.max(1, endIndex - startIndex + 1) };
+
+        const span = Math.max(1, endIndex - startIndex + 1);
+        const rangeStart = hours[startIndex] * 60;
+        const rangeEnd = (hours[endIndex] + 1) * 60;
+        const rangeDuration = Math.max(rangeEnd - rangeStart, 1);
+        const topPct = ((startMins - rangeStart) / rangeDuration) * 100;
+        const heightPct = Math.max(((endMins - startMins) / rangeDuration) * 100, 8);
+
+        return { startIndex, span, topPct, heightPct, startMins, endMins };
+    }
+
+    function timesOverlap(aStart, aEnd, bStart, bEnd) {
+        return aStart < bEnd && bStart < aEnd;
     }
 
     function renderDayGrid(hostEl, day) {
@@ -1457,43 +1473,39 @@ window.addEventListener('load', function() {
         const hourCount = Math.max(fitted.hours.length, 1);
         const roomCount = Math.max(fitted.resources.length, 1);
 
-        // Track placed panels for multi-hour row spans.
         const placedEvents = [];
         fitted.events.forEach(eventData => {
             const roomId = String(eventData.resourceId);
             const roomIdx = resourceIndex.get(roomId);
             if (roomIdx === undefined) return;
-            const { startIndex, span } = eventRowSpan(eventData, fitted.hours);
-            if (startIndex < 0 || startIndex >= fitted.hours.length) return;
-            placedEvents.push({ eventData, roomIdx, startIndex, span });
+            const placement = eventPlacement(eventData, fitted.hours);
+            if (placement.startIndex < 0 || placement.startIndex >= fitted.hours.length) return;
+            placedEvents.push({ eventData, roomIdx, ...placement });
         });
 
         placedEvents.sort((a, b) => {
-            const startDiff = parseTimeToMinutes(a.eventData.start) - parseTimeToMinutes(b.eventData.start);
+            const startDiff = a.startMins - b.startMins;
             if (startDiff !== 0) return startDiff;
-            return b.span - a.span;
+            return (b.endMins - b.startMins) - (a.endMins - a.startMins);
         });
 
-        // Side-by-side lanes when panels overlap in the same room.
+        // Side-by-side lanes only for true time overlaps in the same room.
         for (let roomIdx = 0; roomIdx < roomCount; roomIdx += 1) {
             const roomEvents = placedEvents.filter(item => item.roomIdx === roomIdx);
             const laneEnds = [];
             roomEvents.forEach(item => {
                 let lane = 0;
-                while (lane < laneEnds.length && laneEnds[lane] > item.startIndex) {
+                while (lane < laneEnds.length && laneEnds[lane] > item.startMins) {
                     lane += 1;
                 }
                 if (lane === laneEnds.length) laneEnds.push(0);
-                laneEnds[lane] = item.startIndex + item.span;
+                laneEnds[lane] = item.endMins;
                 item.lane = lane;
             });
             roomEvents.forEach(item => {
                 const lanes = new Set([item.lane]);
                 roomEvents.forEach(other => {
-                    if (
-                        other.startIndex < item.startIndex + item.span
-                        && item.startIndex < other.startIndex + other.span
-                    ) {
+                    if (timesOverlap(item.startMins, item.endMins, other.startMins, other.endMins)) {
                         lanes.add(other.lane);
                     }
                 });
@@ -1506,7 +1518,6 @@ window.addEventListener('load', function() {
             `<div class="sg-col-header">${escapeHtml(resource.title || '')}</div>`
         ).join('');
 
-        // Background grid: time labels + room cells for every hour.
         const rowTracks = fitted.hours.map((_, hourIdx) => {
             const covered = placedEvents.some(
                 item => hourIdx >= item.startIndex && hourIdx < item.startIndex + item.span
@@ -1531,13 +1542,19 @@ window.addEventListener('load', function() {
             });
         });
 
-        // Panel cards overlay the background and span multiple hour rows when needed.
-        const eventCells = placedEvents.map(({ eventData, roomIdx, startIndex, span, lane = 0, laneCount = 1 }) => {
+        const eventCells = placedEvents.map((item) => {
+            const {
+                eventData, roomIdx, startIndex, span, topPct, heightPct, lane = 0, laneCount = 1,
+            } = item;
             const rowStart = startIndex + 1;
             const rowEnd = rowStart + span;
             const width = `calc((100% - 0.7rem - ${(laneCount - 1) * 0.25}rem) / ${laneCount})`;
             const left = `calc(0.35rem + ${lane} * ((100% - 0.7rem - ${(laneCount - 1) * 0.25}rem) / ${laneCount} + 0.25rem))`;
-            return `<div class="sg-event-slot" style="grid-column:${roomIdx + 2};grid-row:${rowStart} / ${rowEnd};width:${width};margin-left:${left};">${buildEventCard(eventData, span)}</div>`;
+            return `<div class="sg-event-slot" style="grid-column:${roomIdx + 2};grid-row:${rowStart} / ${rowEnd};">
+                <div class="sg-event-slot-inner" style="top:${topPct}%;height:${heightPct}%;left:${left};width:${width};">
+                    ${buildEventCard(eventData, span)}
+                </div>
+            </div>`;
         }).join('');
 
         hostEl.innerHTML = `
@@ -3469,20 +3486,26 @@ html[data-bs-theme="light"] .fc-schedule-host {
 .sg-event-slot {
     z-index: 2;
     min-width: 0;
-    padding: 0.35rem 0;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    justify-self: start;
-    box-sizing: border-box;
+    position: relative;
     pointer-events: none;
 }
 
-.sg-event-slot .sg-event-card {
+.sg-event-slot-inner {
+    position: absolute;
+    box-sizing: border-box;
+    padding: 0.2rem 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    pointer-events: none;
+}
+
+.sg-event-slot-inner .sg-event-card {
     pointer-events: auto;
     flex: 1 1 auto;
     height: 100%;
     min-height: 0;
+    overflow: hidden;
 }
 
 .sg-empty {
