@@ -25,6 +25,7 @@
             --primary-purple-dark: #3700b3;
             --bs-table-hover-bg: rgba(255, 127, 0, 0.35);
             --fc-star: #000;
+            --fc-footer-height: 44px;
         }
 
         html[data-bs-theme="dark"] {
@@ -32,14 +33,22 @@
             --fc-star: #fff;
         }
 
-        html, body {
+        html {
             height: 100%;
         }
         body {
+            min-height: 100%;
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
+            margin: 0;
             transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+
+        body > .container {
+            flex: 1 0 auto;
+            padding-bottom: calc(var(--fc-footer-height) + env(safe-area-inset-bottom, 0px) + 0.75rem);
         }
 
         .navbar {
@@ -332,19 +341,22 @@
 
 
         #sticky-footer.footer {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            height: 32px;
+            position: fixed !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            min-height: var(--fc-footer-height);
+            margin: 0 !important;
+            padding: 0.45rem 0.9rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+            box-sizing: border-box;
             background: var(--bs-body-bg, #fff);
             color: var(--bs-body-color, #222);
             border-top: 1px solid var(--bs-border-color, #eee);
-            z-index: 1050;
-            box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
-            font-size: 0.85rem;
+            z-index: 1040;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+            font-size: 0.82rem;
             line-height: 1.1;
-            padding: 0.2rem 0.6rem 0.2rem env(safe-area-inset-left, 0);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -352,16 +364,30 @@
         }
 
         #sticky-footer .container {
-            max-width: 100%;
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 0 !important;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 0.5rem;
-            padding: 2;
-            margin: 0;
         }
-        
+
+        #sticky-footer .footer-left,
+        #sticky-footer .footer-right {
+            display: flex;
+            align-items: center;
+        }
+
+        #sticky-footer .footer-right {
+            gap: 0.5rem;
+        }
+
+        #sticky-footer .footer-version {
+            color: var(--bs-secondary-color, #999);
+        }
+
         .container,
         .container-fluid,
         .grid-table-container {
@@ -369,22 +395,6 @@
             width: 90% !important;
             margin-left: auto !important;
             margin-right: auto !important;
-        }
-
-        #sticky-footer .container {
-            max-width: 100% !important;
-            width: 100% !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            justify-content: space-between;
-        }
-
-        #sticky-footer .footer-right {
-            display: flex !important;
-            flex: 0 0 auto !important;
-            justify-content: flex-end !important;
-            min-width: 80px !important;
-            padding-left: 0.5rem !important;
         }
 
         .theme-switch-modern {
@@ -405,26 +415,21 @@
             font-size: clamp(0.8rem, 1.7vw, 1rem) !important;
         }
 
-        body {
-            padding-bottom: 70px !important;
-        }
-
-        #sticky-footer {
-            min-height: 44px;
-            padding: 0.45rem 0.9rem;
-            font-size: 0.82rem;
-        }
-
         @media (max-width: 576px) {
-            #sticky-footer {
-                min-height: 52px;
-                padding: 0.55rem 0.9rem;
-                font-size: 0.78rem;
+            :root {
+                --fc-footer-height: 52px;
             }
+
+            #sticky-footer.footer {
+                font-size: 0.78rem;
+                padding: 0.55rem 0.9rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+            }
+
             #sticky-footer .container {
                 flex-direction: column;
                 align-items: center;
             }
+
             #sticky-footer .footer-left,
             #sticky-footer .footer-right {
                 justify-content: center;
@@ -519,6 +524,15 @@
         {% block content %}
         {% endblock %}
     </div>
+
+    <footer id="sticky-footer" class="footer">
+        <div class="container d-flex justify-content-between align-items-center">
+            <div class="footer-left">
+                <span>Powered by <strong>FurConnect</strong></span>
+                <span class="footer-version ms-2 text-muted">{{ FURCONNECT_VERSION }}</span>
+            </div>
+        </div>
+    </footer>
 
     <!-- Login Modal -->
     <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
@@ -1021,106 +1035,6 @@
 
         });
     </script>
-    <style>
-      #sticky-footer {
-        background: var(--bs-body-bg);
-        border-top: 1px solid rgba(255,255,255,0.1);
-        box-shadow: inset 0 1px 0 rgba(0,0,0,0.05);
-        color: var(--bs-body-color);
-        font-size: 0.9rem;
-        padding: 0.5rem 0;
-        z-index: 99999999;
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-      }
-
-      #sticky-footer .container {
-        max-width: 100%;
-        gap: 0.4rem;
-      }
-      #sticky-footer .footer-left,
-      #sticky-footer .footer-right {
-        display: flex;
-        align-items: center;
-      }
-      #sticky-footer .footer-right {
-        gap: 0.5rem;
-      }
-      #sticky-footer .footer-version {
-        color: var(--bs-secondary-color, #999);
-      }
-      .theme-switch-modern {
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.12) !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        border-radius: 999px !important;
-        padding: 0.25rem 0.35rem !important;
-        color: var(--bs-body-color, #222) !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        z-index: 9999 !important;
-      }
-      .theme-switch-modern input {
-        display: none;
-      }
-      .theme-switch-container,
-      .theme-switch-modern,
-      .theme-switch-modern .slider-modern {
-        display: inline-flex !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        pointer-events: auto !important;
-      }
-      #sticky-footer,
-      #sticky-footer .footer-right,
-      #sticky-footer .theme-switch-modern,
-      #sticky-footer .theme-switch-modern .slider-modern {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        z-index: 2000 !important;
-      }
-      #sticky-footer {
-        z-index: 2000 !important;
-      }
-      .slider-modern {
-        display: inline-flex;
-        gap: 0.25rem;
-        font-size: 0.8rem;
-      }
-
-      @media (max-width: 768px) {
-        #sticky-footer .container {
-          flex-direction: column;
-          align-items: stretch;
-          text-align: center;
-        }
-        #sticky-footer .footer-left,
-        #sticky-footer .footer-right {
-          justify-content: center;
-          width: 100%;
-        }
-        #sticky-footer .footer-right {
-          margin-top: 0.35rem;
-        }
-      }
-    </style>
-
-    <footer id="sticky-footer" class="footer mt-auto">
-        <div class="container d-flex justify-content-between align-items-center">
-            <div class="footer-left">
-                <span>Powered by <strong>FurConnect</strong></span>
-                <span class="footer-version ms-2 text-muted">{{ FURCONNECT_VERSION }}</span>
-            </div>
-        </div>
-    </footer>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
       if (!localStorage.getItem('nextPath') && window.location.pathname !== '/login/') {
