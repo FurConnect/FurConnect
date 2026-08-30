@@ -12,10 +12,10 @@
     justify-content: center;
     min-height: min(52vh, 420px);
     padding: 3rem 1rem 4rem;
-    background: var(--bs-body-bg, #fff);
+    background: #fff;
 }
 html[data-bs-theme="dark"] #convention-page-loader {
-    background: var(--bs-body-bg, #212529);
+    background: #212529;
 }
 #convention-page-loader.is-done {
     display: none;
@@ -2236,7 +2236,9 @@ document.addEventListener('DOMContentLoaded', function () {
                                              data-room="{% if panel.room %}{{ panel.room.name|lower|slugify }}{% endif %}"
                                              data-rsvped="{% if panel.pk in user_rsvp_panel_ids %}true{% else %}false{% endif %}"
                                              {% if panel.cancelled %}data-cancelled="true"{% endif %}
-                                             style="--panel-accent: {{ panel.ordered_tags.0.color|default:'#ffc107' }};">
+                                             {% with accent=panel.ordered_tags.0.color|default:'#ffc107' %}
+                                             style="--panel-accent: {{ accent }}; --event-text: {% if accent|is_light_color %}#1a1d21{% else %}#f8f9fa{% endif %};">
+                                             {% endwith %}
                                             {% include 'events/panel_schedule_card.html' with panel=panel %}
                                         </div>
                                     {% endfor %}
@@ -2929,13 +2931,11 @@ html[data-bs-theme="light"] .text-primary {
 }
 
 html[data-bs-theme="light"] .panel-card:not(.cancelled-panel) {
-    --panel-fill: color-mix(in srgb, var(--panel-accent) 42%, #ffffff);
-    border-color: color-mix(in srgb, var(--panel-accent) 58%, #dee2e6) !important;
+    border-color: color-mix(in srgb, var(--panel-accent) 70%, #000) !important;
 }
 
 html[data-bs-theme="dark"] .panel-card:not(.cancelled-panel) {
-    --panel-fill: color-mix(in srgb, var(--panel-accent) 28%, #2c3034);
-    border-color: color-mix(in srgb, var(--panel-accent) 42%, #495057) !important;
+    border-color: color-mix(in srgb, var(--panel-accent) 70%, #000) !important;
 }
 
 html[data-bs-theme="light"] .panel-card .host-avatar-container {
@@ -2976,15 +2976,15 @@ html.safari-webkit .panel-card.d-none {
 /* Event card styles (list view) */
 .panel-card {
     --panel-accent: #ffc107;
-    --panel-fill: color-mix(in srgb, var(--panel-accent) 36%, var(--bs-body-bg, #fff));
+    --event-text: #1a1d21;
     transition: transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
-    border: 1px solid color-mix(in srgb, var(--panel-accent) 45%, var(--bs-border-color, #dee2e6)) !important;
-    background-color: var(--panel-fill) !important;
+    border: 1px solid color-mix(in srgb, var(--panel-accent) 75%, #000) !important;
+    background-color: var(--panel-accent) !important;
     width: 100%;
     margin: 0.5rem 0;
     box-sizing: border-box;
-    color: var(--bs-body-color, #212529);
+    color: var(--event-text);
     padding: 0.75rem;
     border-radius: 8px;
     height: auto !important;
@@ -3009,6 +3009,12 @@ html.safari-webkit .panel-card.d-none {
     min-width: 0;
     width: 100%;
     max-width: 100%;
+    color: inherit !important;
+}
+
+.panel-card .card-info .material-icons {
+    color: inherit !important;
+    width: auto;
 }
 
 .panel-card .card-info.mb-1 {

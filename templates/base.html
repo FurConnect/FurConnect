@@ -8,10 +8,10 @@
             try {
                 var saved = localStorage.getItem('theme');
                 var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                document.documentElement.setAttribute(
-                    'data-bs-theme',
-                    saved || (prefersDark ? 'dark' : 'light')
-                );
+                var theme = saved || (prefersDark ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-bs-theme', theme);
+                document.documentElement.style.backgroundColor = theme === 'dark' ? '#212529' : '#fff';
+                document.documentElement.style.colorScheme = theme;
             } catch (e) {}
         })();
     </script>
@@ -43,6 +43,12 @@
         html[data-bs-theme="dark"] {
             --bs-table-hover-bg: rgba(255, 127, 0, 0.35);
             --fc-star: #fff;
+            background-color: #212529;
+        }
+
+        html[data-bs-theme="dark"] body {
+            background-color: #212529;
+            color: #dee2e6;
         }
 
         html {

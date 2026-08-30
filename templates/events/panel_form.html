@@ -228,7 +228,10 @@
             justify-content: center;
             min-height: min(52vh, 420px);
             padding: 3rem 1rem 4rem;
-            background: var(--bs-body-bg, #fff);
+            background: #fff;
+        }
+        html[data-bs-theme="dark"] #panel-form-loader {
+            background: #212529;
         }
         #panel-form-loader.is-done {
             display: none;
@@ -255,9 +258,6 @@
             font-weight: 600;
             color: var(--bs-body-color, #212529);
             line-height: 1.35;
-        }
-        html[data-bs-theme="dark"] #panel-form-loader {
-            background: var(--bs-body-bg, #212529);
         }
         html[data-bs-theme="dark"] .panel-form-loader-text {
             color: #e9ecef;
