@@ -1854,11 +1854,11 @@ window.addEventListener('load', function() {
             </button>
         </div>
         <div class="dropdown">
-            <button class="btn toolbar-btn dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <button class="btn toolbar-btn dropdown-toggle" type="button" id="exportDropdown" aria-expanded="false" aria-haspopup="true">
                 <i class="material-icons">download</i>
                 <span class="toolbar-btn-label">Export</span>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
+            <ul class="dropdown-menu dropdown-menu-end" id="exportDropdownMenu" aria-labelledby="exportDropdown">
                 <li>
                     <a id="exportPdfBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:printable_schedule_pdf' pk=convention.pk %}?view=list" target="_blank">
                         <i class="material-icons me-2">picture_as_pdf</i> Download PDF (Print)
@@ -1882,11 +1882,11 @@ window.addEventListener('load', function() {
             <span class="toolbar-btn-label">Admin</span>
         </a>
         <div class="dropdown">
-            <button class="btn toolbar-btn dropdown-toggle" type="button" id="addEventDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <button class="btn toolbar-btn dropdown-toggle" type="button" id="addEventDropdown" aria-expanded="false" aria-haspopup="true">
                 <i class="material-icons">add</i>
                 <span class="toolbar-btn-label">Add Event</span>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="addEventDropdown">
+            <ul class="dropdown-menu dropdown-menu-end" id="addEventDropdownMenu" aria-labelledby="addEventDropdown">
                 {% if convention.days.exists %}
                 <li>
                     <a class="dropdown-item d-flex align-items-center" href="{% url 'events:panel_create' convention.days.first.pk %}">
@@ -1908,6 +1908,12 @@ window.addEventListener('load', function() {
             </ul>
         </div>
         {% endif %}
+        <button id="page-theme-btn" class="btn toolbar-btn toolbar-btn-icon btn-theme-switch" type="button" aria-label="Toggle light/dark theme">
+            <span class="theme-btn-icon">☀</span>
+        </button>
+        <input type="hidden" id="page-theme-toggle" />
+    </div>
+</div>
         <!-- Calendar Feed Modal -->
         <div class="modal fade" id="calendarFeedModal" tabindex="-1" aria-labelledby="calendarFeedModalLabel" aria-hidden="true" style="z-index: 99999;">
             <div class="modal-dialog modal-dialog-centered">
@@ -2137,6 +2143,10 @@ window.addEventListener('load', function() {
                     var trigger = e.target.closest('#calendarFeedModalTrigger');
                     if (trigger) {
                         e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.closeToolbarDropdowns === 'function') {
+                            window.closeToolbarDropdowns();
+                        }
                         syncFeedScopeFromPage();
                         layoutCalendarButtons();
                         refreshCalendarFeedUrl();
@@ -2178,21 +2188,55 @@ window.addEventListener('load', function() {
                 });
 
                 // initial value on page load in case modal is opened later
-                layoutCalendarButtons();
-                refreshCalendarFeedUrl();
+                try {
+                    layoutCalendarButtons();
+                    refreshCalendarFeedUrl();
+                } catch (err) {
+                    console.error(err);
+                }
             });
         </script>
-        <button id="page-theme-btn" class="btn toolbar-btn toolbar-btn-icon btn-theme-switch" type="button" aria-label="Toggle light/dark theme">
-            <span class="theme-btn-icon">☀</span>
-        </button>
-        <input type="hidden" id="page-theme-toggle" />
-    </div>
-</div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const exportPdfBtn = document.getElementById('exportPdfBtn');
     const exportCsvBtn = document.getElementById('exportCsvBtn');
     const rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
+
+    function closeToolbarDropdowns(exceptMenu) {
+        document.querySelectorAll('.control-toolbar .dropdown-menu.show').forEach(function (menu) {
+            if (menu === exceptMenu) return;
+            menu.classList.remove('show');
+            var btn = menu.parentElement && menu.parentElement.querySelector('.dropdown-toggle');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    function wireToolbarDropdown(buttonId, menuId) {
+        var btn = document.getElementById(buttonId);
+        var menu = document.getElementById(menuId);
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var willOpen = !menu.classList.contains('show');
+            closeToolbarDropdowns();
+            if (willOpen) {
+                menu.classList.add('show');
+                btn.setAttribute('aria-expanded', 'true');
+            }
+        });
+    }
+
+    wireToolbarDropdown('exportDropdown', 'exportDropdownMenu');
+    wireToolbarDropdown('addEventDropdown', 'addEventDropdownMenu');
+    window.closeToolbarDropdowns = closeToolbarDropdowns;
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.control-toolbar .dropdown')) return;
+        closeToolbarDropdowns();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeToolbarDropdowns();
+    });
 
     function getRsvpQueryString() {
         const toggle = document.getElementById('showMyRsvpsToggle');
@@ -3530,6 +3574,31 @@ html[data-bs-theme="light"] .cancelled-panel .modal-panel-room {
     align-items: center;
     gap: 0.5rem;
     width: 100%;
+    overflow: visible;
+}
+
+.control-toolbar .dropdown {
+    position: relative;
+}
+
+.control-toolbar .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    left: auto;
+    z-index: 4000;
+    display: none;
+    margin: 0;
+    min-width: 16rem;
+}
+
+.control-toolbar .dropdown-menu.show {
+    display: block;
+}
+
+#calendarFeedModal:not(.show) {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 .view-toggle-group {
