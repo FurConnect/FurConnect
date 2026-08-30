@@ -1917,15 +1917,31 @@ window.addEventListener('load', function() {
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <p>To get live updates in your calendar, <strong>subscribe</strong> using this URL (do not download and import):</p>
+                        <p>Subscribe once and your calendar stays in sync when this schedule changes. Do not download and import the file.</p>
+                        <div class="d-grid gap-2 mb-3">
+                            <a id="googleCalendarSubscribeBtn" class="btn btn-primary d-flex align-items-center justify-content-center" target="_blank" rel="noopener noreferrer">
+                                <i class="material-icons me-2">event</i> Add to Google Calendar
+                            </a>
+                            <div class="d-flex gap-2">
+                                <a id="appleCalendarSubscribeBtn" class="btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center">
+                                    Apple Calendar
+                                </a>
+                                <a id="outlookCalendarSubscribeBtn" class="btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center" target="_blank" rel="noopener noreferrer">
+                                    Outlook
+                                </a>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-2" style="font-size:0.9em;">Google Calendar usually refreshes subscribed calendars about once a day.</p>
+                        <p class="mb-2" style="font-size:0.95em;">Or copy the feed URL:</p>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" id="calendarFeedUrl" readonly>
                             <button class="btn btn-outline-secondary" type="button" id="copyCalendarUrlBtn">Copy URL</button>
                         </div>
+                        <div id="calendarFeedLocalhostNote" class="alert alert-warning d-none" style="font-size:0.97em;">
+                            Google and Outlook fetch this feed from the public internet, so subscribe from a deployed URL rather than localhost.
+                        </div>
                         <div class="alert alert-info" style="font-size:0.97em;">
-                            <strong>Google Calendar:</strong> Go to Google Calendar (web), click <b>+</b> next to "Other calendars" → <b>From URL</b>, and paste the link above.<br><br>
-                            <strong>Apple Calendar:</strong> File → New Calendar Subscription, paste the link above.<br><br>
-                            <strong>Outlook:</strong> Add calendar → Subscribe from web, paste the link above.
+                            If the Google button does not add the calendar, open Google Calendar on the web, click <b>+</b> next to "Other calendars" → <b>From URL</b>, and paste the link above.
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1939,6 +1955,7 @@ window.addEventListener('load', function() {
                 var feedPath = '{% url "events:convention_ical_feed" pk=convention.pk %}';
                 var rsvpFeedPathTemplate = '{% url "events:convention_ical_feed_token" pk=convention.pk token="__TOKEN__" %}';
                 var rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
+                var conventionName = '{{ convention.name|escapejs }}';
 
                 function getFeedUrl() {
                     var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
@@ -1949,10 +1966,38 @@ window.addEventListener('load', function() {
                     return origin + feedPath;
                 }
 
+                function toWebcalUrl(url) {
+                    return url.replace(/^https?:\/\//i, 'webcal://');
+                }
+
+                function isPublicFeedHost() {
+                    var host = window.location.hostname;
+                    return host !== 'localhost' && host !== '127.0.0.1' && host !== '0.0.0.0' && host !== '[::1]';
+                }
+
                 function refreshCalendarFeedUrl() {
+                    var feedUrl = getFeedUrl();
+                    var webcalUrl = toWebcalUrl(feedUrl);
                     var urlInput = document.getElementById('calendarFeedUrl');
+                    var googleBtn = document.getElementById('googleCalendarSubscribeBtn');
+                    var appleBtn = document.getElementById('appleCalendarSubscribeBtn');
+                    var outlookBtn = document.getElementById('outlookCalendarSubscribeBtn');
+                    var localNote = document.getElementById('calendarFeedLocalhostNote');
+
                     if (urlInput) {
-                        urlInput.value = getFeedUrl();
+                        urlInput.value = feedUrl;
+                    }
+                    if (googleBtn) {
+                        googleBtn.href = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
+                    }
+                    if (appleBtn) {
+                        appleBtn.href = webcalUrl;
+                    }
+                    if (outlookBtn) {
+                        outlookBtn.href = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(feedUrl) + '&name=' + encodeURIComponent(conventionName);
+                    }
+                    if (localNote) {
+                        localNote.classList.toggle('d-none', isPublicFeedHost());
                     }
                 }
 
