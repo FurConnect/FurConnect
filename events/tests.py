@@ -332,8 +332,10 @@ class ConventionCatalogTests(TransactionTestCase):
         self.assertContains(response, 'id="convention-page-data"')
         self.assertContains(response, 'id="googleCalendarSubscribeBtn"')
         self.assertContains(response, 'id="appleCalendarSubscribeBtn"')
+        self.assertContains(response, 'id="googleMobileNote"')
         self.assertContains(response, 'calendar.google.com/calendar/render?cid=')
-        self.assertContains(response, 'function isAppleDevice')
+        self.assertContains(response, 'function isIosDevice')
+        self.assertContains(response, 'function isMobileDevice')
 
     def test_catalog_ajax_returns_one_payload(self):
         client = Client()

@@ -1929,6 +1929,7 @@ window.addEventListener('load', function() {
                         </div>
                         {% endif %}
                         <div id="calendarFeedScopeBanner" class="alert alert-info py-2" style="font-size:0.97em;"></div>
+                        <div id="googleMobileNote" class="alert alert-warning d-none" style="font-size:0.97em;"></div>
                         <div id="calendarSubscribeStack" class="d-grid gap-2 mb-3">
                             <a id="googleCalendarSubscribeBtn" class="btn btn-primary d-flex align-items-center justify-content-center" target="_blank" rel="noopener noreferrer">
                                 <i class="material-icons me-2">event</i>
@@ -1944,8 +1945,7 @@ window.addEventListener('load', function() {
                                 </a>
                             </div>
                         </div>
-                        <p class="text-muted mb-2" style="font-size:0.9em;">Google’s one-click add is unreliable. If it does not add the calendar, copy the HTTPS URL below and paste it in Google Calendar under <b>Other calendars → From URL</b>.</p>
-                        <p class="mb-2" style="font-size:0.95em;">Or copy the feed URL and add it in Google Calendar with <b>Other calendars → From URL</b>:</p>
+                        <p class="mb-2" style="font-size:0.95em;">Or copy the feed URL:</p>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" id="calendarFeedUrl" readonly>
                             <button class="btn btn-outline-secondary" type="button" id="copyCalendarUrlBtn">Copy URL</button>
@@ -1994,15 +1994,23 @@ window.addEventListener('load', function() {
                     return httpsUrl.replace(/^https:\/\//i, 'http://');
                 }
 
-                function isAppleDevice() {
+                function isIosDevice() {
                     var ua = navigator.userAgent || '';
                     if (/iPhone|iPad|iPod/i.test(ua)) {
                         return true;
                     }
-                    if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) {
+                    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+                }
+
+                function isMobileDevice() {
+                    var ua = navigator.userAgent || '';
+                    if (navigator.userAgentData && navigator.userAgentData.mobile) {
                         return true;
                     }
-                    return /Macintosh|Mac OS X/i.test(ua);
+                    if (/Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+                        return true;
+                    }
+                    return isIosDevice();
                 }
 
                 function layoutCalendarButtons() {
@@ -2011,19 +2019,39 @@ window.addEventListener('load', function() {
                     var googleBtn = document.getElementById('googleCalendarSubscribeBtn');
                     var appleBtn = document.getElementById('appleCalendarSubscribeBtn');
                     var outlookBtn = document.getElementById('outlookCalendarSubscribeBtn');
+                    var googleNote = document.getElementById('googleMobileNote');
                     if (!stack || !secondaryRow || !googleBtn || !appleBtn || !outlookBtn) {
                         return;
                     }
-                    var applePrimary = isAppleDevice();
+                    var mobile = isMobileDevice();
+                    var applePrimary = isIosDevice();
                     var primaryClass = 'btn btn-primary d-flex align-items-center justify-content-center';
                     var secondaryClass = 'btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center';
+
+                    if (googleNote) {
+                        googleNote.classList.toggle('d-none', !mobile);
+                        if (mobile) {
+                            googleNote.innerHTML = isIosDevice()
+                                ? 'Google Calendar cannot be added from a phone. Open this page on a <b>computer</b>, then use <b>Other calendars → From URL</b> with the link below. It will sync to the Google Calendar app on this device. Apple Calendar can be added here.'
+                                : 'Google Calendar cannot be added from a phone. Open this page on a <b>computer</b>, then use <b>Other calendars → From URL</b> with the link below. It will sync to the Google Calendar app on this device.';
+                        }
+                    }
+
+                    if (mobile) {
+                        googleBtn.classList.add('d-none');
+                        googleBtn.removeAttribute('href');
+                    } else {
+                        googleBtn.classList.remove('d-none');
+                    }
+
                     if (applePrimary) {
                         appleBtn.className = primaryClass;
-                        googleBtn.className = secondaryClass;
                         appleBtn.removeAttribute('target');
-                        googleBtn.setAttribute('target', '_blank');
                         stack.insertBefore(appleBtn, stack.firstChild);
-                        secondaryRow.insertBefore(googleBtn, outlookBtn);
+                    } else if (mobile) {
+                        appleBtn.className = secondaryClass;
+                        appleBtn.removeAttribute('target');
+                        secondaryRow.insertBefore(appleBtn, outlookBtn);
                     } else {
                         googleBtn.className = primaryClass;
                         appleBtn.className = secondaryClass;
@@ -2063,12 +2091,12 @@ window.addEventListener('load', function() {
                     var outlookBtn = document.getElementById('outlookCalendarSubscribeBtn');
                     var localNote = document.getElementById('calendarFeedLocalhostNote');
                     var banner = document.getElementById('calendarFeedScopeBanner');
-                    var applePrimary = isAppleDevice();
+                    var applePrimary = isIosDevice();
 
                     if (urlInput) {
                         urlInput.value = feedUrl;
                     }
-                    if (googleBtn) {
+                    if (googleBtn && !isMobileDevice()) {
                         googleBtn.href = 'https://calendar.google.com/calendar/render?cid=' + toGoogleCidUrl(feedUrl);
                     }
                     if (googleLabel) {
@@ -2120,7 +2148,7 @@ window.addEventListener('load', function() {
                             modal.show();
                             setTimeout(function () {
                                 var urlInput = document.getElementById('calendarFeedUrl');
-                                if (urlInput) {
+                                if (urlInput && !isMobileDevice()) {
                                     urlInput.select();
                                     urlInput.focus();
                                 }
