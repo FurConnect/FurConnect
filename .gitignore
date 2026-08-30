@@ -8,3 +8,4 @@ panel_hosts/
 staticfiles/
 .env
 furconnect_version
+tmp/

@@ -1,4 +1,5 @@
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
 from django.core.cache import cache
 
@@ -9,6 +10,7 @@ from .users import get_user_by_id
 _AVATAR_CACHE_PREFIX = 'concat:avatar:'
 _AVATAR_CACHE_TTL = 60 * 60 * 24
 _AVATAR_MISS_TTL = 60 * 10
+_AVATAR_FETCH_WORKERS = 8
 
 
 def extract_user_payload(response):
@@ -87,12 +89,13 @@ def get_concat_profile_pictures(user_ids, token=None):
         return {}
 
     unique_ids = list(dict.fromkeys(user_ids))
+    cache_keys = {user_id: f'{_AVATAR_CACHE_PREFIX}{user_id}' for user_id in unique_ids}
+    cached = cache.get_many(cache_keys.values())
     pictures = {}
     missing_ids = []
-    for user_id in unique_ids:
-        cached = cache.get(f'{_AVATAR_CACHE_PREFIX}{user_id}')
-        if cached is not None:
-            pictures[user_id] = cached
+    for user_id, cache_key in cache_keys.items():
+        if cache_key in cached:
+            pictures[user_id] = cached[cache_key]
         else:
             missing_ids.append(user_id)
 
@@ -105,6 +108,16 @@ def get_concat_profile_pictures(user_ids, token=None):
         except (ConcatError, requests.RequestException):
             return pictures
 
-    for user_id in missing_ids:
-        pictures[user_id] = get_concat_profile_picture_url(user_id, token=token)
+    def fetch_one(user_id):
+        return user_id, get_concat_profile_picture_url(user_id, token=token)
+
+    if len(missing_ids) == 1:
+        user_id, avatar_url = fetch_one(missing_ids[0])
+        pictures[user_id] = avatar_url
+        return pictures
+
+    workers = min(_AVATAR_FETCH_WORKERS, len(missing_ids))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for user_id, avatar_url in pool.map(fetch_one, missing_ids):
+            pictures[user_id] = avatar_url
     return pictures

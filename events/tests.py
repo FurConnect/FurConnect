@@ -305,6 +305,19 @@ class ConventionCatalogTests(TransactionTestCase):
         self.assertEqual(catalog['rooms'][0]['name'], 'Main Hall')
         self.assertEqual(catalog['tags'][0]['name'], 'Science')
 
+    def test_public_catalog_is_reused_until_invalidated(self):
+        from events.catalog import build_public_host_catalog, invalidate_convention_catalogs
+
+        first = build_public_host_catalog(self.convention)
+        with self.assertNumQueries(0):
+            second = build_public_host_catalog(self.convention)
+        self.assertEqual(first['version'], second['version'])
+        self.assertEqual(first['hosts'][0]['name'], second['hosts'][0]['name'])
+
+        invalidate_convention_catalogs(self.convention.pk)
+        rebuilt = build_public_host_catalog(self.convention)
+        self.assertEqual(rebuilt['hosts'][0]['name'], 'Ada Lovelace')
+
     def test_convention_detail_embeds_catalog(self):
         client = Client()
         response = client.get(f'/convention/{self.convention.pk}/')
@@ -328,7 +341,7 @@ class ConventionCatalogTests(TransactionTestCase):
         self.assertIn('rooms', payload)
         self.assertIn('tags', payload)
         self.assertEqual(payload['hosts'][0]['name'], 'Ada Lovelace')
-        self.assertEqual(response['Cache-Control'], 'private, max-age=60')
+        self.assertEqual(response['Cache-Control'], 'public, max-age=60')
 
 
 class ConcatCacheTests(SimpleTestCase):
@@ -349,6 +362,22 @@ class ConcatCacheTests(SimpleTestCase):
         self.assertEqual(first['42'], 'https://cdn.example/ada.png')
         self.assertEqual(second['42'], 'https://cdn.example/ada.png')
         get_user_by_id.assert_called_once_with('42', token='tok')
+
+    @override_settings(CONCAT_ENABLED=True)
+    @patch('events.concat.profiles.get_user_by_id')
+    def test_profile_pictures_fetch_each_missing_id(self, get_user_by_id):
+        from events.concat.profiles import get_concat_profile_pictures
+
+        get_user_by_id.side_effect = [
+            {'profilePictureUrl': 'https://cdn.example/ada.png'},
+            {'profilePictureUrl': 'https://cdn.example/al.png'},
+        ]
+
+        pictures = get_concat_profile_pictures(['42', '7'], token='tok')
+
+        self.assertEqual(pictures['42'], 'https://cdn.example/ada.png')
+        self.assertEqual(pictures['7'], 'https://cdn.example/al.png')
+        self.assertEqual(get_user_by_id.call_count, 2)
 
     @patch('events.concat.oauth.post_token')
     def test_service_token_is_stored_and_reused(self, post_token):

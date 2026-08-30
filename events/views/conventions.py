@@ -1,28 +1,29 @@
 import icalendar
 import geopy.geocoders
+import hashlib
 import pytz
 from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Count, Prefetch, Q
+from django.core.cache import cache
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from timezonefinder import TimezoneFinder
 
 from ..auth import can_manage_events, organizer_required
-from ..catalog import build_public_host_catalog
-from ..concat import attach_host_avatar_urls
+from ..catalog import build_public_host_catalog, speakers_from_catalog
 from ..forms import ConventionForm
-from ..models import Convention, Panel, PanelHost, Room, Tag
+from ..models import Convention, Panel, PanelHost, Tag
 from ..rsvp import (
     filter_panels_for_user_rsvp,
     get_rsvp_user_id,
     get_user_rsvp_panel_ids,
     make_rsvp_feed_token,
 )
-from .schedule_grid import build_display_days, build_schedule_grid_payload, collect_panel_hosts
+from .schedule_grid import build_display_days, build_schedule_grid_payload
 
 
 def _convention_days_queryset(convention):
@@ -53,25 +54,8 @@ def convention_detail(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
     days = _convention_days_queryset(convention)
 
-    unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
-    unique_rooms = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
-    convention_hosts = (
-        PanelHost.objects.filter(panels__convention_day__convention=convention)
-        .distinct()
-        .annotate(
-            convention_panel_count=Count(
-                'panels',
-                filter=Q(panels__convention_day__convention=convention),
-                distinct=True,
-            )
-        )
-        .order_by('name')
-    )
-
     display_days_with_panels = build_display_days(days)
-    attach_host_avatar_urls(
-        list(collect_panel_hosts(display_days_with_panels)) + list(convention_hosts)
-    )
+    host_catalog = build_public_host_catalog(convention)
 
     rsvp_user_id = get_rsvp_user_id(request)
     user_rsvp_panel_ids = get_user_rsvp_panel_ids(request, convention) if rsvp_user_id else set()
@@ -80,19 +64,19 @@ def convention_detail(request, pk):
         display_days_with_panels,
         user_rsvp_panel_ids,
     )
-    host_catalog = build_public_host_catalog(convention)
+    can_manage = can_manage_events(request)
 
     return render(request, 'events/convention_detail.html', {
         'convention': convention,
         'days': display_days_with_panels,
         'schedule_grid_payload': schedule_grid_payload,
         'host_catalog': host_catalog,
-        'unique_tags': unique_tags,
-        'unique_rooms': unique_rooms,
-        'convention_hosts': convention_hosts,
+        'unique_tags': host_catalog.get('tags') or [],
+        'unique_rooms': host_catalog.get('rooms') or [],
+        'convention_hosts': speakers_from_catalog(host_catalog),
         'current_convention_name': convention.name,
-        'is_staff': can_manage_events(request),
-        'can_manage_events': can_manage_events(request),
+        'is_staff': can_manage,
+        'can_manage_events': can_manage,
         'concat_enabled': settings.CONCAT_ENABLED,
         'concat_authenticated': bool(request.session.get('concat_user_id')),
         'concat_user_name': request.session.get('concat_user_name', ''),
@@ -136,9 +120,35 @@ def convention_delete(request, pk):
         return redirect('events:schedule')
 
 
+def _timezone_name_for_location(location_name):
+    location_name = (location_name or '').strip()
+    cache_key = 'ical:tz:' + hashlib.md5(location_name.lower().encode('utf-8')).hexdigest()
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    tz_name = 'UTC'
+    if location_name:
+        try:
+            geolocator = geopy.geocoders.Nominatim(user_agent="furconnect-ical")
+            location = geolocator.geocode(location_name)
+            if location:
+                tf = TimezoneFinder()
+                tz_name = tf.timezone_at(lng=location.longitude, lat=location.latitude) or 'UTC'
+        except Exception:
+            tz_name = 'UTC'
+    cache.set(cache_key, tz_name, 60 * 60 * 24 * 7)
+    return tz_name
+
+
 def convention_ical_feed(request, pk, token=None):
     convention = get_object_or_404(Convention, pk=pk)
-    days = convention.days.all().order_by('date')
+    days = convention.days.prefetch_related(
+        Prefetch(
+            'panels',
+            queryset=Panel.objects.filter(cancelled=False).select_related('room').order_by('start_time'),
+        ),
+    ).order_by('date')
     rsvp_param = token or request.GET.get('rsvp')
 
     cal = icalendar.Calendar()
@@ -146,21 +156,12 @@ def convention_ical_feed(request, pk, token=None):
     cal.add('version', '2.0')
     cal.add('X-WR-CALNAME', convention.name)
 
-    tz_name = 'UTC'
-    try:
-        geolocator = geopy.geocoders.Nominatim(user_agent="furconnect-ical")
-        location = geolocator.geocode(convention.location)
-        if location:
-            tf = TimezoneFinder()
-            tz_name = tf.timezone_at(lng=location.longitude, lat=location.latitude) or 'UTC'
-    except Exception:
-        tz_name = 'UTC'
-
+    tz_name = _timezone_name_for_location(convention.location)
     cal.add('X-WR-TIMEZONE', tz_name)
     tz = pytz.timezone(tz_name)
 
     for day in days:
-        panels = day.panels.filter(cancelled=False).order_by('start_time')
+        panels = day.panels.all()
         if rsvp_param:
             panels = filter_panels_for_user_rsvp(panels, request, rsvp_param).order_by('start_time')
         for panel in panels:

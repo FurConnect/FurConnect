@@ -16,3 +16,4 @@ class EventsConfig(AppConfig):
             import events.templatetags.event_filters
         except ImportError:
             pass
+        from . import signals  # noqa: F401

@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.db.models import Count, Max, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -5,6 +6,34 @@ from django.views.decorators.http import require_GET
 
 from .concat import build_avatar_map, serialize_panel_host
 from .models import Convention, Panel, PanelHost, Room, Tag
+
+_CATALOG_GEN_KEY = 'furconnect:catalog:generation'
+_CATALOG_CACHE_TTL = 60 * 5
+
+
+def _catalog_generation():
+    value = cache.get(_CATALOG_GEN_KEY)
+    if value is None:
+        cache.add(_CATALOG_GEN_KEY, 1)
+        value = cache.get(_CATALOG_GEN_KEY) or 1
+    return value
+
+
+def invalidate_convention_catalogs(convention_id=None):
+    try:
+        cache.incr(_CATALOG_GEN_KEY)
+    except ValueError:
+        cache.set(_CATALOG_GEN_KEY, 1)
+
+
+def _cached_catalog(suffix, builder):
+    cache_key = f'catalog:{_catalog_generation()}:{suffix}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    catalog = builder()
+    cache.set(cache_key, catalog, _CATALOG_CACHE_TTL)
+    return catalog
 
 
 def convention_catalog_version(convention):
@@ -129,16 +158,31 @@ def build_convention_catalog(convention, *, panel_id=None, all_hosts=False, incl
 
 
 def build_public_host_catalog(convention):
-    return build_convention_catalog(convention, include_panels=True, all_hosts=False)
+    return _cached_catalog(
+        f'public:{convention.pk}',
+        lambda: build_convention_catalog(convention, include_panels=True, all_hosts=False),
+    )
 
 
 def build_panel_form_catalog(convention, panel_id=None):
-    return build_convention_catalog(
-        convention,
-        panel_id=panel_id,
-        all_hosts=True,
-        include_panels=False,
+    return _cached_catalog(
+        f'form:{convention.pk}:{panel_id or 0}',
+        lambda: build_convention_catalog(
+            convention,
+            panel_id=panel_id,
+            all_hosts=True,
+            include_panels=False,
+        ),
     )
+
+
+def speakers_from_catalog(catalog):
+    speakers = []
+    for host in catalog.get('hosts') or []:
+        speaker = dict(host)
+        speaker['convention_panel_count'] = host.get('panels_count', 0)
+        speakers.append(speaker)
+    return speakers
 
 
 @require_GET
@@ -146,5 +190,5 @@ def get_convention_catalog_ajax(request, convention_pk):
     convention = get_object_or_404(Convention, pk=convention_pk)
     catalog = build_public_host_catalog(convention)
     response = JsonResponse(catalog)
-    response['Cache-Control'] = 'private, max-age=60'
+    response['Cache-Control'] = 'public, max-age=60'
     return response
