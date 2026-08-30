@@ -1917,10 +1917,22 @@ window.addEventListener('load', function() {
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <p>Subscribe once and your calendar stays in sync when this schedule changes. Do not download and import the file.</p>
+                        <p>This is a live subscription. Titles, times, and rooms update when the schedule changes. Do not download and import the file.</p>
+                        {% if rsvp_feed_token %}
+                        <div class="mb-3">
+                            <div class="btn-group w-100" role="group" aria-label="Calendar feed type">
+                                <input type="radio" class="btn-check" name="calendarFeedScope" id="calendarFeedScopeAll" value="all" checked>
+                                <label class="btn btn-outline-primary" for="calendarFeedScopeAll">Full schedule</label>
+                                <input type="radio" class="btn-check" name="calendarFeedScope" id="calendarFeedScopeRsvp" value="rsvp">
+                                <label class="btn btn-outline-primary" for="calendarFeedScopeRsvp">My RSVPs only</label>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div id="calendarFeedScopeBanner" class="alert alert-info py-2" style="font-size:0.97em;"></div>
                         <div class="d-grid gap-2 mb-3">
                             <a id="googleCalendarSubscribeBtn" class="btn btn-primary d-flex align-items-center justify-content-center" target="_blank" rel="noopener noreferrer">
-                                <i class="material-icons me-2">event</i> Add to Google Calendar
+                                <i class="material-icons me-2">event</i>
+                                <span id="googleCalendarSubscribeLabel">Add to Google Calendar</span>
                             </a>
                             <div class="d-flex gap-2">
                                 <a id="appleCalendarSubscribeBtn" class="btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center">
@@ -1932,16 +1944,13 @@ window.addEventListener('load', function() {
                             </div>
                         </div>
                         <p class="text-muted mb-2" style="font-size:0.9em;">Google Calendar usually refreshes subscribed calendars about once a day.</p>
-                        <p class="mb-2" style="font-size:0.95em;">Or copy the feed URL:</p>
+                        <p class="mb-2" style="font-size:0.95em;">Or copy the feed URL and add it in Google Calendar with <b>Other calendars → From URL</b>:</p>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" id="calendarFeedUrl" readonly>
                             <button class="btn btn-outline-secondary" type="button" id="copyCalendarUrlBtn">Copy URL</button>
                         </div>
                         <div id="calendarFeedLocalhostNote" class="alert alert-warning d-none" style="font-size:0.97em;">
                             Google and Outlook fetch this feed from the public internet, so subscribe from a deployed URL rather than localhost.
-                        </div>
-                        <div class="alert alert-info" style="font-size:0.97em;">
-                            If the Google button does not add the calendar, open Google Calendar on the web, click <b>+</b> next to "Other calendars" → <b>From URL</b>, and paste the link above.
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1957,10 +1966,18 @@ window.addEventListener('load', function() {
                 var rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
                 var conventionName = '{{ convention.name|escapejs }}';
 
+                function isRsvpFeedSelected() {
+                    var rsvpRadio = document.getElementById('calendarFeedScopeRsvp');
+                    return !!(rsvpRadio && rsvpRadio.checked && rsvpFeedToken);
+                }
+
+                function calendarDisplayName() {
+                    return isRsvpFeedSelected() ? (conventionName + ' (My RSVPs)') : conventionName;
+                }
+
                 function getFeedUrl() {
                     var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
-                    var toggle = document.getElementById('showMyRsvpsToggle');
-                    if (toggle && toggle.checked && rsvpFeedToken) {
+                    if (isRsvpFeedSelected()) {
                         return origin + rsvpFeedPathTemplate.replace('__TOKEN__', encodeURIComponent(rsvpFeedToken));
                     }
                     return origin + feedPath;
@@ -1975,38 +1992,69 @@ window.addEventListener('load', function() {
                     return host !== 'localhost' && host !== '127.0.0.1' && host !== '0.0.0.0' && host !== '[::1]';
                 }
 
+                function syncFeedScopeFromPage() {
+                    var rsvpRadio = document.getElementById('calendarFeedScopeRsvp');
+                    var allRadio = document.getElementById('calendarFeedScopeAll');
+                    var toggle = document.getElementById('showMyRsvpsToggle');
+                    if (rsvpRadio && toggle && toggle.checked) {
+                        rsvpRadio.checked = true;
+                    } else if (allRadio) {
+                        allRadio.checked = true;
+                    }
+                }
+
                 function refreshCalendarFeedUrl() {
                     var feedUrl = getFeedUrl();
                     var webcalUrl = toWebcalUrl(feedUrl);
+                    var isRsvp = isRsvpFeedSelected();
+                    var displayName = calendarDisplayName();
                     var urlInput = document.getElementById('calendarFeedUrl');
                     var googleBtn = document.getElementById('googleCalendarSubscribeBtn');
+                    var googleLabel = document.getElementById('googleCalendarSubscribeLabel');
                     var appleBtn = document.getElementById('appleCalendarSubscribeBtn');
                     var outlookBtn = document.getElementById('outlookCalendarSubscribeBtn');
                     var localNote = document.getElementById('calendarFeedLocalhostNote');
+                    var banner = document.getElementById('calendarFeedScopeBanner');
 
                     if (urlInput) {
                         urlInput.value = feedUrl;
                     }
                     if (googleBtn) {
-                        googleBtn.href = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
+                        // Google treats encoded https URLs as calendar IDs. Leave webcal:// unencoded.
+                        googleBtn.href = 'https://calendar.google.com/calendar/r?cid=' + webcalUrl;
+                    }
+                    if (googleLabel) {
+                        googleLabel.textContent = isRsvp ? 'Add my RSVPs to Google Calendar' : 'Add full schedule to Google Calendar';
                     }
                     if (appleBtn) {
                         appleBtn.href = webcalUrl;
                     }
                     if (outlookBtn) {
-                        outlookBtn.href = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(feedUrl) + '&name=' + encodeURIComponent(conventionName);
+                        outlookBtn.href = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(feedUrl) + '&name=' + encodeURIComponent(displayName);
                     }
                     if (localNote) {
                         localNote.classList.toggle('d-none', isPublicFeedHost());
+                    }
+                    if (banner) {
+                        banner.className = isRsvp ? 'alert alert-warning py-2' : 'alert alert-info py-2';
+                        banner.style.fontSize = '0.97em';
+                        banner.textContent = isRsvp
+                            ? 'This feed is only panels you RSVP’d to. Google will name it "' + displayName + '". Each event title includes (RSVP).'
+                            : 'This feed is the full convention schedule. Google will name it "' + displayName + '".';
                     }
                 }
 
                 window.refreshCalendarFeedUrl = refreshCalendarFeedUrl;
 
+                document.querySelectorAll('input[name="calendarFeedScope"]').forEach(function (el) {
+                    el.addEventListener('change', refreshCalendarFeedUrl);
+                });
+
                 document.body.addEventListener('click', function (e) {
                     var trigger = e.target.closest('#calendarFeedModalTrigger');
                     if (trigger) {
                         e.preventDefault();
+                        syncFeedScopeFromPage();
                         refreshCalendarFeedUrl();
                         var modalEl = document.getElementById('calendarFeedModal');
                         if (modalEl) {

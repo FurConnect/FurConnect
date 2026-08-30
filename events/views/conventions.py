@@ -130,7 +130,7 @@ def _timezone_name_for_location(location_name):
     tz_name = 'UTC'
     if location_name:
         try:
-            geolocator = geopy.geocoders.Nominatim(user_agent="furconnect-ical")
+            geolocator = geopy.geocoders.Nominatim(user_agent="furconnect-ical", timeout=2)
             location = geolocator.geocode(location_name)
             if location:
                 tf = TimezoneFinder()
@@ -139,6 +139,12 @@ def _timezone_name_for_location(location_name):
             tz_name = 'UTC'
     cache.set(cache_key, tz_name, 60 * 60 * 24 * 7)
     return tz_name
+
+
+def _ical_calendar_name(convention, is_rsvp_feed):
+    if is_rsvp_feed:
+        return f'{convention.name} (My RSVPs)'
+    return convention.name
 
 
 def convention_ical_feed(request, pk, token=None):
@@ -150,14 +156,25 @@ def convention_ical_feed(request, pk, token=None):
         ),
     ).order_by('date')
     rsvp_param = token or request.GET.get('rsvp')
+    is_rsvp_feed = bool(rsvp_param)
+    calendar_name = _ical_calendar_name(convention, is_rsvp_feed)
 
     cal = icalendar.Calendar()
     cal.add('prodid', '-//FurConnect//Convention Schedule//EN')
     cal.add('version', '2.0')
-    cal.add('X-WR-CALNAME', convention.name)
+    cal.add('calscale', 'GREGORIAN')
+    cal.add('method', 'PUBLISH')
+    cal.add('name', calendar_name)
+    cal.add('X-WR-CALNAME', calendar_name)
+    cal.add(
+        'X-WR-CALDESC',
+        f'Panels you RSVP’d to at {convention.name}'
+        if is_rsvp_feed
+        else f'Full schedule for {convention.name}',
+    )
 
     tz_name = _timezone_name_for_location(convention.location)
-    cal.add('X-WR-TIMEZONE', tz_name)
+    cal.add('X-WR-TIMEZONE', 'UTC')
     tz = pytz.timezone(tz_name)
 
     for day in days:
@@ -166,7 +183,10 @@ def convention_ical_feed(request, pk, token=None):
             panels = filter_panels_for_user_rsvp(panels, request, rsvp_param).order_by('start_time')
         for panel in panels:
             event = icalendar.Event()
-            event.add('summary', panel.title or 'Untitled Event')
+            title = panel.title or 'Untitled Event'
+            if is_rsvp_feed:
+                title = f'{title} (RSVP)'
+            event.add('summary', title)
             event.add('description', panel.description or '')
             room_name = panel.room.name if panel.room else ''
             event.add('location', f'{convention.name} - {room_name}' if room_name else convention.name)
@@ -184,12 +204,19 @@ def convention_ical_feed(request, pk, token=None):
             if end_datetime < start_datetime:
                 end_datetime += timedelta(days=1)
 
-            event.add('dtstart', start_datetime)
-            event.add('dtend', end_datetime)
-            event.add('dtstamp', timezone.now().astimezone(tz))
+            # UTC "Z" times import reliably in Google Calendar; TZID without VTIMEZONE often fails.
+            start_utc = start_datetime.astimezone(pytz.UTC)
+            end_utc = end_datetime.astimezone(pytz.UTC)
+            event.add('dtstart', start_utc)
+            event.add('dtend', end_utc)
+            event.add('dtstamp', timezone.now().astimezone(pytz.UTC))
             event.add('uid', f'panel-{panel.pk}@furconnect')
+            event.add('status', 'CONFIRMED')
+            event.add('transp', 'OPAQUE')
             cal.add_component(event)
 
-    response = HttpResponse(cal.to_ical(), content_type='text/calendar')
-    response['Content-Disposition'] = f'inline; filename="{convention.name}_schedule.ics"'
+    filename = 'my-rsvps.ics' if is_rsvp_feed else 'schedule.ics'
+    response = HttpResponse(cal.to_ical(), content_type='text/calendar; charset=utf-8')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    response['Cache-Control'] = 'public, max-age=300'
     return response

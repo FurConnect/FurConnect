@@ -332,6 +332,7 @@ class ConventionCatalogTests(TransactionTestCase):
         self.assertContains(response, 'id="convention-page-data"')
         self.assertContains(response, 'id="googleCalendarSubscribeBtn"')
         self.assertContains(response, 'calendar.google.com/calendar/r?cid=')
+        self.assertContains(response, 'Leave webcal:// unencoded')
 
     def test_catalog_ajax_returns_one_payload(self):
         client = Client()
@@ -469,7 +470,12 @@ class RsvpCalendarFeedViewTests(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         body = response.content.decode('utf-8', errors='ignore')
         self.assertIn('My Panel', body)
+        self.assertIn('(RSVP)', body)
+        self.assertIn('(My RSVPs)', body)
         self.assertNotIn('Other Panel', body)
+        self.assertIn('text/calendar', response['Content-Type'])
+        self.assertIn('charset=utf-8', response['Content-Type'])
+        self.assertRegex(body, r'DTSTART:\d{8}T\d{6}Z')
 
     def test_query_token_returns_only_rsvps_without_session(self):
         from events.rsvp.feed import make_rsvp_feed_token
@@ -494,6 +500,18 @@ class RsvpCalendarFeedViewTests(TransactionTestCase):
         body = response.content.decode('utf-8', errors='ignore')
         self.assertNotIn('My Panel', body)
         self.assertNotIn('Other Panel', body)
+
+    def test_full_feed_is_not_labeled_as_rsvps(self):
+        client = Client()
+        response = client.get(f'/convention/{self.convention.pk}/calendar.ics')
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode('utf-8', errors='ignore')
+        self.assertIn('My Panel', body)
+        self.assertIn('Other Panel', body)
+        self.assertNotIn('(My RSVPs)', body)
+        self.assertNotIn('(RSVP)', body)
+        self.assertIn('X-WR-CALNAME:RSVP Con', body)
 
 
 class PanelTagOrderTests(TransactionTestCase):
