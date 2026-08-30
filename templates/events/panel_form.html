@@ -217,10 +217,104 @@
         [data-bs-theme="dark"] form label.form-label {
              color: #adb5bd; /* Use a light gray color for labels in dark mode for better contrast */
         }
+
+        #panel-form-shell {
+            position: relative;
+            min-height: min(52vh, 420px);
+        }
+        #panel-form-loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: min(52vh, 420px);
+            padding: 3rem 1rem 4rem;
+            background: var(--bs-body-bg, #fff);
+        }
+        #panel-form-loader.is-done {
+            display: none;
+        }
+        .panel-form-loader-card {
+            width: min(100%, 28rem);
+            text-align: center;
+        }
+        .panel-form-loader-spinner {
+            width: 2.5rem;
+            height: 2.5rem;
+            margin: 0 auto 1.1rem;
+            border: 3px solid rgba(98, 0, 234, 0.18);
+            border-top-color: var(--primary-purple, #6200ea);
+            border-radius: 50%;
+            animation: panelFormLoaderSpin 0.75s linear infinite;
+        }
+        @keyframes panelFormLoaderSpin {
+            to { transform: rotate(360deg); }
+        }
+        .panel-form-loader-text {
+            margin: 0 0 1.25rem;
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: var(--bs-body-color, #212529);
+            line-height: 1.35;
+        }
+        .panel-form-loader-bar {
+            height: 4px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(98, 0, 234, 0.12);
+        }
+        .panel-form-loader-bar-fill {
+            height: 100%;
+            width: 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #b388ff 0%, #7c4dff 45%, #6200ea 100%);
+            transform-origin: left center;
+            animation: panelFormLoadingGrow 6s ease-out forwards;
+        }
+        @keyframes panelFormLoadingGrow {
+            0% { width: 0; }
+            15% { width: 28%; }
+            40% { width: 55%; }
+            70% { width: 78%; }
+            100% { width: 90%; }
+        }
+        #panel-form-loader.is-finishing .panel-form-loader-bar-fill {
+            animation: none;
+            width: 100%;
+            transition: width 0.28s ease;
+        }
+        #panel-form-data {
+            visibility: hidden;
+            position: absolute;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+        }
+        #panel-form-data.is-ready {
+            visibility: visible;
+            position: static;
+            pointer-events: auto;
+        }
     </style>
+<noscript>
+<style>
+#panel-form-data { visibility: visible; }
+#panel-form-loader { display: none; }
+</style>
+</noscript>
 {% endblock %}
 
 {% block content %}
+<div id="panel-form-shell">
+<div id="panel-form-loader" role="status" aria-live="polite">
+    <div class="panel-form-loader-card">
+        <div class="panel-form-loader-spinner" aria-hidden="true"></div>
+        <p class="panel-form-loader-text">{% if form.instance.pk %}{{ form.instance.title|default:"Edit Event" }} is loading{% else %}Add Event is loading{% endif %}</p>
+        <div class="panel-form-loader-bar" aria-hidden="true">
+            <div class="panel-form-loader-bar-fill"></div>
+        </div>
+    </div>
+</div>
+<div id="panel-form-data">
 <div class="row mb-4">
     <div class="col">
         <h1 class="display-4">{% if form.instance.pk %}Edit Event{% else %}Add Event{% endif %}</h1>
@@ -346,6 +440,8 @@
         </form>
     </div>
 </div>
+</div>
+</div>
 
 <!-- Add New Host Modal (Bootstrap) -->
 <div class="modal fade" id="addHostModal" tabindex="-1" aria-labelledby="addHostModalLabel" aria-hidden="true">
@@ -465,7 +561,21 @@
 {{ panel_form_catalog|json_script:"panel-form-catalog" }}
 
 <script>
+function finishPanelFormLoading() {
+    if (window.__panelFormReady) return;
+    window.__panelFormReady = true;
+    const loader = document.getElementById('panel-form-loader');
+    const data = document.getElementById('panel-form-data');
+    if (loader) loader.classList.add('is-finishing');
+    window.setTimeout(function() {
+        if (data) data.classList.add('is-ready');
+        if (loader) loader.classList.add('is-done');
+    }, 220);
+}
+window.setTimeout(finishPanelFormLoading, 10000);
+
 document.addEventListener('DOMContentLoaded', function() {
+    try {
     // Initialize jscolor for the color picker
     if (typeof jscolor !== 'undefined') {
         jscolor.install();
@@ -1738,6 +1848,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         hostSelectInstance.on('reorder', function() {
             updateHostPriorities();
+        });
+    }
+    } catch (error) {
+        console.error('Error initializing panel form:', error);
+    } finally {
+        requestAnimationFrame(function() {
+            window.setTimeout(finishPanelFormLoading, 280);
         });
     }
 });

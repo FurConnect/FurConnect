@@ -528,5 +528,21 @@ class PanelTagOrderTests(TransactionTestCase):
         form = PanelForm(instance=self.panel, convention=self.convention)
         self.assertEqual(list(form.initial['tags']), [self.tag_b.pk, self.tag_a.pk])
 
+    @override_settings(CONCAT_ENABLED=False, EVENTZILLA_ENABLED=False)
+    def test_edit_page_shows_loading_state(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        user = User.objects.create_user(username='staff', password='pass', is_staff=True)
+        client = Client()
+        client.force_login(user)
+        response = client.get(f'/panel/{self.panel.pk}/edit/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="panel-form-loader"')
+        self.assertContains(response, f'{self.panel.title} is loading')
+        self.assertContains(response, 'id="panel-form-data"')
+        self.assertContains(response, 'finishPanelFormLoading')
+
 
 
