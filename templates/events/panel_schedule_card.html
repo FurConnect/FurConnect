@@ -23,7 +23,7 @@
                 {% if can_manage_events %}
                 data-host-edit-url="{% url 'events:host_edit' host.id %}"
                 {% endif %}>
-                <img src="{{ host.avatar_url }}" alt="{{ host.name }}" class="host-avatar"
+                <img alt="{{ host.name }}" class="host-avatar"
                      style="border-radius: 50%; object-fit: cover;">
             </div>
             {% endfor %}

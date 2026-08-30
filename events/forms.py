@@ -1,7 +1,7 @@
 from django import forms
 from django.conf import settings
 from datetime import timedelta, datetime
-from .models import Convention, ConventionDay, Panel, PanelHost, Tag, Room, PanelHostOrder
+from .models import Convention, ConventionDay, Panel, PanelHost, Tag, Room, PanelHostOrder, PanelTag
 
 class ConventionForm(forms.ModelForm):
     hotel_name = forms.CharField(
@@ -185,67 +185,63 @@ class PanelForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         if convention:
-            # Filter the queryset to only include days for the given convention
             self.fields['convention_day'].queryset = ConventionDay.objects.filter(convention=convention).order_by('date')
-            # Filter rooms for the given convention
+            self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
+        elif self.instance and self.instance.pk and getattr(self.instance, 'convention_day', None):
+            convention = self.instance.convention_day.convention
+            self.fields['convention_day'].queryset = ConventionDay.objects.filter(convention=convention).order_by('date')
             self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
 
-            # Filter and order tags by priority for the current panel
-            if self.instance.pk:
-                # Set the queryset for available options, ordered by priority for existing panels
-                self.fields['tags'].queryset = Tag.objects.filter(panels=self.instance).order_by('paneltag__priority')
-                # Explicitly set the initial value for selected tags, ordered by priority
-                self.fields['tags'].initial = self.instance.tags.all().order_by('paneltag__priority')
-                
-                # Set the queryset for hosts, ordered by priority
-                self.fields['host'].queryset = PanelHost.objects.filter(panels=self.instance).order_by('panelhostorder__priority')
-                # Explicitly set the initial value for selected hosts, ordered by priority
-                self.fields['host'].initial = self.instance.host.all().order_by('panelhostorder__priority')
-            else:
-                # For new panels, order alphabetically
-                self.fields['tags'].queryset = Tag.objects.all().order_by('name')
-                self.fields['host'].queryset = PanelHost.objects.all().order_by('name')
-
-        else:
-            # If no convention is provided (e.g., in edit view directly via PK),
-            # try to get the convention from the instance's convention_day
-            if self.instance and self.instance.pk and self.instance.convention_day:
-                convention = self.instance.convention_day.convention
-                self.fields['convention_day'].queryset = ConventionDay.objects.filter(convention=convention).order_by('date')
-                self.fields['room'].queryset = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
-                # Explicitly set the initial value for selected tags, ordered by priority in this case too
-                self.fields['tags'].initial = self.instance.tags.all().order_by('paneltag__priority')
+        self.fields['tags'].queryset = Tag.objects.all().order_by('name')
+        self.fields['host'].queryset = PanelHost.objects.all().order_by('name')
+        if self.instance and self.instance.pk:
+            self.initial['tags'] = list(
+                self.instance.tags.all().order_by('paneltag__priority').values_list('pk', flat=True)
+            )
+            self.initial['host'] = list(
+                self.instance.host.all().order_by('panelhostorder__priority').values_list('pk', flat=True)
+            )
 
     def save(self, commit=True):
         panel = super().save(commit=False)
         if commit:
-            # Get the host order from the form data before saving
-            host_order = self.data.getlist('host')
-            print(f"Host order from form data: {host_order}")  # Debug log
-            
-            # Save the panel first
+            host_order = self._posted_ids('host')
+            tag_order = self._posted_ids('tags')
             panel.save()
-            
-            # Update host order before save_m2m
-            for index, host_id in enumerate(host_order):
-                print(f"Setting host {host_id} to priority {index}")  # Debug log
-                PanelHostOrder.objects.update_or_create(
-                    panel=panel,
-                    host_id=host_id,
-                    defaults={'priority': index}
-                )
-            
-            # Remove any hosts that are no longer associated with the panel
-            PanelHostOrder.objects.filter(panel=panel).exclude(host_id__in=host_order).delete()
-            
-            # Now save many-to-many relationships
             self.save_m2m()
-            
-            # Verify the order after saving
-            final_order = list(PanelHostOrder.objects.filter(panel=panel).order_by('priority').values_list('host_id', flat=True))
-            print(f"Final host order in database: {final_order}")  # Debug log
-            
+            self._apply_ordered_relations(panel, host_order, tag_order)
         return panel
+
+    def _posted_ids(self, field_name):
+        data = self.data
+        if hasattr(data, 'getlist'):
+            values = data.getlist(field_name)
+        else:
+            value = data.get(field_name, [])
+            if value in (None, ''):
+                values = []
+            elif isinstance(value, (list, tuple)):
+                values = list(value)
+            else:
+                values = [value]
+        return [str(value).strip() for value in values if str(value).strip()]
+
+    def _apply_ordered_relations(self, panel, host_order, tag_order):
+        for index, host_id in enumerate(host_order):
+            PanelHostOrder.objects.update_or_create(
+                panel=panel,
+                host_id=host_id,
+                defaults={'priority': index},
+            )
+        PanelHostOrder.objects.filter(panel=panel).exclude(host_id__in=host_order).delete()
+
+        for index, tag_id in enumerate(tag_order):
+            PanelTag.objects.update_or_create(
+                panel=panel,
+                tag_id=tag_id,
+                defaults={'priority': index},
+            )
+        PanelTag.objects.filter(panel=panel).exclude(tag_id__in=tag_order).delete()
 
 class PanelHostForm(forms.ModelForm):
     image = forms.ImageField(

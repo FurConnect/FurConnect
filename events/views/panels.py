@@ -8,10 +8,26 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from ..auth import can_manage_events, organizer_required
+from ..catalog import build_panel_form_catalog
 from ..concat import attach_host_avatar_urls
 from ..forms import PanelForm, PanelHostForm, TagForm
 from ..models import ConventionDay, Panel, PanelHostOrder, PanelTag
 from ..rsvp import get_rsvp_context
+
+
+def _panel_form_context(convention, form, **extra):
+    context = {
+        'form': form,
+        'convention': convention,
+        'current_convention_name': convention.name if convention else 'FurConnect',
+        'convention_pk': convention.pk if convention else None,
+        'panel_form_catalog': build_panel_form_catalog(
+            convention,
+            panel_id=getattr(form.instance, 'pk', None),
+        ),
+    }
+    context.update(extra)
+    return context
 
 @organizer_required
 def panel_create(request, day_pk):
@@ -31,10 +47,7 @@ def panel_create(request, day_pk):
         # Pass the convention to the form to filter the convention_day queryset
         form = PanelForm(request.POST, convention=current_convention)
         if form.is_valid():
-            panel = form.save(commit=False)
-            # The convention_day is now selected via the form, no need to set it from URL pk
-            panel.save()
-            form.save_m2m() # Save ManyToMany data
+            panel = form.save()
             messages.success(request, 'Panel created successfully!')
 
             if is_ajax:
@@ -50,25 +63,20 @@ def panel_create(request, day_pk):
                  return JsonResponse({'success': False, 'errors': form.errors}, status=400)
             else:
                  # For non-AJAX, render the template with errors
-                 return render(request, 'events/panel_form.html', {
-                     'form': form,
-                     'host_form': host_form,
-                     'convention': current_convention,
-                     'current_convention_name': current_convention_name,
-                     'convention_pk': current_convention.pk
-                 })
+                 return render(request, 'events/panel_form.html', _panel_form_context(
+                     current_convention,
+                     form,
+                     host_form=host_form,
+                 ))
     else:
         # Pass the convention to the form to filter the convention_day queryset
         form = PanelForm(convention=current_convention)
 
-    return render(request, 'events/panel_form.html', {
-        'form': form,
-        'host_form': host_form, # Pass the host form to the template
-        'convention': current_convention, # Pass the convention object
-        # 'date': convention_day.date, # No longer needed as day is selected in form
-        'current_convention_name': current_convention_name,
-        'convention_pk': current_convention.pk # Pass convention pk for redirect if needed
-    })
+    return render(request, 'events/panel_form.html', _panel_form_context(
+        current_convention,
+        form,
+        host_form=host_form,
+    ))
 
 
 @organizer_required
@@ -84,26 +92,24 @@ def panel_edit(request, pk):
     panel.ordered_hosts = panel.get_ordered_hosts()
     panel.ordered_tags = panel.tags.all().order_by('paneltag__priority')
 
+    host_form = PanelHostForm()
+    tag_form = TagForm()
     if request.method == 'POST':
-        form = PanelForm(request.POST, instance=panel)
+        form = PanelForm(request.POST, instance=panel, convention=current_convention)
         if form.is_valid():
             panel = form.save()
             messages.success(request, 'Panel updated successfully!')
             # Use the stored convention_pk for the redirect
             return redirect('events:convention_detail', pk=convention_pk)
     else:
-        form = PanelForm(instance=panel)
-        host_form = PanelHostForm() # Instantiate the host form
-        tag_form = TagForm() # Instantiate the tag form
-    return render(request, 'events/panel_form.html', {
-        'form': form,
-        'convention': panel.convention_day.convention,
-        'date': panel.convention_day.date,
-        'current_convention_name': current_convention_name,
-        'convention_pk': panel.convention_day.convention.pk,
-        'host_form': host_form,
-        'tag_form': tag_form
-    })
+        form = PanelForm(instance=panel, convention=current_convention)
+    return render(request, 'events/panel_form.html', _panel_form_context(
+        current_convention,
+        form,
+        date=panel.convention_day.date,
+        host_form=host_form,
+        tag_form=tag_form,
+    ))
 
 
 @organizer_required

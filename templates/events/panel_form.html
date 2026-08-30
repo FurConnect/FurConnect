@@ -462,6 +462,7 @@
 {{ form.host.value|json_script:"initial-host-items" }}
 {{ form.tags.value|json_script:"initial-tag-items" }}
 {{ form.room.value|json_script:"initial-room-items" }}
+{{ panel_form_catalog|json_script:"panel-form-catalog" }}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -480,6 +481,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialHostItems = JSON.parse(document.getElementById('initial-host-items').textContent);
     const initialTagItems = JSON.parse(document.getElementById('initial-tag-items').textContent);
     const initialRoomItems = JSON.parse(document.getElementById('initial-room-items').textContent);
+    const FORM_CATALOG_STORAGE_KEY = 'furconnect:form-catalog:{{ convention_pk }}';
+    let panelFormCatalog = { hosts: [], rooms: [], tags: [] };
+    const catalogEl = document.getElementById('panel-form-catalog');
+    if (catalogEl) {
+        try {
+            panelFormCatalog = JSON.parse(catalogEl.textContent) || panelFormCatalog;
+            sessionStorage.setItem(FORM_CATALOG_STORAGE_KEY, JSON.stringify(panelFormCatalog));
+        } catch (e) {
+            try {
+                const stored = sessionStorage.getItem(FORM_CATALOG_STORAGE_KEY);
+                if (stored) panelFormCatalog = JSON.parse(stored);
+            } catch (storageError) {
+                panelFormCatalog = { hosts: [], rooms: [], tags: [] };
+            }
+        }
+    }
 
     // Initialize Tom Select for hosts
     let hostSelectInstance = null; // Declare using let so we can assign later
@@ -522,56 +539,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (hostData && hostData.profile_picture) {
                         imgElement.src = hostData.profile_picture;
-                      } else if (hostData && !hostData.profile_picture) {
-                          imgElement.src = "{% static 'events/images/placeholder.webp' %}";
                       } else {
-                         // Fallback: If data not in stored variable, fetch details via AJAX (less common now)
-                         fetch(`{% url 'events:get_host_details_ajax' pk=0 %}`.replace('/0/', `/${hostId}/`), {
-                             method: 'GET',
-                             headers: {
-                                 'Accept': 'application/json',
-                                 'X-Requested-With': 'XMLHttpRequest'
-                             },
-                             credentials: 'same-origin'
-                          })
-                          .then(response => {
-                              if (!response.ok) {
-                                  console.error(`HTTP error fetching fallback host ${hostId} details! status: ${response.status}`);
-                                  // If 404, it might mean the host was deleted, set placeholder.
-                                  if (response.status === 404) {
-                                      imgElement.src = "{% static 'events/images/placeholder.webp' %}";
-                                  }
-                                  throw new Error(`HTTP error! status: ${response.status}`);
-                              }
-                              return response.json();
-                          })
-                          .then(data => {
-                              if (data && data.profile_picture) {
-                                  imgElement.src = data.profile_picture;
-                                  // Optionally update stored data here too if needed
-                                  allHostsData[hostId] = data; // Update stored data with the fetched details
-                              } else {
-                                  // Generate initials avatar when no profile picture
-                                  const hostName = data.name || '?';
-                                  const initials = generateInitials(hostName);
-                                  const color = generateAvatarColor(hostName);
-                                  imgElement.src = generateInitialsAvatar(initials, color);
-                              }
-                          })
-                          .catch(error => {
-                              // Generate initials avatar as fallback
-                              const hostName = hostContainer.getAttribute('data-title') || '?';
-                              const initials = generateInitials(hostName);
-                              const color = generateAvatarColor(hostName);
-                              imgElement.src = generateInitialsAvatar(initials, color);
-                          });
+                          const hostName = hostData?.name || hostElement?.getAttribute('data-title') || '?';
+                          imgElement.src = generateInitialsAvatar(generateInitials(hostName), generateAvatarColor(hostName));
                       }
                   } else {
-                      // Generate initials avatar as fallback
-                      const hostName = hostContainer.getAttribute('data-title') || '?';
-                      const initials = generateInitials(hostName);
-                      const color = generateAvatarColor(hostName);
-                      imgElement.src = generateInitialsAvatar(initials, color);
+                      const hostName = hostElement?.getAttribute('data-title') || '?';
+                      imgElement.src = generateInitialsAvatar(generateInitials(hostName), generateAvatarColor(hostName));
                   }
               });
           });
@@ -671,56 +645,28 @@ document.addEventListener('DOMContentLoaded', function() {
         placeholder: 'Select hosts...',
         items: initialHostItems,
         onInitialize: function() {
-            const hostSelect = this;
-             // Fetch all hosts for the current convention and add them as options
-            fetch(`/ajax/hosts/all/?convention_id={{ convention_pk }}&panel_id={{ form.instance.pk|default:"" }}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.hosts) {
-                         // Store fetched data in the allHostsData variable for faster lookup
-                        data.hosts.forEach(host => {
-                            allHostsData[host.id] = host;
-                        });
-
-                        // Add all hosts as options
-                        const options = data.hosts.map(host => {
-                             return {
-                                 value: host.id,
-                                 text: host.name,
-                                 profile_picture: host.profile_picture || "{% static 'events/images/placeholder.webp' %}", // Add top-level for robustness
-                                 customProperties: {
-                                     profile_picture: host.profile_picture || "{% static 'events/images/placeholder.webp' %}"
-                                 }
-                             };
-                         });
-                         this.addOptions(options);
-
-                         // Add selected items
-                         data.hosts.forEach(host => {
-                             if (host.selected) {
-                                 this.addItem(host.id); // This will trigger renderHostItem
-                             }
-                         });
-
-                         // Manually refresh images after adding options and items
-                         requestAnimationFrame(() => {
-                             // Ensure allHostsData is populated before attempting refresh
-                             if (Object.keys(allHostsData).length > 0) {
-                                 setTimeout(() => { refreshHostImages('tomselect_init'); }, 100); // Increased delay
-                             } else {
-                                 console.warn('allHostsData is empty after fetch in onInitialize. Images may not refresh.');
-                                 // Still attempt refresh with a slightly longer delay just in case of late population
-                                 setTimeout(() => { refreshHostImages('tomselect_init_empty_data'); }, 200);
-                             }
-                         });
-
-                         // Ensure Tom Select syncs after adding options and items
-                         this.sync();
-                     }
-                 })
-                 .catch(error => {
-                     console.error('Error fetching hosts for Tom Select initialization:', error);
-                 });
+            const hosts = panelFormCatalog.hosts || [];
+            hosts.forEach(host => {
+                allHostsData[host.id] = host;
+            });
+            const options = hosts.map(host => ({
+                value: host.id,
+                text: host.name,
+                profile_picture: host.profile_picture || "{% static 'events/images/placeholder.webp' %}",
+                customProperties: {
+                    profile_picture: host.profile_picture || "{% static 'events/images/placeholder.webp' %}"
+                }
+            }));
+            this.addOptions(options);
+            hosts.forEach(host => {
+                if (host.selected) {
+                    this.addItem(host.id);
+                }
+            });
+            requestAnimationFrame(() => {
+                setTimeout(() => { refreshHostImages('tomselect_init'); }, 100);
+            });
+            this.sync();
          },
          render: {
             option_create: function(data, escape) {
@@ -762,44 +708,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add form submission handler to ensure host values are included
     document.querySelector('form').addEventListener('submit', function(e) {
-        e.preventDefault(); // Prevent default form submission
-        
-        // Get the selected host values from TomSelect in their current order
-        const selectedHosts = hostSelectInstance ? hostSelectInstance.items : [];
-        
-        // Remove any existing host inputs
-        const existingHostInputs = document.querySelectorAll('input[name="host"]');
-        existingHostInputs.forEach(input => input.remove());
-        
-        // Create hidden inputs for each selected host in order
-        selectedHosts.forEach(hostId => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'host';
-            input.value = hostId;
-            this.appendChild(input);
-        });
-        
-        // Log the form data before submission
-        const formData = new FormData(this);
-        
-        // Now submit the form
+        e.preventDefault();
+        syncOrderedMultiSelect(this, 'host', hostSelectInstance);
+        syncOrderedMultiSelect(this, 'tags', tagSelectInstance);
         this.submit();
     });
 
-    // Add retroactive loading of host images every second
-    setInterval(function() {
-                            if (hostSelectInstance) {
-            refreshHostImages('retroactive');
+    function syncOrderedMultiSelect(form, fieldName, selectInstance) {
+        form.querySelectorAll('input[name="' + fieldName + '"]').forEach(function(input) {
+            input.remove();
+        });
+        const nativeSelect = form.querySelector('select[name="' + fieldName + '"]');
+        if (nativeSelect) {
+            nativeSelect.disabled = true;
         }
-    }, 1000);
+        const items = selectInstance && Array.isArray(selectInstance.items) ? selectInstance.items : [];
+        items.forEach(function(id) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = fieldName;
+            input.value = id;
+            form.appendChild(input);
+        });
+    }
 
-    // Add retroactive loading of tag colors every second
-    setInterval(function() {
-        if (tagSelectInstance) {
-            refreshTagColors();
-        }
-    }, 1000); // Reload every 1 second
+    requestAnimationFrame(() => {
+        refreshHostImages('init');
+        refreshTagColors();
+    });
 
     // Add a function to check color luminosity (needed for tag color contrast)
     function isLightColor(color) {
@@ -881,30 +817,15 @@ document.addEventListener('DOMContentLoaded', function() {
         placeholder: 'Select room...',
         items: initialRoomItems,
         onInitialize: function() {
-            // Fetch all rooms for the current convention
-            fetch(`/ajax/rooms/all/?convention_id={{ convention_pk }}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.rooms) {
-                        // Add all rooms as options
-                        const options = data.rooms.map(room => ({
-                            value: room.id,
-                            text: room.name
-                        }));
-                        this.addOptions(options);
-                        
-                        // Add selected item if any
-                        if (this.items.length > 0) {
-                            this.addItem(this.items[0]);
-                        }
-                        
-                        // Ensure Tom Select syncs after adding options and items
-                        this.sync();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching rooms:', error);
-                });
+            const rooms = panelFormCatalog.rooms || [];
+            this.addOptions(rooms.map(room => ({
+                value: room.id,
+                text: room.name
+            })));
+            if (this.items.length > 0) {
+                this.addItem(this.items[0]);
+            }
+            this.sync();
         },
         render: {
             option_create: function(data, escape) {
@@ -1456,43 +1377,24 @@ document.addEventListener('DOMContentLoaded', function() {
         items: initialTagItems,
         onInitialize: function() {
             const tagSelect = this;
-             // Fetch all tags for the current convention
-            fetch(`/ajax/tags/all/?convention_id={{ convention_pk }}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.tags) {
-
-                         // Store fetched data in allTagsData
-                        data.tags.forEach(tag => {
-                            allTagsData[tag.id] = tag;
-                        });
-
-                        // Add all tags as options
-                        data.tags.forEach(tag => {
-                            tagSelect.addOption({value: tag.id, text: tag.name});
-                        });
-
-                         // Pre-select initial items if any
-                         if (initialTagItems && initialTagItems.length > 0) {
-                             tagSelect.setValue(initialTagItems);
-                         }
-                         // Refresh visuals after setting value
-                         tagSelect.refreshOptions(false);
-                         tagSelect.refreshItems();
-                    }
-                })
-                .catch(error => console.error('Error fetching tags:', error));
+            const tags = panelFormCatalog.tags || [];
+            tags.forEach(tag => {
+                allTagsData[tag.id] = tag;
+                tagSelect.addOption({value: tag.id, text: tag.name});
+            });
+            if (initialTagItems && initialTagItems.length > 0) {
+                tagSelect.setValue(initialTagItems);
+            }
+            tagSelect.refreshOptions(false);
+            tagSelect.refreshItems();
         },
-        onItemAdd: function(value, item) {
-            // When a tag is added, update its priority
+        onItemAdd: function() {
             updateTagPriorities();
         },
-        onItemRemove: function(value, item) {
-            // When a tag is removed, update priorities
+        onItemRemove: function() {
             updateTagPriorities();
         },
-        onReorder: function() {
-            // When tags are reordered, update priorities
+        onChange: function() {
             updateTagPriorities();
         },
         render: {

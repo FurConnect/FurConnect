@@ -4,12 +4,13 @@ from datetime import datetime
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from ..auth import organizer_required
+from ..catalog import build_panel_form_catalog, sorted_host_panels
 from ..concat import apply_host_profile_image, build_avatar_map, resolve_profile_picture, serialize_panel_host
 from ..forms import PanelHostForm
 from ..models import Convention, Panel, PanelHost
@@ -126,29 +127,11 @@ def delete_host_ajax(request, pk):
     return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
 
 
-def _serialize_host_panel(panel):
-    tag_color = panel.tags.first().color if panel.tags.exists() else '#ffffff'
-    day_date = panel.convention_day.date if panel.convention_day and panel.convention_day.date else None
-    return {
-        'id': panel.pk,
-        'title': panel.title,
-        'description': panel.description,
-        'start_time': panel.start_time.strftime('%I:%M %p') if panel.start_time else '',
-        'end_time': panel.end_time.strftime('%I:%M %p') if panel.end_time else '',
-        'room_name': panel.room.name if panel.room else '',
-        'tag_color': tag_color,
-        'cancelled': panel.cancelled,
-        'day_of_week': day_date.strftime('%A') if day_date else '',
-        '_sort_date': day_date,
-        '_sort_time': panel.start_time,
-    }
-
-
 def _get_host_panels_queryset(host, convention_id=None):
-    panels = host.panels.all().select_related('convention_day', 'room').prefetch_related('tags')
+    panels = host.panels.all()
     if convention_id:
         panels = panels.filter(convention_day__convention_id=convention_id)
-    return panels
+    return panels.select_related('convention_day', 'room').prefetch_related('tags')
 
 
 def get_host_details_ajax(request, pk):
@@ -159,12 +142,7 @@ def get_host_details_ajax(request, pk):
         host = PanelHost.objects.get(pk=pk)
         convention_id = request.GET.get('convention_id')
         panels = _get_host_panels_queryset(host, convention_id)
-        panels_data = [_serialize_host_panel(panel) for panel in panels]
-        # Sort by day (date), then by time
-        panels_data.sort(key=lambda x: (x['_sort_date'], x['_sort_time']))
-        for p in panels_data:
-            p.pop('_sort_date', None)
-            p.pop('_sort_time', None)
+        panels_data = sorted_host_panels(panels)
         
         return JsonResponse({
             'id': host.pk,
@@ -194,29 +172,9 @@ def get_all_hosts_ajax(request):
         return JsonResponse({'error': 'convention_id is required.'}, status=400)
 
     try:
-        hosts = PanelHost.objects.all().order_by('name')
-
-        # Determine selected hosts if panel_id is provided
-        selected_host_ids = []
-        if panel_id:
-            try:
-                panel = Panel.objects.get(pk=panel_id)
-                selected_host_ids = list(panel.host.values_list('id', flat=True))
-            except Panel.DoesNotExist:
-                pass # Panel not found, no hosts are pre-selected
-
-        hosts_data = []
-        concat_avatars = build_avatar_map(hosts)
-        for host in hosts:
-            hosts_data.append({
-                'id': host.pk,
-                'name': host.name,
-                'concat_user_id': host.concat_user_id,
-                'profile_picture': resolve_profile_picture(host, concat_avatars),
-                'selected': host.id in selected_host_ids
-            })
-
-        return JsonResponse({'hosts': hosts_data})
+        convention = get_object_or_404(Convention, pk=convention_id)
+        catalog = build_panel_form_catalog(convention, panel_id=panel_id or None)
+        return JsonResponse({'hosts': catalog['hosts']})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
@@ -259,16 +217,16 @@ def get_hosts_batch_ajax(request):
     convention_id = request.GET.get('convention_id')
     try:
         ids = [int(i) for i in ids_param.split(',') if i.strip().isdigit()]
-        hosts = PanelHost.objects.filter(pk__in=ids)
+        panels_qs = Panel.objects.select_related('convention_day', 'room').prefetch_related('tags')
+        if convention_id:
+            panels_qs = panels_qs.filter(convention_day__convention_id=convention_id)
+        hosts = PanelHost.objects.filter(pk__in=ids).prefetch_related(
+            Prefetch('panels', queryset=panels_qs)
+        )
         concat_avatars = build_avatar_map(hosts)
         hosts_data = []
         for host in hosts:
-            panels = _get_host_panels_queryset(host, convention_id)
-            panels_data = [_serialize_host_panel(panel) for panel in panels]
-            panels_data.sort(key=lambda x: (x['_sort_date'], x['_sort_time']))
-            for p in panels_data:
-                p.pop('_sort_date', None)
-                p.pop('_sort_time', None)
+            panels_data = sorted_host_panels(host.panels.all())
             hosts_data.append({
                 **serialize_panel_host(host, concat_avatars),
                 'panels': panels_data,

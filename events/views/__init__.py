@@ -7,6 +7,7 @@ from .admin import (
     randomize_tag_colors,
 )
 from .auth import login_view, logout_view, register_view
+from ..catalog import get_convention_catalog_ajax
 from .conventions import (
     convention_create,
     convention_delete,
@@ -81,6 +82,7 @@ __all__ = [
     'get_all_hosts_ajax',
     'get_all_rooms_ajax',
     'get_all_tags_ajax',
+    'get_convention_catalog_ajax',
     'get_host_details_ajax',
     'get_hosts_batch_ajax',
     'get_room_details_ajax',

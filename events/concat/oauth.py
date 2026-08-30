@@ -1,8 +1,11 @@
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 from .api import post_token
 from .exceptions import ConcatError
+
+_TOKEN_CACHE_PREFIX = 'concat:service_token:'
 
 
 def get_authorize_url(state):
@@ -29,6 +32,11 @@ def exchange_code_for_token(code):
 
 
 def get_service_token(scope=None):
+    cache_key = f'{_TOKEN_CACHE_PREFIX}{scope or "default"}'
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+
     scopes_to_try = []
     if scope:
         scopes_to_try.append(scope)
@@ -57,6 +65,11 @@ def get_service_token(scope=None):
             token = data.get('access_token')
             if not token:
                 raise ConcatError('Concat service token response missing access_token')
+            try:
+                expires_in = int(data.get('expires_in') or 3600)
+            except (TypeError, ValueError):
+                expires_in = 3600
+            cache.set(cache_key, token, timeout=max(30, expires_in - 60))
             return token
         except ConcatError as exc:
             last_error = exc

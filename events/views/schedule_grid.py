@@ -4,26 +4,36 @@ from django.utils.text import slugify
 
 
 def attach_panel_ordering(panel):
-    panel.ordered_hosts = list(panel.host.all().order_by('panelhostorder__priority'))
-    panel.ordered_tags = list(panel.tags.all().order_by('paneltag__priority'))
+    if not hasattr(panel, 'ordered_hosts'):
+        panel.ordered_hosts = list(panel.host.all().order_by('panelhostorder__priority'))
+    else:
+        panel.ordered_hosts = list(panel.ordered_hosts)
+    if not hasattr(panel, 'ordered_tags'):
+        panel.ordered_tags = list(panel.tags.all().order_by('paneltag__priority'))
+    else:
+        panel.ordered_tags = list(panel.ordered_tags)
 
 
 def build_display_days(days):
     """Group panels by day and start time for list view."""
+    days = list(days)
     panels_by_display_time = {}
+    days_by_date = {}
 
     for day in days:
+        days_by_date[day.date] = day
         panels_by_display_time[day.date] = {}
-        for panel in day.panels.all().order_by('start_time'):
+        panels = list(day.panels.all())
+        panels.sort(key=lambda panel: panel.start_time)
+        for panel in panels:
             attach_panel_ordering(panel)
             start_time = panel.start_time
             panels_by_display_time[day.date].setdefault(start_time, []).append(panel)
 
     display_days_with_panels = []
     for day_date in sorted(panels_by_display_time.keys()):
-        day_obj = days.get(date=day_date)
         display_day = {
-            'original_day_obj': day_obj,
+            'original_day_obj': days_by_date[day_date],
             'panels_by_time': [
                 {
                     'start_time': slot_time,
@@ -124,7 +134,7 @@ def _panel_to_fc_event(panel, day_date, user_rsvp_panel_ids):
         hosts.append({
             'id': host.id,
             'name': host.name,
-            'avatarUrl': getattr(host, 'avatar_url', None) or host.get_profile_picture() or '',
+            'avatarUrl': getattr(host, 'avatar_url', None) or '',
         })
 
     return {

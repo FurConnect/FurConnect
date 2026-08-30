@@ -4,9 +4,86 @@
 
 {% block title %}{{ convention.name }} - {{ current_convention_name|default:"FurConnect" }}{% endblock %}
 
+{% block extra_css %}
+<style>
+#convention-page-loader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: min(52vh, 420px);
+    padding: 3rem 1rem 4rem;
+}
+#convention-page-loader.is-done {
+    display: none;
+}
+.convention-page-loader-card {
+    width: min(100%, 28rem);
+    text-align: center;
+}
+.convention-page-loader-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0 auto 1.1rem;
+    border: 3px solid rgba(98, 0, 234, 0.18);
+    border-top-color: var(--primary-purple, #6200ea);
+    border-radius: 50%;
+    animation: conventionLoaderSpin 0.75s linear infinite;
+}
+@keyframes conventionLoaderSpin {
+    to { transform: rotate(360deg); }
+}
+.convention-page-loader-text {
+    margin: 0 0 1.25rem;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
+    line-height: 1.35;
+}
+.convention-page-loader-bar {
+    height: 4px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(98, 0, 234, 0.12);
+}
+.convention-page-loader-bar-fill {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #b388ff 0%, #7c4dff 45%, #6200ea 100%);
+    transform-origin: left center;
+    animation: pageLoadingGrow 6s ease-out forwards;
+}
+@keyframes pageLoadingGrow {
+    0% { width: 0; }
+    15% { width: 28%; }
+    40% { width: 55%; }
+    70% { width: 78%; }
+    100% { width: 90%; }
+}
+#convention-page-loader.is-finishing .convention-page-loader-bar-fill {
+    animation: none;
+    width: 100%;
+    transition: width 0.28s ease;
+}
+#convention-page-data {
+    display: none;
+}
+#convention-page-data.is-ready {
+    display: block;
+}
+</style>
+<noscript>
+<style>
+#convention-page-data { display: block; }
+#convention-page-loader { display: none; }
+</style>
+</noscript>
+{% endblock %}
+
 {% block extra_js %}
 {# Add JSON data for JavaScript #}
 {{ is_staff|json_script:"is-staff-data" }}
+{{ host_catalog|json_script:"host-catalog" }}
 
 <style>
 .filter-dropdown .dropdown-toggle {
@@ -77,6 +154,78 @@ body.dark-mode .filter-dropdown .dropdown-item.active {
 </script>
 
 <script>
+const HOST_CATALOG_STORAGE_KEY = 'furconnect:host-catalog:{{ convention.pk }}';
+
+function readStoredHostCatalog() {
+    try {
+        const raw = sessionStorage.getItem(HOST_CATALOG_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function storeHostCatalog(catalog) {
+    try {
+        sessionStorage.setItem(HOST_CATALOG_STORAGE_KEY, JSON.stringify(catalog));
+    } catch (e) {
+        // Ignore quota / private-mode failures.
+    }
+}
+
+function indexHostCatalog(catalog) {
+    const hostsById = {};
+    (catalog && catalog.hosts ? catalog.hosts : []).forEach(host => {
+        hostsById[String(host.id)] = host;
+    });
+    return hostsById;
+}
+
+function loadEmbeddedHostCatalog() {
+    const catalogEl = document.getElementById('host-catalog');
+    let embedded = null;
+    if (catalogEl) {
+        try {
+            embedded = JSON.parse(catalogEl.textContent);
+        } catch (e) {
+            embedded = null;
+        }
+    }
+    const stored = readStoredHostCatalog();
+    if (embedded && embedded.version) {
+        if (!stored || stored.version !== embedded.version) {
+            storeHostCatalog(embedded);
+        }
+        return embedded;
+    }
+    return stored || { hosts: [] };
+}
+
+window.__hostCatalog = loadEmbeddedHostCatalog();
+window.__hostsById = indexHostCatalog(window.__hostCatalog);
+
+function getHostFromCatalog(hostId) {
+    return window.__hostsById[String(hostId)] || null;
+}
+
+function finishConventionPageLoading() {
+    if (window.__conventionPageReady) return;
+    window.__conventionPageReady = true;
+    const loader = document.getElementById('convention-page-loader');
+    const data = document.getElementById('convention-page-data');
+    if (loader) loader.classList.add('is-finishing');
+    window.setTimeout(function() {
+        if (data) data.classList.add('is-ready');
+        if (loader) loader.classList.add('is-done');
+        if (typeof window.refreshScheduleCalendars === 'function') {
+            window.refreshScheduleCalendars();
+        }
+        window.dispatchEvent(new Event('resize'));
+    }, 220);
+}
+window.finishConventionPageLoading = finishConventionPageLoading;
+window.setTimeout(finishConventionPageLoading, 12000);
+
 // Wait for all resources to load
 window.addEventListener('load', function() {
     try {
@@ -296,34 +445,41 @@ window.addEventListener('load', function() {
             }
         }
 
-                // Batch host image loader with loading bar (single request)
-        function showLoadingBar() {
-            let bar = document.getElementById('host-loading-bar');
-            if (!bar) {
-                bar = document.createElement('div');
-                bar.id = 'host-loading-bar';
-                bar.style.position = 'fixed';
-                bar.style.top = '0';
-                bar.style.left = '0';
-                bar.style.width = '0%';
-                bar.style.height = '4px';
-                bar.style.background = 'linear-gradient(90deg, #7c4dff, #6200ea)';
-                bar.style.zIndex = '2000';
-                bar.style.transition = 'width 0.2s';
-                document.body.appendChild(bar);
-            }
-            bar.style.width = '60%';
-            bar.style.display = 'block';
-        }
-        
-        function hideLoadingBar() {
-            let bar = document.getElementById('host-loading-bar');
-            if (bar) {
-                bar.style.width = '100%';
-                setTimeout(() => { bar.style.display = 'none'; bar.style.width = '0%'; }, 400);
-            }
+        function whenImageSettled(img, timeoutMs) {
+            return new Promise(resolve => {
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                };
+                if (img.complete) {
+                    finish();
+                    return;
+                }
+                img.addEventListener('load', finish, { once: true });
+                img.addEventListener('error', finish, { once: true });
+                window.setTimeout(finish, timeoutMs || 5000);
+            });
         }
 
+        function waitForPaintedImages(root) {
+            return new Promise(resolve => {
+                requestAnimationFrame(() => {
+                    const imgs = [...root.querySelectorAll('.host-avatar, img.sg-event-avatar')]
+                        .filter(img => img.getAttribute('src'));
+                    if (!imgs.length) {
+                        resolve();
+                        return;
+                    }
+                    Promise.all(imgs.map(img => whenImageSettled(img, 5000))).then(resolve);
+                });
+            });
+        }
+
+        function shouldRevealSchedule(root) {
+            return !root || root === document || root === document.body;
+        }
 
         function ensureHostAvatarImg(hostContainer) {
             let imgElement = hostContainer.querySelector('img.host-avatar');
@@ -345,89 +501,96 @@ window.addEventListener('load', function() {
             return imgElement;
         }
 
-        // Function to load and update host images using bulk endpoint (single request)
+        function applyPictureToImg(imgElement, hostData, fallbackName) {
+            const hostName = (hostData && hostData.name) || fallbackName || '?';
+            let imageUrl = hostData && hostData.profile_picture;
+            if (imageUrl && imageUrl.startsWith('/') && !imageUrl.startsWith('//') && !imageUrl.startsWith('data:')) {
+                imageUrl = window.location.origin + imageUrl;
+            }
+            if (imageUrl) {
+                imgElement.src = imageUrl;
+            } else {
+                imgElement.src = generateInitialsAvatar(generateInitials(hostName), generateAvatarColor(hostName));
+            }
+            imgElement.onerror = () => {
+                imgElement.src = generateInitialsAvatar(generateInitials(hostName), generateAvatarColor(hostName));
+                imgElement.onerror = null;
+            };
+        }
+
+        function mergeHostsIntoCatalog(hosts) {
+            if (!Array.isArray(hosts)) return;
+            window.__hostsById = window.__hostsById || {};
+            hosts.forEach(host => {
+                if (host && host.id != null) {
+                    window.__hostsById[String(host.id)] = host;
+                }
+            });
+            window.__hostCatalog = window.__hostCatalog || { hosts: [] };
+            window.__hostCatalog.hosts = Object.values(window.__hostsById);
+            storeHostCatalog(window.__hostCatalog);
+        }
+
         function loadHostImages(containerElement) {
             requestAnimationFrame(() => {
-                const hostContainers = containerElement.querySelectorAll('.host-avatar-container');
-                if (hostContainers.length === 0) {
-                    setTimeout(() => loadHostImages(containerElement), 100);
+                const root = containerElement && containerElement.querySelectorAll ? containerElement : document;
+                const hostContainers = root.querySelectorAll('.host-avatar-container');
+                const gridAvatars = root.querySelectorAll('img.sg-event-avatar[data-host-id]');
+                if (!hostContainers.length && !gridAvatars.length) {
+                    if (shouldRevealSchedule(root)) finishConventionPageLoading();
                     return;
                 }
 
-                const hostIds = Array.from(hostContainers).map(c => c.dataset.hostId).filter(Boolean);
-                if (hostIds.length === 0) return;
+                const neededIds = [];
+                hostContainers.forEach(container => {
+                    if (container.dataset.hostId) neededIds.push(String(container.dataset.hostId));
+                });
+                gridAvatars.forEach(img => {
+                    if (img.dataset.hostId) neededIds.push(String(img.dataset.hostId));
+                });
+                const missingIds = [...new Set(neededIds)].filter(id => !getHostFromCatalog(id));
 
-                showLoadingBar();
-                const batchUrl = `/ajax/hosts/batch/?ids=${hostIds.join(',')}`;
-                fetch(batchUrl, { headers: { 'Accept': 'application/json' } })
-                    .then(async response => {
-                        const text = await response.text();
+                function paintHostImages() {
+                    hostContainers.forEach(hostContainer => {
+                        const hostData = getHostFromCatalog(hostContainer.dataset.hostId);
+                        const imgElement = ensureHostAvatarImg(hostContainer);
+                        applyPictureToImg(
+                            imgElement,
+                            hostData,
+                            hostContainer.getAttribute('data-title')
+                        );
+                    });
+                    gridAvatars.forEach(imgElement => {
+                        applyPictureToImg(
+                            imgElement,
+                            getHostFromCatalog(imgElement.dataset.hostId),
+                            imgElement.getAttribute('title') || imgElement.alt
+                        );
+                    });
+                    if (shouldRevealSchedule(root)) {
+                        waitForPaintedImages(root).then(finishConventionPageLoading);
+                    }
+                }
 
-                        // Detect common HTML login redirect or error page
-                        const trimmedText = text.trim();
-                        if (trimmedText.startsWith('<') && trimmedText.toLowerCase().includes('<html')) {
-                            throw new Error(`Non-JSON response from ${batchUrl} (HTML/login page).`);
-                        }
+                if (!missingIds.length) {
+                    paintHostImages();
+                    return;
+                }
 
-                        if (!response.ok) {
-                            const msg = `HTTP error! status: ${response.status} - ${trimmedText.substring(0, 256)}`;
-                            throw new Error(msg);
-                        } 
-
-                        try {
-                            return JSON.parse(trimmedText);
-                        } catch (parseError) {
-                            throw new Error(`Invalid JSON from ${batchUrl}: ${parseError.message}; response: ${trimmedText.substring(0, 256)}`);
-                        }
-                    })
+                fetch(`/ajax/hosts/batch/?ids=${missingIds.join(',')}&convention_id={{ convention.pk }}`, {
+                    headers: { 'Accept': 'application/json' }
+                })
+                    .then(response => response.json())
                     .then(data => {
-                        const hostsById = {};
-                        if (data && Array.isArray(data.hosts)) {
-                            data.hosts.forEach(h => {
-                                hostsById[String(h.id)] = h;
-                            });
-                        }
-
-                        hostContainers.forEach(hostContainer => {
-                            const hostId = String(hostContainer.dataset.hostId);
-                            const hostData = hostsById[hostId];
-                            const imgElement = ensureHostAvatarImg(hostContainer);
-
-                            if (hostData && hostData.profile_picture) {
-                                let imageUrl = hostData.profile_picture;
-                                if (imageUrl.startsWith('/') && !imageUrl.startsWith('//') && !imageUrl.startsWith('data:')) {
-                                    imageUrl = window.location.origin + imageUrl;
-                                }
-                                imgElement.src = imageUrl;
-                            } else {
-                                const hostName = hostData?.name || hostContainer.getAttribute('data-title') || '?';
-                                const initials = generateInitials(hostName);
-                                const color = generateAvatarColor(hostName);
-                                imgElement.src = generateInitialsAvatar(initials, color);
-                            }
-
-                            imgElement.onerror = () => {
-                                const hostName = hostData?.name || hostContainer.getAttribute('data-title') || '?';
-                                const initials = generateInitials(hostName);
-                                const color = generateAvatarColor(hostName);
-                                imgElement.src = generateInitialsAvatar(initials, color);
-                                imgElement.onerror = null;
-                            };
-                        });
+                        mergeHostsIntoCatalog(data && data.hosts);
                     })
                     .catch(error => {
                         console.error('Bulk host image load failed:', error);
-                        hostContainers.forEach(hostContainer => {
-                            const imgElement = ensureHostAvatarImg(hostContainer);
-                            const hostName = hostContainer.getAttribute('data-title') || '?';
-                            const initials = generateInitials(hostName);
-                            const color = generateAvatarColor(hostName);
-                            imgElement.src = generateInitialsAvatar(initials, color);
-                        });
                     })
-                    .finally(hideLoadingBar);
+                    .finally(paintHostImages);
             });
         }
+        window.loadHostImages = loadHostImages;
 
         // Function to generate initials from a name
         function generateInitials(name) {
@@ -611,7 +774,6 @@ window.addEventListener('load', function() {
                     if (isWebkitSafari) {
                         schedule.style.display = 'block';
                     }
-                    loadHostImages(schedule);
                 });
                 dayGrids.forEach(grid => {
                     grid.classList.remove('d-none', 'day-filter-hidden');
@@ -627,7 +789,6 @@ window.addEventListener('load', function() {
                     if (isWebkitSafari) {
                         schedule.style.display = isSelected ? 'block' : 'none';
                     }
-                    if (isSelected) loadHostImages(schedule);
                 });
                 dayGrids.forEach((grid, index) => {
                     const isSelected = index === parseInt(value, 10);
@@ -643,6 +804,7 @@ window.addEventListener('load', function() {
             localStorage.setItem('conventionDayIndex', value);
             currentDayIndex = value;
             updateTimeSlotsVisibility();
+            loadHostImages(document);
 
             if (document.body.classList.contains('grid-view') && typeof window.refreshScheduleCalendars === 'function') {
                 setTimeout(function() {
@@ -1090,30 +1252,9 @@ window.addEventListener('load', function() {
 
         // Initial update of time slots visibility
         updateTimeSlotsVisibility();
+        loadHostImages(document);
 
-        // Initial load of host images on the main schedule page
-        window.addEventListener('load', function() {
-            const isMobile = window.innerWidth <= 767.98;
-            const initialDelay = isMobile ? 1000 : 750;
-
-            setTimeout(() => {
-                loadHostImages(document);
-                if (typeof window.refreshScheduleCalendars === 'function') {
-                    window.refreshScheduleCalendars();
-                }
-            }, initialDelay);
-        });
-
-        let lastWidth = window.innerWidth;
         window.addEventListener('resize', function() {
-            const currentWidth = window.innerWidth;
-            if ((lastWidth <= 767.98 && currentWidth > 767.98) ||
-                (lastWidth > 767.98 && currentWidth <= 767.98)) {
-                setTimeout(() => {
-                    loadHostImages(document);
-                }, 500);
-            }
-            lastWidth = currentWidth;
             if (typeof window.refreshScheduleCalendars === 'function') {
                 window.refreshScheduleCalendars();
             }
@@ -1142,137 +1283,142 @@ window.addEventListener('load', function() {
             });
         }
 
-        // Speaker card click handler
+        function renderSpeakerDetails(host) {
+            let html = `
+                <div class="text-center mb-4">
+            `;
+
+            const initials = generateInitials(host.name || 'Unknown');
+            const color = generateAvatarColor(host.name || 'Unknown');
+            if (host.profile_picture) {
+                html += `
+                    <img src="${host.profile_picture}"
+                         alt="${host.name || 'Speaker'}"
+                         class="rounded-circle mb-3"
+                         style="width: 150px; height: 150px; object-fit: cover;"
+                         onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=150 height=150><rect width=150 height=150 fill=\'${encodeURIComponent(color)}\' /><text x=50% y=50% fill=\'white\' font-family=\'Arial\' font-size=60 text-anchor=middle dominant-baseline=middle>${initials}</text></svg>'">
+                `;
+            } else {
+                html += `
+                    <div class="rounded-circle mb-3 d-flex align-items-center justify-content-center"
+                         style="width: 150px; height: 150px; background-color: ${color}; color: white; font-weight: bold; font-size: 60px; text-align: center; line-height: 150px;">
+                        ${initials}
+                    </div>
+                `;
+            }
+
+            html += `
+                    <h3>${host.name || 'Unknown'}</h3>
+                    <p class="text-muted">${host.panels_count || 0} Event${(host.panels_count || 0) !== 1 ? 's' : ''}</p>
+                </div>
+            `;
+
+            function isLightColor(colorValue) {
+                if (!colorValue) return true;
+                let r, g, b;
+                if (colorValue.startsWith('#')) {
+                    r = parseInt(colorValue.substr(1,2), 16);
+                    g = parseInt(colorValue.substr(3,2), 16);
+                    b = parseInt(colorValue.substr(5,2), 16);
+                } else if (colorValue.startsWith('rgb')) {
+                    const rgb = colorValue.match(/\d+/g);
+                    r = parseInt(rgb[0]);
+                    g = parseInt(rgb[1]);
+                    b = parseInt(rgb[2]);
+                } else {
+                    return true;
+                }
+                const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                return luminance > 0.5;
+            }
+
+            if (host.panels && Array.isArray(host.panels) && host.panels.length > 0) {
+                html += '<div class="panels-list">';
+                host.panels.forEach(panel => {
+                    const tagColor = panel.tag_color || '#ffffff';
+                    const textColor = isLightColor(tagColor) ? '#222' : '#fff';
+                    const cancelledClass = panel.cancelled ? ' cancelled-panel' : '';
+                    const cancelledBadge = panel.cancelled
+                        ? '<span class="badge bg-secondary">Cancelled</span>'
+                        : '';
+                    html += `
+                        <div class="modal-panel-card${cancelledClass}" data-panel-id="${panel.id}" style="background:${tagColor}; color:${textColor}; cursor:pointer;">
+                            <div class="modal-panel-header">
+                                <span class="modal-panel-title" style="color:${textColor};">${panel.title}</span>
+                                ${cancelledBadge}
+                            </div>
+                            <div class="modal-panel-desc" style="color:${textColor};">${panel.description || ''}</div>
+                            <div class="modal-panel-info" style="color:${textColor};">
+                                <span class="modal-panel-time"><i class="material-icons" style="color:${textColor};">schedule</i> ${panel.day_of_week ? `<strong>${panel.day_of_week},</strong> ` : ''}${panel.start_time}</span>
+                                <span class="modal-panel-room"><i class="material-icons" style="color:${textColor};">room</i> ${panel.room_name || panel.room || ''}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            } else {
+                html += '<p class="text-center text-muted">No events scheduled for this speaker.</p>';
+            }
+
+            speakerDetailContent.innerHTML = html;
+            speakerDetailModal.show();
+        }
+
+        speakerDetailContent.addEventListener('click', function(e) {
+            const card = e.target.closest('.modal-panel-card');
+            if (card && card.dataset.panelId) {
+                loadPanelDetailModal(card.dataset.panelId)
+                    .catch(error => {
+                        console.error('Error loading panel details:', error);
+                        panelDetailContent.innerHTML = '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
+                        const footerTarget = getPanelDetailFooter();
+                        if (footerTarget) {
+                            footerTarget.innerHTML = '';
+                            footerTarget.classList.add('d-none');
+                        }
+                        speakerDetailModal.hide();
+                        panelDetailModal.show();
+                    });
+            }
+        });
+
         document.querySelectorAll('.speaker-card').forEach(card => {
             card.addEventListener('click', function() {
                 const speakerId = this.dataset.speakerId;
                 currentSpeakerId = speakerId;
-                
-                // Fetch speaker details and panels using bulk endpoint (single request)
-                fetch(`/ajax/hosts/batch/?ids=${speakerId}&convention_id={{ convention.pk }}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const host = (data && Array.isArray(data.hosts) && data.hosts.length > 0) ? data.hosts[0] : null;
-                    if (!host) {
-                        throw new Error('Host not found');
-                    }
-                    
-                    // Create HTML for speaker details and panels
-                    let html = `
-                        <div class="text-center mb-4">
-                    `;
-                    
-                    // Handle profile picture or generate initials avatar
-                    const initials = generateInitials(host.name || 'Unknown');
-                    const color = generateAvatarColor(host.name || 'Unknown');
-                    if (host.profile_picture) {
-                        html += `
-                            <img src="${host.profile_picture}" 
-                                 alt="${host.name || 'Speaker'}" 
-                                 class="rounded-circle mb-3" 
-                                 style="width: 150px; height: 150px; object-fit: cover;"
-                                 onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=150 height=150><rect width=150 height=150 fill=\'${encodeURIComponent(color)}\' /><text x=50% y=50% fill=\'white\' font-family=\'Arial\' font-size=60 text-anchor=middle dominant-baseline=middle>${initials}</text></svg>'">
-                        `;
-                    } else {
-                        html += `
-                            <div class="rounded-circle mb-3 d-flex align-items-center justify-content-center" 
-                                 style="width: 150px; height: 150px; background-color: ${color}; color: white; font-weight: bold; font-size: 60px; text-align: center; line-height: 150px;">
-                                ${initials}
-                            </div>
-                        `;
-                    }
-                    
-                    html += `
-                            <h3>${host.name || 'Unknown'}</h3>
-                            <p class="text-muted">${host.panels_count || 0} Event${(host.panels_count || 0) !== 1 ? 's' : ''}</p>
-                        </div>
-                    `;
-
-                    function isLightColor(color) {
-                        if (!color) return true;
-                        let r, g, b;
-                        if (color.startsWith('#')) {
-                            r = parseInt(color.substr(1,2), 16);
-                            g = parseInt(color.substr(3,2), 16);
-                            b = parseInt(color.substr(5,2), 16);
-                        } else if (color.startsWith('rgb')) {
-                            const rgb = color.match(/\d+/g);
-                            r = parseInt(rgb[0]);
-                            g = parseInt(rgb[1]);
-                            b = parseInt(rgb[2]);
-                        } else {
-                            return true;
+                const host = getHostFromCatalog(speakerId);
+                if (host) {
+                    renderSpeakerDetails(host);
+                    return;
+                }
+                fetch(`{% url 'events:get_convention_catalog_ajax' convention.pk %}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
                         }
-                        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-                        return luminance > 0.5;
-                    }
-
-                    if (host.panels && Array.isArray(host.panels) && host.panels.length > 0) {
-                        html += '<div class="panels-list">';
-                        host.panels.forEach(panel => {
-                            const tagColor = panel.tag_color || '#ffffff';
-                            const textColor = isLightColor(tagColor) ? '#222' : '#fff';
-                            const cancelledClass = panel.cancelled ? ' cancelled-panel' : '';
-                            const cancelledBadge = panel.cancelled
-                                ? '<span class="badge bg-secondary">Cancelled</span>'
-                                : '';
-                            html += `
-                                <div class="modal-panel-card${cancelledClass}" data-panel-id="${panel.id}" style="background:${tagColor}; color:${textColor}; cursor:pointer;">
-                                    <div class="modal-panel-header">
-                                        <span class="modal-panel-title" style="color:${textColor};">${panel.title}</span>
-                                        ${cancelledBadge}
-                                    </div>
-                                    <div class="modal-panel-desc" style="color:${textColor};">${panel.description || ''}</div>
-                                    <div class="modal-panel-info" style="color:${textColor};">
-                                        <span class="modal-panel-time"><i class="material-icons" style="color:${textColor};">schedule</i> ${panel.day_of_week ? `<strong>${panel.day_of_week},</strong> ` : ''}${panel.start_time}</span>
-                                        <span class="modal-panel-room"><i class="material-icons" style="color:${textColor};">room</i> ${panel.room_name || panel.room || ''}</span>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                        html += '</div>';
-                    } else {
-                        html += '<p class="text-center text-muted">No events scheduled for this speaker.</p>';
-                    }
-
-                    speakerDetailContent.innerHTML = html;
-                    speakerDetailModal.show();
-
-                    // Make modal-panel-card clickable to open event detail modal
-                    speakerDetailContent.addEventListener('click', function(e) {
-                        const card = e.target.closest('.modal-panel-card');
-                        if (card && card.dataset.panelId) {
-                            const panelId = card.dataset.panelId;
-                            loadPanelDetailModal(panelId)
-                                .catch(error => {
-                                    console.error('Error loading panel details:', error);
-                                    panelDetailContent.innerHTML = '<div class="alert alert-danger">Error loading panel details. Please try again.</div>';
-                                    const footerTarget = getPanelDetailFooter();
-                                    if (footerTarget) {
-                                        footerTarget.innerHTML = '';
-                                        footerTarget.classList.add('d-none');
-                                    }
-                                    speakerDetailModal.hide();
-                                    panelDetailModal.show();
-                                });
+                        return response.json();
+                    })
+                    .then(data => {
+                        storeHostCatalog(data);
+                        window.__hostCatalog = data;
+                        window.__hostsById = indexHostCatalog(data);
+                        const catalogHost = getHostFromCatalog(speakerId);
+                        if (!catalogHost) {
+                            throw new Error('Host not found');
                         }
+                        renderSpeakerDetails(catalogHost);
+                    })
+                    .catch(error => {
+                        console.error('Error loading speaker details:', error);
+                        speakerDetailContent.innerHTML = '<div class="alert alert-danger">Error loading speaker details. Please try again.</div>';
+                        speakerDetailModal.show();
                     });
-                })
-                .catch(error => {
-                    console.error('Error loading speaker details:', error);
-                    speakerDetailContent.innerHTML = '<div class="alert alert-danger">Error loading speaker details. Please try again.</div>';
-                    speakerDetailModal.show();
-                });
             });
         });
 
     } catch (error) {
         console.error('Error initializing convention detail page:', error);
+        finishConventionPageLoading();
     }
 });
 </script>
@@ -1405,7 +1551,7 @@ window.addEventListener('load', function() {
         ).join('');
 
         const hosts = (props.hosts || []).map(host =>
-            `<img class="sg-event-avatar" src="${escapeHtml(host.avatarUrl || '')}" alt="${escapeHtml(host.name || '')}" title="${escapeHtml(host.name || '')}" loading="lazy" onerror="this.style.display='none'">`
+            `<img class="sg-event-avatar" data-host-id="${escapeHtml(host.id || '')}" src="${escapeHtml(host.avatarUrl || '')}" alt="${escapeHtml(host.name || '')}" title="${escapeHtml(host.name || '')}" loading="lazy">`
         ).join('');
 
         const badge = props.cancelled
@@ -1601,6 +1747,9 @@ window.addEventListener('load', function() {
 
     function refreshScheduleCalendars() {
         dayViews.forEach(fitDayView);
+        if (typeof window.loadHostImages === 'function') {
+            window.loadHostImages(document);
+        }
     }
 
     document.querySelectorAll('.fc-day-wrap').forEach(wrap => {
@@ -1631,6 +1780,16 @@ window.addEventListener('load', function() {
 {% endblock %}
 
 {% block content %}
+<div id="convention-page-loader" role="status" aria-live="polite">
+    <div class="convention-page-loader-card">
+        <div class="convention-page-loader-spinner" aria-hidden="true"></div>
+        <p class="convention-page-loader-text">{{ convention.name }} is loading</p>
+        <div class="convention-page-loader-bar" aria-hidden="true">
+            <div class="convention-page-loader-bar-fill"></div>
+        </div>
+    </div>
+</div>
+<div id="convention-page-data">
 <div class="row mb-4">
     <div class="col">
         {# Convention Name #}
@@ -1751,24 +1910,16 @@ window.addEventListener('load', function() {
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 var feedPath = '{% url "events:convention_ical_feed" pk=convention.pk %}';
+                var rsvpFeedPathTemplate = '{% url "events:convention_ical_feed_token" pk=convention.pk token="__TOKEN__" %}';
                 var rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
-
-                function getRsvpQueryString() {
-                    var toggle = document.getElementById('showMyRsvpsToggle');
-                    if (!toggle || !toggle.checked || !rsvpFeedToken) {
-                        return '';
-                    }
-                    return 'rsvp=' + encodeURIComponent(rsvpFeedToken);
-                }
 
                 function getFeedUrl() {
                     var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
-                    var url = origin + feedPath;
-                    var rsvpQuery = getRsvpQueryString();
-                    if (rsvpQuery) {
-                        url += '?' + rsvpQuery;
+                    var toggle = document.getElementById('showMyRsvpsToggle');
+                    if (toggle && toggle.checked && rsvpFeedToken) {
+                        return origin + rsvpFeedPathTemplate.replace('__TOKEN__', encodeURIComponent(rsvpFeedToken));
                     }
-                    return url;
+                    return origin + feedPath;
                 }
 
                 function refreshCalendarFeedUrl() {
@@ -2090,15 +2241,8 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="col-md-4 col-lg-3 mb-4 speaker-card-container" data-speaker-name="{{ host.name|lower }}">
                 <div class="card h-100 speaker-card" data-speaker-id="{{ host.id }}" style="cursor: pointer;">
                     <div class="card-body text-center">
-                        <div class="mb-3 d-flex justify-content-center">
-                            {% if host.avatar_url %}
-                            <img src="{{ host.avatar_url }}" alt="{{ host.name }}" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
-                            {% else %}
-                            <div class="rounded-circle d-flex align-items-center justify-content-center" 
-                                 style="width: 120px; height: 120px; background-color: {{ host.get_avatar_color }}; color: white; font-weight: bold; font-size: 48px; display: flex; align-items: center; justify-content: center;">
-                                {{ host.get_initials }}
-                            </div>
-                            {% endif %}
+                        <div class="mb-3 d-flex justify-content-center host-avatar-container" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
+                            <img alt="{{ host.name }}" class="host-avatar rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
                         </div>
                         <h5 class="card-title">{{ host.name }}</h5>
                         <p class="card-text text-muted">
@@ -2115,6 +2259,7 @@ document.addEventListener('DOMContentLoaded', function () {
             {% endfor %}
         </div>
     </div>
+</div>
 </div>
 
 <!-- Event Detail Modal -->

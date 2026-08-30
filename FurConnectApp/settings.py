@@ -227,6 +227,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'furconnect',
+        'TIMEOUT': 3600,
+    }
+}
+
 # Login URL configuration
 LOGIN_URL = 'events:login'
 LOGIN_REDIRECT_URL = 'schedule'

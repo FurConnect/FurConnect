@@ -258,3 +258,275 @@ class EventzillaVerifyEmailViewTests(SimpleTestCase):
             'barcode': 'ABC123',
         })
         self.assertEqual(response.status_code, 403)
+
+
+class ConventionCatalogTests(TransactionTestCase):
+    def setUp(self):
+        from datetime import date, time as time_of_day
+
+        from django.core.cache import cache
+
+        from events.models import Convention, ConventionDay, Panel, PanelHost, PanelHostOrder, Room, Tag
+
+        cache.clear()
+        Convention.objects.all().delete()
+        self.convention = Convention.objects.create(
+            name='Catalog Con',
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 2),
+            location='Test City',
+        )
+        self.day = ConventionDay.objects.create(convention=self.convention, date=date(2026, 8, 1))
+        self.room = Room.objects.create(convention=self.convention, name='Main Hall', sort_order=0)
+        self.host = PanelHost.objects.create(name='Ada Lovelace')
+        self.tag = Tag.objects.create(name='Science', color='#112233')
+        self.panel = Panel.objects.create(
+            title='Computing',
+            description='Talk about engines',
+            convention_day=self.day,
+            start_time=time_of_day(10, 0),
+            end_time=time_of_day(11, 0),
+            room=self.room,
+        )
+        PanelHostOrder.objects.create(panel=self.panel, host=self.host, priority=0)
+        self.panel.tags.add(self.tag)
+
+    def test_public_catalog_includes_hosts_rooms_and_tags(self):
+        from events.catalog import build_public_host_catalog
+
+        catalog = build_public_host_catalog(self.convention)
+
+        self.assertEqual(catalog['convention_id'], self.convention.pk)
+        self.assertTrue(catalog['version'])
+        self.assertEqual(len(catalog['hosts']), 1)
+        self.assertEqual(catalog['hosts'][0]['name'], 'Ada Lovelace')
+        self.assertEqual(catalog['hosts'][0]['panels_count'], 1)
+        self.assertEqual(catalog['hosts'][0]['panels'][0]['title'], 'Computing')
+        self.assertEqual(catalog['rooms'][0]['name'], 'Main Hall')
+        self.assertEqual(catalog['tags'][0]['name'], 'Science')
+
+    def test_convention_detail_embeds_catalog(self):
+        client = Client()
+        response = client.get(f'/convention/{self.convention.pk}/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="host-catalog"')
+        self.assertContains(response, 'Ada Lovelace')
+        self.assertContains(response, 'furconnect:host-catalog:')
+        self.assertContains(response, 'loadHostImages')
+        self.assertContains(response, 'id="convention-page-loader"')
+        self.assertContains(response, f'{self.convention.name} is loading')
+        self.assertContains(response, 'id="convention-page-data"')
+
+    def test_catalog_ajax_returns_one_payload(self):
+        client = Client()
+        response = client.get(f'/ajax/convention/{self.convention.pk}/catalog/')
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertIn('hosts', payload)
+        self.assertIn('rooms', payload)
+        self.assertIn('tags', payload)
+        self.assertEqual(payload['hosts'][0]['name'], 'Ada Lovelace')
+        self.assertEqual(response['Cache-Control'], 'private, max-age=60')
+
+
+class ConcatCacheTests(SimpleTestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    @override_settings(CONCAT_ENABLED=True)
+    @patch('events.concat.profiles.get_user_by_id')
+    def test_profile_pictures_are_stored_and_reused(self, get_user_by_id):
+        from events.concat.profiles import get_concat_profile_pictures
+
+        get_user_by_id.return_value = {'profilePictureUrl': 'https://cdn.example/ada.png'}
+
+        first = get_concat_profile_pictures(['42'], token='tok')
+        second = get_concat_profile_pictures(['42'], token='tok')
+
+        self.assertEqual(first['42'], 'https://cdn.example/ada.png')
+        self.assertEqual(second['42'], 'https://cdn.example/ada.png')
+        get_user_by_id.assert_called_once_with('42', token='tok')
+
+    @patch('events.concat.oauth.post_token')
+    def test_service_token_is_stored_and_reused(self, post_token):
+        from events.concat.oauth import get_service_token
+
+        post_token.return_value = {'access_token': 'abc123', 'expires_in': 3600}
+
+        first = get_service_token(scope='user:read')
+        second = get_service_token(scope='user:read')
+
+        self.assertEqual(first, 'abc123')
+        self.assertEqual(second, 'abc123')
+        post_token.assert_called_once()
+
+
+class RsvpCalendarTokenTests(SimpleTestCase):
+    def test_token_roundtrip_hides_email_and_avoids_colons(self):
+        from events.rsvp.feed import make_rsvp_feed_token, user_id_from_rsvp_feed_token
+
+        email = 'guest@example.com'
+        token = make_rsvp_feed_token(email)
+
+        self.assertNotIn(':', token)
+        self.assertNotIn('@', token)
+        self.assertNotIn(email, token)
+        self.assertEqual(user_id_from_rsvp_feed_token(token), email)
+
+    def test_legacy_colon_token_still_decodes(self):
+        from django.core.signing import TimestampSigner
+        from events.rsvp.feed import user_id_from_rsvp_feed_token
+
+        legacy = TimestampSigner(salt='furconnect-rsvp-feed').sign('concat-user-99')
+        self.assertEqual(user_id_from_rsvp_feed_token(legacy), 'concat-user-99')
+
+    def test_feed_user_ids_include_eventzilla_and_concat_forms(self):
+        from events.rsvp.feed import attendee_ids_for_feed_user
+
+        ids = attendee_ids_for_feed_user('guest@example.com')
+        self.assertIn('guest@example.com', ids)
+        self.assertIn('eventzilla:guest@example.com', ids)
+
+
+class RsvpCalendarFeedViewTests(TransactionTestCase):
+    def setUp(self):
+        from datetime import date, time as time_of_day
+
+        from events.models import Convention, ConventionDay, Panel, PanelRSVP, Room
+
+        Convention.objects.all().delete()
+        self.convention = Convention.objects.create(
+            name='RSVP Con',
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 2),
+            location='Test City',
+        )
+        day = ConventionDay.objects.create(convention=self.convention, date=date(2026, 8, 1))
+        room = Room.objects.create(convention=self.convention, name='Hall', sort_order=0)
+        self.rsvped = Panel.objects.create(
+            title='My Panel',
+            description='Saved event',
+            convention_day=day,
+            start_time=time_of_day(10, 0),
+            end_time=time_of_day(11, 0),
+            room=room,
+        )
+        self.other = Panel.objects.create(
+            title='Other Panel',
+            description='Not saved',
+            convention_day=day,
+            start_time=time_of_day(12, 0),
+            end_time=time_of_day(13, 0),
+            room=room,
+        )
+        PanelRSVP.objects.create(
+            panel=self.rsvped,
+            attendee_id='guest@example.com',
+            display_name='Guest',
+        )
+
+    def test_token_path_returns_only_rsvps_without_session(self):
+        from events.rsvp.feed import make_rsvp_feed_token
+
+        token = make_rsvp_feed_token('guest@example.com')
+        client = Client()
+        response = client.get(f'/convention/{self.convention.pk}/calendar/{token}.ics')
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode('utf-8', errors='ignore')
+        self.assertIn('My Panel', body)
+        self.assertNotIn('Other Panel', body)
+
+    def test_query_token_returns_only_rsvps_without_session(self):
+        from events.rsvp.feed import make_rsvp_feed_token
+
+        token = make_rsvp_feed_token('guest@example.com')
+        client = Client()
+        response = client.get(f'/convention/{self.convention.pk}/calendar.ics', {'rsvp': token})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode('utf-8', errors='ignore')
+        self.assertIn('My Panel', body)
+        self.assertNotIn('Other Panel', body)
+
+    def test_invalid_token_returns_empty_calendar(self):
+        client = Client()
+        response = client.get(
+            f'/convention/{self.convention.pk}/calendar.ics',
+            {'rsvp': 'not-a-valid-token'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode('utf-8', errors='ignore')
+        self.assertNotIn('My Panel', body)
+        self.assertNotIn('Other Panel', body)
+
+
+class PanelTagOrderTests(TransactionTestCase):
+    def setUp(self):
+        from datetime import date, time as time_of_day
+
+        from events.models import Convention, ConventionDay, Panel, PanelTag, Room, Tag
+
+        Convention.objects.all().delete()
+        self.convention = Convention.objects.create(
+            name='Tag Order Con',
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 2),
+            location='Test City',
+        )
+        day = ConventionDay.objects.create(convention=self.convention, date=date(2026, 8, 1))
+        room = Room.objects.create(convention=self.convention, name='Hall', sort_order=0)
+        self.tag_a = Tag.objects.create(name='Alpha', color='#111111')
+        self.tag_b = Tag.objects.create(name='Beta', color='#222222')
+        self.panel = Panel.objects.create(
+            title='Tagged Panel',
+            description='Has tags',
+            convention_day=day,
+            start_time=time_of_day(10, 0),
+            end_time=time_of_day(11, 0),
+            room=room,
+        )
+        PanelTag.objects.create(panel=self.panel, tag=self.tag_a, priority=0)
+        PanelTag.objects.create(panel=self.panel, tag=self.tag_b, priority=1)
+
+    def test_form_save_keeps_posted_tag_order(self):
+        from events.forms import PanelForm
+        from events.models import PanelTag
+
+        form = PanelForm(
+            {
+                'title': self.panel.title,
+                'description': self.panel.description,
+                'convention_day': str(self.panel.convention_day_id),
+                'start_time': '10:00',
+                'end_time': '11:00',
+                'room': str(self.panel.room_id),
+                'tags': [str(self.tag_b.pk), str(self.tag_a.pk)],
+            },
+            instance=self.panel,
+            convention=self.convention,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+
+        ordered = list(
+            PanelTag.objects.filter(panel=self.panel).order_by('priority').values_list('tag_id', flat=True)
+        )
+        self.assertEqual(ordered, [self.tag_b.pk, self.tag_a.pk])
+
+    def test_form_initial_tags_follow_priority(self):
+        from events.forms import PanelForm
+        from events.models import PanelTag
+
+        PanelTag.objects.filter(panel=self.panel, tag=self.tag_b).update(priority=0)
+        PanelTag.objects.filter(panel=self.panel, tag=self.tag_a).update(priority=1)
+
+        form = PanelForm(instance=self.panel, convention=self.convention)
+        self.assertEqual(list(form.initial['tags']), [self.tag_b.pk, self.tag_a.pk])
+
+
+

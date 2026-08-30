@@ -1,9 +1,14 @@
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 from .exceptions import ConcatError
 from .oauth import get_service_token
 from .users import get_user_by_id
+
+_AVATAR_CACHE_PREFIX = 'concat:avatar:'
+_AVATAR_CACHE_TTL = 60 * 60 * 24
+_AVATAR_MISS_TTL = 60 * 10
 
 
 def extract_user_payload(response):
@@ -63,11 +68,17 @@ def parse_concat_user(user_data):
 def get_concat_profile_picture_url(user_id, token=None):
     if not settings.CONCAT_ENABLED or not user_id:
         return ''
+    cache_key = f'{_AVATAR_CACHE_PREFIX}{user_id}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         profile = parse_concat_user_profile(get_user_by_id(user_id, token=token))
-        return profile.get('avatar_url') or ''
+        avatar_url = profile.get('avatar_url') or ''
     except (ConcatError, requests.RequestException):
-        return ''
+        avatar_url = ''
+    cache.set(cache_key, avatar_url, timeout=_AVATAR_CACHE_TTL if avatar_url else _AVATAR_MISS_TTL)
+    return avatar_url
 
 
 def get_concat_profile_pictures(user_ids, token=None):
@@ -76,13 +87,24 @@ def get_concat_profile_pictures(user_ids, token=None):
         return {}
 
     unique_ids = list(dict.fromkeys(user_ids))
+    pictures = {}
+    missing_ids = []
+    for user_id in unique_ids:
+        cached = cache.get(f'{_AVATAR_CACHE_PREFIX}{user_id}')
+        if cached is not None:
+            pictures[user_id] = cached
+        else:
+            missing_ids.append(user_id)
+
+    if not missing_ids:
+        return pictures
+
     if token is None:
         try:
             token = get_service_token(scope='user:read')
         except (ConcatError, requests.RequestException):
-            return {}
+            return pictures
 
-    return {
-        user_id: get_concat_profile_picture_url(user_id, token=token)
-        for user_id in unique_ids
-    }
+    for user_id in missing_ids:
+        pictures[user_id] = get_concat_profile_picture_url(user_id, token=token)
+    return pictures

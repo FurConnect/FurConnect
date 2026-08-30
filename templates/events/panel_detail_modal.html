@@ -93,13 +93,7 @@
                 {% for host in panel.ordered_hosts %}
                 <div class="panel-detail-going-person" style="cursor: pointer;" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
                     <div class="host-avatar-container panel-detail-going-avatar-wrap" data-host-id="{{ host.id }}" data-title="{{ host.name }}">
-                        {% if host.avatar_url %}
-                        <img src="{{ host.avatar_url }}" alt="{{ host.name }}" class="host-avatar panel-detail-going-avatar">
-                        {% else %}
-                        <div class="panel-detail-going-avatar panel-detail-going-initials" style="background-color: {{ host.get_avatar_color }};">
-                            {{ host.get_initials }}
-                        </div>
-                        {% endif %}
+                        <img alt="{{ host.name }}" class="host-avatar panel-detail-going-avatar">
                     </div>
                     <span class="panel-detail-going-name">{{ host.name }}</span>
                 </div>

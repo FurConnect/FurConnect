@@ -5,16 +5,17 @@ from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from timezonefinder import TimezoneFinder
 
 from ..auth import can_manage_events, organizer_required
+from ..catalog import build_public_host_catalog
 from ..concat import attach_host_avatar_urls
 from ..forms import ConventionForm
-from ..models import Convention, PanelHost, Room, Tag
+from ..models import Convention, Panel, PanelHost, Room, Tag
 from ..rsvp import (
     filter_panels_for_user_rsvp,
     get_rsvp_user_id,
@@ -24,9 +25,33 @@ from ..rsvp import (
 from .schedule_grid import build_display_days, build_schedule_grid_payload, collect_panel_hosts
 
 
+def _convention_days_queryset(convention):
+    return convention.days.prefetch_related(
+        Prefetch(
+            'panels',
+            queryset=(
+                Panel.objects.select_related('room', 'convention_day')
+                .prefetch_related(
+                    Prefetch(
+                        'host',
+                        queryset=PanelHost.objects.order_by('panelhostorder__priority'),
+                        to_attr='ordered_hosts',
+                    ),
+                    Prefetch(
+                        'tags',
+                        queryset=Tag.objects.order_by('paneltag__priority'),
+                        to_attr='ordered_tags',
+                    ),
+                )
+                .order_by('start_time')
+            ),
+        ),
+    ).order_by('date')
+
+
 def convention_detail(request, pk):
     convention = get_object_or_404(Convention, pk=pk)
-    days = convention.days.all().order_by('date')
+    days = _convention_days_queryset(convention)
 
     unique_tags = Tag.objects.filter(panels__convention_day__convention=convention).distinct().order_by('name')
     unique_rooms = Room.objects.filter(convention=convention).order_by('sort_order', 'name')
@@ -44,8 +69,9 @@ def convention_detail(request, pk):
     )
 
     display_days_with_panels = build_display_days(days)
-    attach_host_avatar_urls(collect_panel_hosts(display_days_with_panels))
-    attach_host_avatar_urls(convention_hosts)
+    attach_host_avatar_urls(
+        list(collect_panel_hosts(display_days_with_panels)) + list(convention_hosts)
+    )
 
     rsvp_user_id = get_rsvp_user_id(request)
     user_rsvp_panel_ids = get_user_rsvp_panel_ids(request, convention) if rsvp_user_id else set()
@@ -54,11 +80,13 @@ def convention_detail(request, pk):
         display_days_with_panels,
         user_rsvp_panel_ids,
     )
+    host_catalog = build_public_host_catalog(convention)
 
     return render(request, 'events/convention_detail.html', {
         'convention': convention,
         'days': display_days_with_panels,
         'schedule_grid_payload': schedule_grid_payload,
+        'host_catalog': host_catalog,
         'unique_tags': unique_tags,
         'unique_rooms': unique_rooms,
         'convention_hosts': convention_hosts,
@@ -108,10 +136,10 @@ def convention_delete(request, pk):
         return redirect('events:schedule')
 
 
-def convention_ical_feed(request, pk):
+def convention_ical_feed(request, pk, token=None):
     convention = get_object_or_404(Convention, pk=pk)
     days = convention.days.all().order_by('date')
-    rsvp_param = request.GET.get('rsvp')
+    rsvp_param = token or request.GET.get('rsvp')
 
     cal = icalendar.Calendar()
     cal.add('prodid', '-//FurConnect//Convention Schedule//EN')

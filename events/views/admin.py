@@ -2,7 +2,7 @@ import colorsys
 import random
 
 from django.contrib import messages
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -22,8 +22,19 @@ def _get_admin_panel_data(convention):
     )
     panel_count = Panel.objects.filter(convention_day__convention=convention).count()
     day_count = convention.days.count()
+    hosts = (
+        PanelHost.objects.annotate(
+            panels_count=Count(
+                'panels',
+                filter=Q(panels__convention_day__convention=convention),
+                distinct=True,
+            )
+        )
+        .order_by('name')
+    )
     return {
         'rooms': rooms,
+        'hosts': hosts,
         'hosts_count': PanelHost.objects.count(),
         'tags': tags,
         'panel_count': panel_count,
