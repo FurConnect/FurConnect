@@ -152,7 +152,7 @@ def convention_ical_feed(request, pk, token=None):
     days = convention.days.prefetch_related(
         Prefetch(
             'panels',
-            queryset=Panel.objects.filter(cancelled=False).select_related('room').order_by('start_time'),
+            queryset=Panel.objects.select_related('room').order_by('start_time'),
         ),
     ).order_by('date')
     rsvp_param = token or request.GET.get('rsvp')
@@ -168,7 +168,7 @@ def convention_ical_feed(request, pk, token=None):
     cal.add('X-WR-CALNAME', calendar_name)
     cal.add(
         'X-WR-CALDESC',
-        f'Panels you RSVP’d to at {convention.name}'
+        f'Panels you RSVPed to at {convention.name}'
         if is_rsvp_feed
         else f'Full schedule for {convention.name}',
     )
@@ -184,10 +184,15 @@ def convention_ical_feed(request, pk, token=None):
         for panel in panels:
             event = icalendar.Event()
             title = panel.title or 'Untitled Event'
+            if panel.cancelled:
+                title = f'Cancelled: {title}'
             if is_rsvp_feed:
                 title = f'{title} (RSVP)'
             event.add('summary', title)
-            event.add('description', panel.description or '')
+            description = panel.description or ''
+            if panel.cancelled:
+                description = 'This event has been cancelled.\n\n' + description
+            event.add('description', description.strip())
             room_name = panel.room.name if panel.room else ''
             event.add('location', f'{convention.name} - {room_name}' if room_name else convention.name)
 
@@ -211,12 +216,15 @@ def convention_ical_feed(request, pk, token=None):
             event.add('dtend', end_utc)
             event.add('dtstamp', timezone.now().astimezone(pytz.UTC))
             event.add('uid', f'panel-{panel.pk}@furconnect')
-            event.add('status', 'CONFIRMED')
-            event.add('transp', 'OPAQUE')
+            if panel.cancelled:
+                event.add('status', 'CANCELLED')
+                event.add('transp', 'TRANSPARENT')
+            else:
+                event.add('status', 'CONFIRMED')
+                event.add('transp', 'OPAQUE')
             cal.add_component(event)
 
-    filename = 'my-rsvps.ics' if is_rsvp_feed else 'schedule.ics'
     response = HttpResponse(cal.to_ical(), content_type='text/calendar; charset=utf-8')
-    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    # No Content-Disposition: Google Calendar treats that as a file download, not a live feed.
     response['Cache-Control'] = 'public, max-age=300'
     return response

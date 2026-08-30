@@ -1929,21 +1929,22 @@ window.addEventListener('load', function() {
                         </div>
                         {% endif %}
                         <div id="calendarFeedScopeBanner" class="alert alert-info py-2" style="font-size:0.97em;"></div>
-                        <div class="d-grid gap-2 mb-3">
+                        <div id="calendarSubscribeStack" class="d-grid gap-2 mb-3">
                             <a id="googleCalendarSubscribeBtn" class="btn btn-primary d-flex align-items-center justify-content-center" target="_blank" rel="noopener noreferrer">
                                 <i class="material-icons me-2">event</i>
                                 <span id="googleCalendarSubscribeLabel">Add to Google Calendar</span>
                             </a>
-                            <div class="d-flex gap-2">
+                            <div id="calendarSubscribeSecondaryRow" class="d-flex gap-2">
                                 <a id="appleCalendarSubscribeBtn" class="btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center">
-                                    Apple Calendar
+                                    <i class="material-icons me-2">event</i>
+                                    <span id="appleCalendarSubscribeLabel">Apple Calendar</span>
                                 </a>
                                 <a id="outlookCalendarSubscribeBtn" class="btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center" target="_blank" rel="noopener noreferrer">
                                     Outlook
                                 </a>
                             </div>
                         </div>
-                        <p class="text-muted mb-2" style="font-size:0.9em;">Google Calendar usually refreshes subscribed calendars about once a day.</p>
+                        <p class="text-muted mb-2" style="font-size:0.9em;">Google’s one-click add is unreliable. If it does not add the calendar, copy the HTTPS URL below and paste it in Google Calendar under <b>Other calendars → From URL</b>.</p>
                         <p class="mb-2" style="font-size:0.95em;">Or copy the feed URL and add it in Google Calendar with <b>Other calendars → From URL</b>:</p>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" id="calendarFeedUrl" readonly>
@@ -1987,6 +1988,52 @@ window.addEventListener('load', function() {
                     return url.replace(/^https?:\/\//i, 'webcal://');
                 }
 
+                function toGoogleCidUrl(httpsUrl) {
+                    // Google's cid handler rejects https and encoded webcal. Use http:// unencoded;
+                    // Google follows the redirect to https when it fetches the feed.
+                    return httpsUrl.replace(/^https:\/\//i, 'http://');
+                }
+
+                function isAppleDevice() {
+                    var ua = navigator.userAgent || '';
+                    if (/iPhone|iPad|iPod/i.test(ua)) {
+                        return true;
+                    }
+                    if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) {
+                        return true;
+                    }
+                    return /Macintosh|Mac OS X/i.test(ua);
+                }
+
+                function layoutCalendarButtons() {
+                    var stack = document.getElementById('calendarSubscribeStack');
+                    var secondaryRow = document.getElementById('calendarSubscribeSecondaryRow');
+                    var googleBtn = document.getElementById('googleCalendarSubscribeBtn');
+                    var appleBtn = document.getElementById('appleCalendarSubscribeBtn');
+                    var outlookBtn = document.getElementById('outlookCalendarSubscribeBtn');
+                    if (!stack || !secondaryRow || !googleBtn || !appleBtn || !outlookBtn) {
+                        return;
+                    }
+                    var applePrimary = isAppleDevice();
+                    var primaryClass = 'btn btn-primary d-flex align-items-center justify-content-center';
+                    var secondaryClass = 'btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center';
+                    if (applePrimary) {
+                        appleBtn.className = primaryClass;
+                        googleBtn.className = secondaryClass;
+                        appleBtn.removeAttribute('target');
+                        googleBtn.setAttribute('target', '_blank');
+                        stack.insertBefore(appleBtn, stack.firstChild);
+                        secondaryRow.insertBefore(googleBtn, outlookBtn);
+                    } else {
+                        googleBtn.className = primaryClass;
+                        appleBtn.className = secondaryClass;
+                        googleBtn.setAttribute('target', '_blank');
+                        appleBtn.removeAttribute('target');
+                        stack.insertBefore(googleBtn, stack.firstChild);
+                        secondaryRow.insertBefore(appleBtn, outlookBtn);
+                    }
+                }
+
                 function isPublicFeedHost() {
                     var host = window.location.hostname;
                     return host !== 'localhost' && host !== '127.0.0.1' && host !== '0.0.0.0' && host !== '[::1]';
@@ -2011,23 +2058,31 @@ window.addEventListener('load', function() {
                     var urlInput = document.getElementById('calendarFeedUrl');
                     var googleBtn = document.getElementById('googleCalendarSubscribeBtn');
                     var googleLabel = document.getElementById('googleCalendarSubscribeLabel');
+                    var appleLabel = document.getElementById('appleCalendarSubscribeLabel');
                     var appleBtn = document.getElementById('appleCalendarSubscribeBtn');
                     var outlookBtn = document.getElementById('outlookCalendarSubscribeBtn');
                     var localNote = document.getElementById('calendarFeedLocalhostNote');
                     var banner = document.getElementById('calendarFeedScopeBanner');
+                    var applePrimary = isAppleDevice();
 
                     if (urlInput) {
                         urlInput.value = feedUrl;
                     }
                     if (googleBtn) {
-                        // Google treats encoded https URLs as calendar IDs. Leave webcal:// unencoded.
-                        googleBtn.href = 'https://calendar.google.com/calendar/r?cid=' + webcalUrl;
+                        googleBtn.href = 'https://calendar.google.com/calendar/render?cid=' + toGoogleCidUrl(feedUrl);
                     }
                     if (googleLabel) {
-                        googleLabel.textContent = isRsvp ? 'Add my RSVPs to Google Calendar' : 'Add full schedule to Google Calendar';
+                        googleLabel.textContent = applePrimary
+                            ? 'Google Calendar'
+                            : (isRsvp ? 'Add my RSVPs to Google Calendar' : 'Add full schedule to Google Calendar');
                     }
                     if (appleBtn) {
                         appleBtn.href = webcalUrl;
+                    }
+                    if (appleLabel) {
+                        appleLabel.textContent = applePrimary
+                            ? (isRsvp ? 'Add my RSVPs to Apple Calendar' : 'Add full schedule to Apple Calendar')
+                            : 'Apple Calendar';
                     }
                     if (outlookBtn) {
                         outlookBtn.href = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(feedUrl) + '&name=' + encodeURIComponent(displayName);
@@ -2055,6 +2110,7 @@ window.addEventListener('load', function() {
                     if (trigger) {
                         e.preventDefault();
                         syncFeedScopeFromPage();
+                        layoutCalendarButtons();
                         refreshCalendarFeedUrl();
                         var modalEl = document.getElementById('calendarFeedModal');
                         if (modalEl) {
@@ -2094,6 +2150,7 @@ window.addEventListener('load', function() {
                 });
 
                 // initial value on page load in case modal is opened later
+                layoutCalendarButtons();
                 refreshCalendarFeedUrl();
             });
         </script>

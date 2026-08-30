@@ -331,8 +331,9 @@ class ConventionCatalogTests(TransactionTestCase):
         self.assertContains(response, f'{self.convention.name} is loading')
         self.assertContains(response, 'id="convention-page-data"')
         self.assertContains(response, 'id="googleCalendarSubscribeBtn"')
-        self.assertContains(response, 'calendar.google.com/calendar/r?cid=')
-        self.assertContains(response, 'Leave webcal:// unencoded')
+        self.assertContains(response, 'id="appleCalendarSubscribeBtn"')
+        self.assertContains(response, 'calendar.google.com/calendar/render?cid=')
+        self.assertContains(response, 'function isAppleDevice')
 
     def test_catalog_ajax_returns_one_payload(self):
         client = Client()
@@ -501,6 +502,19 @@ class RsvpCalendarFeedViewTests(TransactionTestCase):
         self.assertNotIn('My Panel', body)
         self.assertNotIn('Other Panel', body)
 
+    def test_full_feed_is_not_gzipped_and_has_no_disposition(self):
+        client = Client()
+        response = client.get(
+            f'/convention/{self.convention.pk}/calendar.ics',
+            HTTP_ACCEPT_ENCODING='gzip',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.get('Content-Encoding'), 'gzip')
+        self.assertFalse(response.has_header('Content-Disposition'))
+        body = response.content.decode('utf-8', errors='ignore')
+        self.assertIn('BEGIN:VCALENDAR', body)
+
     def test_full_feed_is_not_labeled_as_rsvps(self):
         client = Client()
         response = client.get(f'/convention/{self.convention.pk}/calendar.ics')
@@ -512,6 +526,44 @@ class RsvpCalendarFeedViewTests(TransactionTestCase):
         self.assertNotIn('(My RSVPs)', body)
         self.assertNotIn('(RSVP)', body)
         self.assertIn('X-WR-CALNAME:RSVP Con', body)
+
+    def test_cancelled_panels_are_marked_in_full_feed(self):
+        from datetime import time as time_of_day
+
+        from events.models import Panel
+
+        Panel.objects.create(
+            title='Dropped Panel',
+            description='Will not happen',
+            convention_day=self.rsvped.convention_day,
+            start_time=time_of_day(14, 0),
+            end_time=time_of_day(15, 0),
+            room=self.rsvped.room,
+            cancelled=True,
+        )
+        client = Client()
+        response = client.get(f'/convention/{self.convention.pk}/calendar.ics')
+        body = response.content.decode('utf-8', errors='ignore')
+
+        self.assertIn('Cancelled: Dropped Panel', body)
+        self.assertIn('STATUS:CANCELLED', body)
+        self.assertIn('This event has been cancelled', body)
+        self.assertIn('STATUS:CONFIRMED', body)
+        self.assertNotIn('Cancelled: My Panel', body)
+
+    def test_cancelled_rsvp_panel_is_marked(self):
+        from events.rsvp.feed import make_rsvp_feed_token
+
+        self.rsvped.cancelled = True
+        self.rsvped.save(update_fields=['cancelled'])
+        token = make_rsvp_feed_token('guest@example.com')
+        client = Client()
+        response = client.get(f'/convention/{self.convention.pk}/calendar/{token}.ics')
+        body = response.content.decode('utf-8', errors='ignore')
+
+        self.assertIn('Cancelled: My Panel (RSVP)', body)
+        self.assertIn('STATUS:CANCELLED', body)
+        self.assertNotIn('Other Panel', body)
 
 
 class PanelTagOrderTests(TransactionTestCase):
