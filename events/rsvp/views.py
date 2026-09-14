@@ -6,10 +6,20 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
 from ..models import Panel, PanelRSVP
-from .enabled import can_rsvp
+from .enabled import can_rsvp, can_view_rsvp_attendees
 from .feed import get_rsvp_login_url
 from .identity import get_attendee_identity, get_rsvp_attendee_ids
 from .queries import get_rsvp_attendees
+
+
+def _rsvp_payload(request, panel, *, rsvped):
+    show_attendees = can_view_rsvp_attendees(request)
+    return {
+        'rsvped': rsvped,
+        'rsvp_count': panel.rsvps.count(),
+        'rsvp_attendees': get_rsvp_attendees(panel) if show_attendees else [],
+        'rsvp_show_attendees': show_attendees,
+    }
 
 
 @require_POST
@@ -48,11 +58,7 @@ def panel_rsvp_toggle(request, pk):
     ).first()
     if existing:
         existing.delete()
-        return JsonResponse({
-            'rsvped': False,
-            'rsvp_count': panel.rsvps.count(),
-            'rsvp_attendees': get_rsvp_attendees(panel),
-        })
+        return JsonResponse(_rsvp_payload(request, panel, rsvped=False))
 
     PanelRSVP.objects.create(
         panel=panel,
@@ -60,8 +66,4 @@ def panel_rsvp_toggle(request, pk):
         display_name=display_name,
         avatar_url=avatar_url,
     )
-    return JsonResponse({
-        'rsvped': True,
-        'rsvp_count': panel.rsvps.count(),
-        'rsvp_attendees': get_rsvp_attendees(panel),
-    })
+    return JsonResponse(_rsvp_payload(request, panel, rsvped=True))

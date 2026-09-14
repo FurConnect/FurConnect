@@ -276,6 +276,13 @@ window.addEventListener('load', function() {
             const container = document.getElementById('panelRsvpAttendees');
             if (!container) return;
 
+            const section = document.getElementById('panelRsvpAttendeesSection');
+            const showAttendees = !section || section.dataset.showAttendees !== 'false';
+            if (!showAttendees) {
+                container.innerHTML = '<p class="text-muted small mb-0" id="panelRsvpPrivacyMessage">Sign in to see who\'s going.</p>';
+                return;
+            }
+
             if (!attendees || attendees.length === 0) {
                 container.innerHTML = '<p class="text-muted small mb-0" id="panelRsvpEmptyMessage">No one has RSVP\'d yet.</p>';
                 return;
@@ -374,13 +381,17 @@ window.addEventListener('load', function() {
             const textEl = document.getElementById('panelRsvpButtonText');
             const iconEl = button.querySelector('.material-icons');
 
-            function setRsvpState(rsvped, count, attendees) {
+            function setRsvpState(rsvped, count, attendees, showAttendees) {
                 controls.dataset.rsvped = rsvped ? 'true' : 'false';
                 button.classList.toggle('btn-success', !rsvped);
                 button.classList.toggle('btn-danger', rsvped);
                 if (textEl) textEl.textContent = rsvped ? 'Remove from Schedule' : 'Add to Schedule';
                 if (iconEl) iconEl.textContent = rsvped ? 'bookmark' : 'bookmark_border';
                 updateRsvpCounts(count);
+                const section = document.getElementById('panelRsvpAttendeesSection');
+                if (section && typeof showAttendees === 'boolean') {
+                    section.dataset.showAttendees = showAttendees ? 'true' : 'false';
+                }
                 if (attendees) renderRsvpAttendees(attendees);
 
                 document.querySelectorAll(`[data-panel-id="${panelId}"]`).forEach(card => {
@@ -418,7 +429,7 @@ window.addEventListener('load', function() {
                                     if (!retryResponse.ok) {
                                         throw new Error(retryData.error || 'RSVP failed');
                                     }
-                                    setRsvpState(retryData.rsvped, retryData.rsvp_count, retryData.rsvp_attendees);
+                                    setRsvpState(retryData.rsvped, retryData.rsvp_count, retryData.rsvp_attendees, retryData.rsvp_show_attendees);
                                 })
                                 .catch(retryError => {
                                     alert(retryError.message);
@@ -443,7 +454,7 @@ window.addEventListener('load', function() {
                     }
                     throw new Error(data.error || 'RSVP failed');
                 }
-                setRsvpState(data.rsvped, data.rsvp_count, data.rsvp_attendees);
+                setRsvpState(data.rsvped, data.rsvp_count, data.rsvp_attendees, data.rsvp_show_attendees);
             })
             .catch(error => {
                 alert(error.message);

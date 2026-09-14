@@ -103,25 +103,29 @@
         {% endif %}
 
         {% if rsvp_enabled %}
-        <div class="panel-detail-going-card" id="panelRsvpAttendeesSection">
+        <div class="panel-detail-going-card" id="panelRsvpAttendeesSection" data-show-attendees="{{ rsvp_show_attendees|yesno:'true,false' }}">
             <div class="panel-detail-going-header">
                 <i class="material-icons">people</i>
                 <span id="panelRsvpGoingLabel">Going ({{ rsvp_count }})</span>
             </div>
             <div class="panel-detail-going-grid" id="panelRsvpAttendees">
-                {% for rsvp in rsvp_attendees %}
-                <div class="panel-detail-going-avatar-item" data-title="{{ rsvp.display_name }}" title="{{ rsvp.display_name }}">
-                    {% if rsvp.avatar_url %}
-                    <img src="{{ rsvp.avatar_url }}" alt="{{ rsvp.display_name }}" class="panel-detail-going-avatar">
-                    {% else %}
-                    <div class="panel-detail-going-avatar panel-detail-going-initials">
-                        {{ rsvp.display_name|default:"?"|slice:":1"|upper }}
+                {% if rsvp_show_attendees %}
+                    {% for rsvp in rsvp_attendees %}
+                    <div class="panel-detail-going-avatar-item" data-title="{{ rsvp.display_name }}" title="{{ rsvp.display_name }}">
+                        {% if rsvp.avatar_url %}
+                        <img src="{{ rsvp.avatar_url }}" alt="{{ rsvp.display_name }}" class="panel-detail-going-avatar">
+                        {% else %}
+                        <div class="panel-detail-going-avatar panel-detail-going-initials">
+                            {{ rsvp.display_name|default:"?"|slice:":1"|upper }}
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
-                </div>
-                {% empty %}
-                <p class="text-muted small mb-0" id="panelRsvpEmptyMessage">No one has RSVP'd yet.</p>
-                {% endfor %}
+                    {% empty %}
+                    <p class="text-muted small mb-0" id="panelRsvpEmptyMessage">No one has RSVP'd yet.</p>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted small mb-0" id="panelRsvpPrivacyMessage">Sign in to see who's going.</p>
+                {% endif %}
             </div>
         </div>
         {% endif %}

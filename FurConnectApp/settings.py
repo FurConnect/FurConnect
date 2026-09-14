@@ -325,6 +325,12 @@ EVENTZILLA_ALLOWED_TICKET_TYPES = [
     if ticket.strip()
 ]
 
+# FurConnect settings (requires Eventzilla or ConCat for RSVP features)
+# When True, hide RSVP attendee names/avatars from logged-out visitors.
+FURCONNECT_ENABLE_RSVP_PRIVACY = (
+    os.environ.get('FURCONNECT_ENABLE_RSVP_PRIVACY', 'False') == 'True'
+)
+
 def furconnect_version(request):
     from django.conf import settings
     return {'FURCONNECT_VERSION': getattr(settings, 'FURCONNECT_VERSION', 'dev')}

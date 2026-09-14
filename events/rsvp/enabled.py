@@ -27,3 +27,18 @@ def can_rsvp_with_eventzilla(request):
 
 def can_rsvp(request):
     return can_rsvp_with_concat(request) or can_rsvp_with_eventzilla(request)
+
+
+def can_view_rsvp_attendees(request):
+    """Whether the visitor may see RSVP names/avatars.
+
+    When FURCONNECT_ENABLE_RSVP_PRIVACY is on, only signed-in ConCat/Eventzilla
+    attendees (or managers) can see who is going.
+    """
+    if not getattr(settings, 'FURCONNECT_ENABLE_RSVP_PRIVACY', False):
+        return True
+    if request.session.get('concat_user_id'):
+        return True
+    if request.session.get('eventzilla_email'):
+        return True
+    return False

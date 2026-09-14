@@ -2,7 +2,13 @@ from django.conf import settings
 
 from ..eventzilla import get_eventzilla_account
 from ..models import PanelRSVP
-from .enabled import can_rsvp, can_rsvp_with_concat, can_rsvp_with_eventzilla, is_rsvp_enabled
+from .enabled import (
+    can_rsvp,
+    can_rsvp_with_concat,
+    can_rsvp_with_eventzilla,
+    can_view_rsvp_attendees,
+    is_rsvp_enabled,
+)
 from .feed import get_rsvp_login_url
 from .identity import get_attendee_identity, get_rsvp_attendee_ids
 from .queries import get_rsvp_attendees
@@ -14,6 +20,7 @@ def get_rsvp_context(request, panel):
 
     attendee_id, display_name, avatar_url = get_attendee_identity(request)
     authenticated = bool(attendee_id)
+    show_attendees = can_view_rsvp_attendees(request)
     provider = ''
     eventzilla_account = get_eventzilla_account(request)
     if request.session.get('concat_user_id'):
@@ -28,6 +35,7 @@ def get_rsvp_context(request, panel):
         'rsvp_can_rsvp': can_rsvp(request),
         'rsvp_provider': provider,
         'rsvp_login_url': get_rsvp_login_url(request),
+        'rsvp_show_attendees': show_attendees,
         'concat_enabled': settings.CONCAT_ENABLED,
         'concat_authenticated': bool(request.session.get('concat_user_id')),
         'concat_user_id': request.session.get('concat_user_id', ''),
@@ -56,5 +64,5 @@ def get_rsvp_context(request, panel):
             if attendee_id else False
         ),
         'rsvp_count': panel.rsvps.count(),
-        'rsvp_attendees': get_rsvp_attendees(panel),
+        'rsvp_attendees': get_rsvp_attendees(panel) if show_attendees else [],
     }
