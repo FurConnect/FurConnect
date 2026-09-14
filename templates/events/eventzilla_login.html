@@ -3,37 +3,113 @@
 
 {% block title %}Eventzilla Sign In{% endblock %}
 
+{% block extra_css %}
+<style>
+    .ez-login-page {
+        min-height: calc(100vh - 8rem);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem 1rem 2.5rem;
+    }
+
+    .ez-login-card {
+        width: 100%;
+        max-width: 32rem;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+        box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.18);
+    }
+
+    .ez-login-header {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 1rem 1.15rem;
+        border-bottom: 1px solid var(--bs-border-color);
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--bs-body-color);
+    }
+
+    .ez-login-header .material-icons {
+        font-size: 1.35rem;
+        line-height: 1;
+        opacity: 0.9;
+    }
+
+    .ez-login-body {
+        padding: 1.15rem 1.15rem 0.35rem;
+    }
+
+    .ez-login-intro {
+        margin-bottom: 1rem;
+        color: var(--bs-secondary-color);
+        font-size: 0.925rem;
+        line-height: 1.45;
+    }
+
+    .ez-login-footer {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+        padding: 0.85rem 1.15rem 1.05rem;
+        border-top: 1px solid var(--bs-border-color);
+        background: color-mix(in srgb, var(--bs-body-bg) 88%, var(--bs-secondary-bg));
+    }
+
+    .ez-login-footer .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .ez-login-footer .btn .material-icons {
+        font-size: 1.1rem;
+        line-height: 1;
+    }
+
+    .ez-login-card .form-control {
+        min-height: 2.5rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="text-center">Sign in with Eventzilla</h3>
+<div class="ez-login-page">
+    <div class="ez-login-card">
+        <div class="ez-login-header">
+            <i class="material-icons" aria-hidden="true">login</i>
+            <span>Sign in with Eventzilla</span>
+        </div>
+        <div class="ez-login-body">
+            <p class="ez-login-intro">
+                Enter the email address you used to register for {{ current_convention_name|default:"the event" }}.
+            </p>
+            <form id="eventzillaLoginForm" class="needs-validation" novalidate>
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" id="eventzillaNext" value="{{ next }}">{% endif %}
+                <div class="mb-3">
+                    <label for="eventzillaEmail" class="form-label">Registration email</label>
+                    <input type="email" class="form-control text-lowercase" id="eventzillaEmail" name="email" required autocomplete="email">
                 </div>
-                <div class="card-body">
-                    <p class="text-muted text-center">
-                        Enter the email and ticket barcode from your Eventzilla registration for {{ current_convention_name|default:"the event" }}.
-                    </p>
-                    <form id="eventzillaLoginForm" class="needs-validation" novalidate>
-                        {% csrf_token %}
-                        {% if next %}<input type="hidden" name="next" id="eventzillaNext" value="{{ next }}">{% endif %}
-                        <div class="mb-3">
-                            <label for="eventzillaEmail" class="form-label">Registration email</label>
-                            <input type="email" class="form-control text-lowercase" id="eventzillaEmail" name="email" required autocomplete="email">
-                        </div>
-                        <div class="mb-3">
-                            <label for="eventzillaBarcode" class="form-label">Ticket barcode</label>
-                            <input type="text" class="form-control" id="eventzillaBarcode" name="barcode" required autocomplete="off" inputmode="numeric">
-                            <div class="form-text">The barcode printed on your Eventzilla ticket or confirmation email.</div>
-                        </div>
-                        <div class="alert alert-danger d-none" id="eventzillaLoginError"></div>
-                        <button type="submit" class="btn btn-success w-100" id="eventzillaLoginSubmit">
-                            Verify registration
-                        </button>
-                    </form>
+                <div class="mb-3">
+                    <label for="eventzillaBarcode" class="form-label">Ticket barcode</label>
+                    <input type="text" class="form-control" id="eventzillaBarcode" name="barcode" required autocomplete="off" inputmode="numeric">
                 </div>
-            </div>
+                <div class="alert alert-danger d-none" id="eventzillaLoginError" role="alert"></div>
+            </form>
+        </div>
+        <div class="ez-login-footer">
+            <a href="{% if next %}{{ next }}{% else %}/{% endif %}" class="btn btn-secondary" id="eventzillaLoginCancel">Cancel</a>
+            <button type="submit" form="eventzillaLoginForm" class="btn btn-success" id="eventzillaLoginSubmit">
+                <i class="material-icons" aria-hidden="true">verified_user</i>
+                Verify registration
+            </button>
         </div>
     </div>
 </div>
@@ -84,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.href = data.profile_url;
                 return;
             }
-            window.location.href = nextInput ? nextInput.value : window.location.pathname;
+            window.location.href = nextInput ? nextInput.value : '/';
         })
         .catch(error => {
             errorEl.textContent = error.message;

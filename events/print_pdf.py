@@ -32,7 +32,8 @@ WHITE = colors.white
 # Landscape letter frame is ~536pt tall; keep each table under that.
 GRID_HEADER_HEIGHT = 18
 GRID_ROW_HEIGHT = 30
-GRID_MAX_BODY_SLOTS = 12
+# ~15 half-hour rows + header fit one landscape page with title chrome.
+GRID_MAX_BODY_SLOTS = 15
 GRID_SLOT_MINUTES = 30
 
 
@@ -356,6 +357,8 @@ def _build_grid_chunk_table(
     chunk_start,
     chunk_slots,
     placements,
+    *,
+    include_header=True,
 ):
     """Build one page-sized grid chunk covering absolute slots [chunk_start, chunk_start+chunk_slots)."""
     time_col = 0.75 * inch
@@ -381,29 +384,50 @@ def _build_grid_chunk_table(
         leading=8,
     )
 
-    header = [Paragraph('Time', header_style)] + [
-        Paragraph(_escape(room.name), header_style) for room in rooms
-    ]
-    data = [header]
+    data = []
+    header_offset = 0
+    if include_header:
+        header = [Paragraph('Time', header_style)] + [
+            Paragraph(_escape(room.name), header_style) for room in rooms
+        ]
+        data.append(header)
+        header_offset = 1
+
     for local_slot in range(chunk_slots):
         absolute_slot = chunk_start + local_slot
         label = _minutes_to_label(grid_start + absolute_slot * slot_minutes)
         data.append([Paragraph(label, time_style)] + [''] * len(rooms))
 
     style_commands = [
-        ('BACKGROUND', (0, 0), (-1, 0), BRAND),
-        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-        ('BACKGROUND', (0, 1), (0, -1), BRAND_SOFT),
+        ('BACKGROUND', (0, header_offset), (0, -1), BRAND_SOFT),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 0.4, LINE),
-        ('BOX', (0, 0), (-1, -1), 1.0, BRAND),
         ('LEFTPADDING', (0, 0), (-1, -1), 3),
         ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('ROWBACKGROUNDS', (1, 1), (-1, -1), [WHITE, PAGE_BG]),
+        (
+            'ROWBACKGROUNDS',
+            (1, header_offset),
+            (-1, -1),
+            [WHITE, PAGE_BG],
+        ),
     ]
+    if include_header:
+        style_commands.extend([
+            ('BACKGROUND', (0, 0), (-1, 0), BRAND),
+            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+            ('BOX', (0, 0), (-1, -1), 1.0, BRAND),
+        ])
+    else:
+        # Continuation chunk: keep side/bottom frame, soft top so it reads as one grid.
+        style_commands.extend([
+            ('LINEBEFORE', (0, 0), (0, -1), 1.0, BRAND),
+            ('LINEAFTER', (-1, 0), (-1, -1), 1.0, BRAND),
+            ('LINEBELOW', (0, -1), (-1, -1), 1.0, BRAND),
+            ('LINEABOVE', (0, 0), (-1, 0), 0.4, LINE),
+        ])
 
     chunk_end = chunk_start + chunk_slots
     for item in placements:
@@ -420,7 +444,7 @@ def _build_grid_chunk_table(
             continue
 
         col = item['room_idx'] + 1
-        row = local_start + 1
+        row = local_start + header_offset
         continued = clipped_start > start
         cell, accent = _panel_cell_paragraph(
             item['panel'],
@@ -442,8 +466,12 @@ def _build_grid_chunk_table(
         )
         style_commands.append(('VALIGN', (col, row), (col, row + local_span - 1), 'TOP'))
 
-    row_heights = [GRID_HEADER_HEIGHT] + [GRID_ROW_HEIGHT] * chunk_slots
-    table = Table(data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+    if include_header:
+        row_heights = [GRID_HEADER_HEIGHT] + [GRID_ROW_HEIGHT] * chunk_slots
+        table = Table(data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+    else:
+        row_heights = [GRID_ROW_HEIGHT] * chunk_slots
+        table = Table(data, colWidths=col_widths, rowHeights=row_heights)
     table.setStyle(TableStyle(style_commands))
     # Prevent ReportLab from trying (and failing) to split SPAN tables mid-page.
     table._splitByRow = 0
@@ -488,6 +516,7 @@ def _build_day_grid_tables(panels, styles, usable_width):
                 chunk_start,
                 chunk_slots,
                 placements,
+                include_header=(chunk_start == 0),
             )
         )
     return tables
@@ -541,10 +570,9 @@ def _build_grid_elements(convention, days, rsvp_param, request, styles, usable_w
             continue
 
         tables = _build_day_grid_tables(panels, styles, usable_width)
-        for idx, table in enumerate(tables):
+        for table in tables:
+            # Stack chunks with no gap so continuations read as one grid.
             elements.append(table)
-            if idx < len(tables) - 1:
-                elements.append(Spacer(1, 10))
         elements.append(Spacer(1, 14))
 
     return elements
