@@ -186,6 +186,7 @@ def import_panels_csv(request, convention_pk):
     })
 
 
+@organizer_required
 def export_panels_csv(request, convention_pk):
     convention = get_object_or_404(Convention, pk=convention_pk)
     

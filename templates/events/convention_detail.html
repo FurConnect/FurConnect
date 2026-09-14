@@ -1577,23 +1577,17 @@ window.addEventListener('load', function() {
             `<span class="sg-event-dot" style="background-color:${escapeHtml(color)}"></span>`
         ).join('');
 
-        const hosts = (props.hosts || []).map(host =>
-            `<img class="sg-event-avatar" data-host-id="${escapeHtml(host.id || '')}" src="${escapeHtml(host.avatarUrl || '')}" alt="${escapeHtml(host.name || '')}" title="${escapeHtml(host.name || '')}" loading="lazy">`
-        ).join('');
-
         const badge = props.cancelled
             ? '<span class="sg-event-badge">Cancelled</span> '
             : (props.featured ? '<span class="material-icons-round sg-event-star">star</span> ' : '');
 
+        // Title + 2-line description only; hide panelists and time/room meta in grid.
         return `
             <button type="button" class="${classes.join(' ')}" data-panel-id="${escapeHtml(eventData.id)}"
                 style="--panel-accent:${escapeHtml(accent)};--event-text:${escapeHtml(textColor)};--sg-span:${spanHours};background-color:${escapeHtml(accent)};color:${escapeHtml(textColor)};">
                 ${dots ? `<div class="sg-event-dots">${dots}</div>` : ''}
                 <div class="sg-event-title">${badge}<span class="sg-event-title-text">${escapeHtml(eventData.title || '')}</span></div>
-                ${props.description ? `<div class="sg-event-desc">${escapeHtml(props.description)}</div>` : ''}
-                ${hosts ? `<div class="sg-event-hosts">${hosts}</div>` : ''}
-                ${props.timeLabel ? `<div class="sg-event-meta"><span class="material-icons">schedule</span><span>${escapeHtml(props.timeLabel)}</span></div>` : ''}
-                ${props.roomName ? `<div class="sg-event-meta"><span class="material-icons">room</span><span>${escapeHtml(props.roomName)}</span></div>` : ''}
+                <div class="sg-event-desc">${escapeHtml(props.description || '')}</div>
             </button>
         `;
     }
@@ -1860,8 +1854,13 @@ window.addEventListener('load', function() {
             </button>
             <ul class="dropdown-menu dropdown-menu-end" id="exportDropdownMenu" aria-labelledby="exportDropdown">
                 <li>
-                    <a id="exportPdfBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:printable_schedule_pdf' pk=convention.pk %}?view=list" target="_blank">
-                        <i class="material-icons me-2">picture_as_pdf</i> Download PDF (Print)
+                    <a id="exportPdfListBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:printable_schedule_pdf' pk=convention.pk %}?view=list" target="_blank">
+                        <i class="material-icons me-2">picture_as_pdf</i> Download PDF (List)
+                    </a>
+                </li>
+                <li>
+                    <a id="exportPdfGridBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:printable_schedule_pdf' pk=convention.pk %}?view=grid" target="_blank">
+                        <i class="material-icons me-2">grid_on</i> Downlaod PDF (Grid)
                     </a>
                 </li>
                 <li>
@@ -1869,11 +1868,13 @@ window.addEventListener('load', function() {
                         <i class="material-icons me-2">event</i> Calendar Feed (.ics)
                     </a>
                 </li>
+                {% if can_manage_events %}
                 <li>
                     <a id="exportCsvBtn" class="dropdown-item d-flex align-items-center" href="{% url 'events:export_panels_csv' convention_pk=convention.pk %}">
                         <i class="material-icons me-2">download</i> Export CSV
                     </a>
                 </li>
+                {% endif %}
             </ul>
         </div>
         {% if can_manage_events %}
@@ -2198,7 +2199,8 @@ window.addEventListener('load', function() {
         </script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    const exportPdfListBtn = document.getElementById('exportPdfListBtn');
+    const exportPdfGridBtn = document.getElementById('exportPdfGridBtn');
     const exportCsvBtn = document.getElementById('exportCsvBtn');
     const rsvpFeedToken = '{{ rsvp_feed_token|escapejs }}';
 
@@ -2255,14 +2257,19 @@ document.addEventListener('DOMContentLoaded', function () {
         return baseUrl.split('?')[0] + '?' + query;
     }
 
-    function updateExportLinks(view) {
-        const currentView = view || localStorage.getItem('scheduleView') || 'list';
+    function updateExportLinks() {
         const toggle = document.getElementById('showMyRsvpsToggle');
         const rsvpValue = (toggle && toggle.checked && rsvpFeedToken) ? rsvpFeedToken : '';
 
-        if (exportPdfBtn) {
-            exportPdfBtn.href = appendQueryParams(exportPdfBtn.href.split('?')[0], {
-                view: currentView,
+        if (exportPdfListBtn) {
+            exportPdfListBtn.href = appendQueryParams(exportPdfListBtn.href.split('?')[0], {
+                view: 'list',
+                rsvp: rsvpValue,
+            });
+        }
+        if (exportPdfGridBtn) {
+            exportPdfGridBtn.href = appendQueryParams(exportPdfGridBtn.href.split('?')[0], {
+                view: 'grid',
                 rsvp: rsvpValue,
             });
         }
@@ -2280,10 +2287,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.updateExportLinks = updateExportLinks;
 
-    if (exportPdfBtn || exportCsvBtn) {
+    if (exportPdfListBtn || exportPdfGridBtn || exportCsvBtn) {
         updateExportLinks();
-        document.addEventListener('scheduleViewChanged', function (e) {
-            updateExportLinks(e.detail.view);
+        document.addEventListener('scheduleViewChanged', function () {
+            updateExportLinks();
         });
     }
 });
@@ -3865,7 +3872,7 @@ html[data-bs-theme="light"] .fc-schedule-host {
 
 .sg-board {
     min-width: 100%;
-    --sg-row-min: 88px;
+    --sg-row-min: 96px;
     --sg-row-min-empty: 40px;
 }
 
@@ -4032,6 +4039,10 @@ html[data-bs-theme="light"] .fc-schedule-host {
 
 .sg-event-title-text {
     min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
     white-space: normal;
     word-break: break-word;
 }
@@ -4054,43 +4065,17 @@ html[data-bs-theme="light"] .fc-schedule-host {
 
 .sg-event-desc {
     margin: 0;
+    flex: 0 0 auto;
+    min-height: calc(1.35em * 2);
     font-size: clamp(0.7rem, 0.92vw, 0.82rem);
     line-height: 1.35;
     opacity: 0.9;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
     white-space: normal;
     word-break: break-word;
-}
-
-.sg-event-hosts {
-    display: flex;
-    gap: 0.3rem;
-    flex-wrap: wrap;
-}
-
-.sg-event-avatar {
-    width: 1.35rem;
-    height: 1.35rem;
-    border-radius: 50%;
-    object-fit: cover;
-    background: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
-}
-
-.sg-event-meta {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.25rem;
-    font-size: clamp(0.68rem, 0.9vw, 0.8rem);
-    font-weight: 550;
-    opacity: 0.94;
-    white-space: normal;
-    word-break: break-word;
-}
-
-.sg-event-meta .material-icons {
-    font-size: 0.95em !important;
-    line-height: 1.2 !important;
-    flex-shrink: 0;
 }
 
 .sg-event-cancelled {
