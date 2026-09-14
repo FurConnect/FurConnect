@@ -31,8 +31,8 @@ WHITE = colors.white
 
 # Landscape letter frame is ~536pt tall; keep each table under that.
 GRID_HEADER_HEIGHT = 18
-GRID_ROW_HEIGHT = 26
-GRID_MAX_BODY_SLOTS = 14
+GRID_ROW_HEIGHT = 30
+GRID_MAX_BODY_SLOTS = 12
 GRID_SLOT_MINUTES = 30
 
 
@@ -87,7 +87,35 @@ def _panel_accent(panel):
     tags = list(panel.tags.all().order_by('paneltag__priority'))
     if tags and tags[0].color:
         return tags[0].color
-    return '#dddddd'
+    return '#ffc107'
+
+
+def _soft_tint(hex_value, amount=0.82):
+    """Blend accent toward white for soft card header backgrounds."""
+    raw = (hex_value or '#ffc107').lstrip('#')
+    if len(raw) != 6:
+        raw = 'ffc107'
+    try:
+        r = int(raw[0:2], 16)
+        g = int(raw[2:4], 16)
+        b = int(raw[4:6], 16)
+    except ValueError:
+        return colors.HexColor('#fff8e1')
+    r = int(r + (255 - r) * amount)
+    g = int(g + (255 - g) * amount)
+    b = int(b + (255 - b) * amount)
+    return colors.HexColor(f'#{r:02x}{g:02x}{b:02x}')
+
+
+def _desc_two_lines(text, width_chars=72):
+    """Keep about two wrapped lines of description for grid cells."""
+    cleaned = ' '.join((text or '').split())
+    if not cleaned:
+        return ''
+    limit = width_chars * 2
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 1].rstrip() + '...'
 
 
 def _panel_hosts(panel):
@@ -157,12 +185,13 @@ def _build_list_elements(convention, days, rsvp_param, request, styles):
         for panel in panels:
             hosts = _panel_hosts(panel)
             tags = ', '.join(t.name for t in panel.tags.all().order_by('paneltag__priority'))
+            accent = _panel_accent(panel)
             title_bits = _escape(panel.title)
             if panel.cancelled:
                 title_bits = f'[Cancelled] {title_bits}'
             card_data = [
                 [Paragraph(
-                    f"<b><font color='#111111' size='12'>{title_bits}</font></b>",
+                    f"<b><font color='{accent}' size='12'>{title_bits}</font></b>",
                     styles['Normal'],
                 )],
                 [Paragraph(
@@ -180,8 +209,8 @@ def _build_list_elements(convention, days, rsvp_param, request, styles):
                 card_data.append([Paragraph(_escape(_truncate(panel.description, 280)), styles['Normal'])])
             card = Table(card_data, colWidths=[card_width])
             card.setStyle(TableStyle([
-                ('BOX', (0, 0), (-1, -1), 1.1, BRAND),
-                ('BACKGROUND', (0, 0), (-1, 0), BRAND_SOFT),
+                ('BOX', (0, 0), (-1, -1), 1.2, _hex_color(accent)),
+                ('BACKGROUND', (0, 0), (-1, 0), _soft_tint(accent)),
                 ('LEFTPADDING', (0, 0), (-1, -1), 12),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 12),
                 ('TOPPADDING', (0, 0), (-1, -1), 7),
@@ -290,10 +319,15 @@ def _panel_cell_paragraph(panel, extras, styles, span_slots, continued=False):
 
     lines = [f'<b>{_escape(title)}</b>']
     lines.append(f'{_fmt_time(panel.start_time)} - {_fmt_time(panel.end_time)}')
-    if span_slots >= 3:
-        hosts = _panel_hosts(panel)
-        if hosts:
-            lines.append(_escape(_truncate(hosts, 36)))
+
+    if not continued and panel.description:
+        # Aim for ~2 wrapped lines; shorten on single-slot cells.
+        width_chars = 40 if span_slots <= 1 else 56
+        desc = _desc_two_lines(panel.description, width_chars=width_chars)
+        if span_slots <= 1:
+            desc = _truncate(desc, 48)
+        if desc:
+            lines.append(_escape(desc))
 
     for extra in extras[:1]:
         extra_title = extra.title or ''
@@ -404,7 +438,7 @@ def _build_grid_chunk_table(
             ('BACKGROUND', (col, row), (col, row + local_span - 1), _hex_color(accent))
         )
         style_commands.append(
-            ('BOX', (col, row), (col, row + local_span - 1), 0.7, BRAND)
+            ('BOX', (col, row), (col, row + local_span - 1), 0.8, _hex_color(accent))
         )
         style_commands.append(('VALIGN', (col, row), (col, row + local_span - 1), 'TOP'))
 
